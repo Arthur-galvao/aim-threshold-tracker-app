@@ -1,0 +1,1 @@
+export const GUIDE_URL = "https://example.com/guide";

@@ -1,0 +1,40 @@
+# Dependencies
+node_modules/
+
+# Production build outputs
+dist/
+dist-ssr/
+src-tauri/target/
+
+# TypeScript build info
+*.tsbuildinfo
+
+# Environment variables & secrets
+.env
+.env.*
+*.env
+*.pem
+*.key
+*.crt
+*.pfx
+
+# IDEs and Editors
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# OS Generated
+.DS_Store
+Thumbs.db
+
+# Archives
+*.zip
+*.tar.gz
+*.rar
+
+# AI / Agent workspace metadata
+.opencode/

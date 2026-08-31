@@ -1,0 +1,176 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --base: #fcfcfd;
+    --surface: #ffffff;
+    --surface-subtle: #f4f4f6;
+    --surface-hover: #eaeaee;
+    --edge: rgba(0, 0, 0, 0.08);
+    --edge-strong: rgba(0, 0, 0, 0.16);
+    --text-main: #09090b;
+    --text-secondary: #71717a;
+    --text-faint: #a1a1aa;
+    
+    --primary: #09090b;
+    --primary-foreground: #ffffff;
+    
+    --accent: #2563eb;
+    --accent-soft: rgba(37, 99, 235, 0.08);
+    --accent-edge: rgba(37, 99, 235, 0.2);
+
+    --amber: #d97706;
+    --amber-soft: rgba(217, 119, 6, 0.08);
+    --amber-edge: rgba(217, 119, 6, 0.2);
+
+    --emerald: #059669;
+    --emerald-soft: rgba(5, 150, 105, 0.08);
+    --emerald-edge: rgba(5, 150, 105, 0.2);
+
+    --red: #e11d48;
+    --red-soft: rgba(225, 29, 72, 0.08);
+    --red-edge: rgba(225, 29, 72, 0.2);
+
+    --scrim: rgba(0, 0, 0, 0.25);
+  }
+
+  .dark {
+    --base: #09090b;
+    --surface: #111114;
+    --surface-subtle: #18181c;
+    --surface-hover: #242429;
+    --edge: rgba(255, 255, 255, 0.08);
+    --edge-strong: rgba(255, 255, 255, 0.18);
+    --text-main: #fafafa;
+    --text-secondary: #a1a1aa;
+    --text-faint: #52525b;
+
+    --primary: #ffffff;
+    --primary-foreground: #09090b;
+
+    --accent: #38bdf8;
+    --accent-soft: rgba(56, 189, 248, 0.1);
+    --accent-edge: rgba(56, 189, 248, 0.25);
+
+    --amber: #fbbf24;
+    --amber-soft: rgba(251, 191, 36, 0.1);
+    --amber-edge: rgba(251, 191, 36, 0.25);
+
+    --emerald: #34d399;
+    --emerald-soft: rgba(52, 211, 153, 0.1);
+    --emerald-edge: rgba(52, 211, 153, 0.25);
+
+    --red: #f43f5e;
+    --red-soft: rgba(244, 63, 94, 0.1);
+    --red-edge: rgba(244, 63, 94, 0.25);
+
+    --scrim: rgba(0, 0, 0, 0.65);
+  }
+}
+
+body {
+  background-color: var(--base);
+  color: var(--text-main);
+  letter-spacing: -0.01em;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+@layer components {
+  .panel {
+    background-color: var(--surface);
+    border: 1px solid var(--edge);
+    border-radius: 12px;
+  }
+
+.minimal-input {
+  width: 100%;
+  background-color: var(--surface-subtle);
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 0.55rem 0.75rem;
+  font-size: 0.85rem;
+  color: var(--text-main);
+  transition: all 0.15s ease;
+}
+
+.minimal-input:focus {
+  outline: none;
+  background-color: var(--surface);
+  border-color: var(--edge-strong);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.minimal-input::placeholder {
+  color: var(--text-faint);
+}
+
+select.minimal-input {
+  appearance: none;
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2386868b' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  padding-right: 2rem;
+}
+
+.minimal-btn {
+  background-color: var(--primary);
+  color: var(--primary-foreground);
+  font-weight: 500;
+  border-radius: 8px;
+  transition: opacity 0.15s ease, transform 0.1s ease;
+}
+
+.minimal-btn:hover {
+  opacity: 0.9;
+}
+
+.minimal-btn:active {
+  transform: scale(0.985);
+}
+
+.minimal-btn-secondary {
+  background-color: var(--surface-subtle);
+  color: var(--text-main);
+  border: 1px solid var(--edge);
+  border-radius: 8px;
+  transition: all 0.15s ease;
+}
+
+.minimal-btn-secondary:hover {
+  background-color: var(--surface-hover);
+  border-color: var(--edge-strong);
+}
+
+.minimal-btn-secondary:active {
+  transform: scale(0.985);
+}
+
+.modal-scrim {
+  background-color: var(--scrim);
+}
+
+/* Minimal Scrollbar */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--edge-strong);
+  border-radius: 4px;
+}
+}
+
+select option {
+  background-color: var(--base);
+  color: var(--text-main);
+}
+
+.chrome {
+  background-color: color-mix(in srgb, var(--surface) 80%, transparent);
+}
