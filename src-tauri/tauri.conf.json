@@ -40,7 +40,7 @@
     "windows": {
       "nsis": {
         "installMode": "currentUser",
-        "languages": ["BrazilianPortuguese", "English"]
+        "languages": ["PortugueseBR", "English"]
       }
     }
   }
