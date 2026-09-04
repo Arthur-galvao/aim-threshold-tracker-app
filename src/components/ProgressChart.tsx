@@ -24,38 +24,41 @@ ChartJS.register(
   Filler
 );
 
+ChartJS.defaults.font.family =
+  '"Segoe UI Variable Text", "Segoe UI", -apple-system, BlinkMacSystemFont, "Inter", sans-serif';
+
 interface ProgressChartProps {
   activeTask: Task | null;
 }
 
 const COLORS = {
   dark: {
-    line: "#fafafa",
-    lineFill: "rgba(250, 250, 250, 0.04)",
-    threshold: "#fbbf24",
-    thresholdFill: "rgba(251, 191, 36, 0.05)",
-    avg: "#52525b",
-    grid: "rgba(255, 255, 255, 0.05)",
-    tick: "#71717a",
-    legend: "#a1a1aa",
-    tooltipBg: "#18181b",
-    tooltipTitle: "#fafafa",
-    tooltipBody: "#a1a1aa",
-    tooltipBorder: "#27272a",
+    line: "#38bdf8",
+    lineFill: "rgba(56, 189, 248, 0.04)",
+    threshold: "#f59e0b",
+    thresholdFill: "transparent",
+    avg: "#64748b",
+    grid: "rgba(255, 255, 255, 0.03)",
+    tick: "#64748b",
+    legend: "#94a3b8",
+    tooltipBg: "#12131a",
+    tooltipTitle: "#f8fafc",
+    tooltipBody: "#94a3b8",
+    tooltipBorder: "rgba(255, 255, 255, 0.08)",
   },
   light: {
-    line: "#09090b",
-    lineFill: "rgba(9, 9, 11, 0.03)",
+    line: "#0284c7",
+    lineFill: "rgba(2, 132, 199, 0.03)",
     threshold: "#d97706",
-    thresholdFill: "rgba(217, 119, 6, 0.04)",
+    thresholdFill: "transparent",
     avg: "#a1a1aa",
-    grid: "rgba(0, 0, 0, 0.05)",
+    grid: "rgba(0, 0, 0, 0.04)",
     tick: "#71717a",
-    legend: "#71717a",
+    legend: "#52525b",
     tooltipBg: "#ffffff",
     tooltipTitle: "#09090b",
-    tooltipBody: "#71717a",
-    tooltipBorder: "#e4e4e7",
+    tooltipBody: "#52525b",
+    tooltipBorder: "rgba(0, 0, 0, 0.08)",
   },
 };
 
@@ -101,60 +104,99 @@ export function ProgressChart({ activeTask }: ProgressChartProps) {
           data: pbData,
           borderColor: c.line,
           backgroundColor: c.lineFill,
-          borderWidth: 1.5,
-          tension: 0.1,
+          borderWidth: 2.5,
+          tension: 0.25,
           pointBackgroundColor: c.line,
-          pointRadius: 2.5,
+          pointBorderColor: resolvedTheme === "dark" ? "#12131a" : "#ffffff",
+          pointBorderWidth: 1.5,
+          pointRadius: 3.5,
+          pointHoverRadius: 6,
+          pointHoverBackgroundColor: c.line,
+          pointHoverBorderColor: "#ffffff",
+          pointHoverBorderWidth: 2,
+          fill: true,
         },
         {
           label: t("chart.threshold"),
           data: threshData,
           borderColor: c.threshold,
           backgroundColor: c.thresholdFill,
-          borderWidth: 1.5,
-          tension: 0.1,
+          borderWidth: 2,
+          tension: 0.25,
           pointBackgroundColor: c.threshold,
-          pointRadius: 2.5,
+          pointBorderColor: resolvedTheme === "dark" ? "#12131a" : "#ffffff",
+          pointBorderWidth: 1.5,
+          pointRadius: 3.5,
+          pointHoverRadius: 5.5,
+          fill: false,
         },
         {
           label:
             avgType === "moving" ? t("chart.avgMoving") : t("chart.avgOverall"),
           data: avgData,
           borderColor: c.avg,
-          borderWidth: 1,
-          borderDash: [3, 3],
-          tension: 0.2,
+          borderWidth: 1.5,
+          borderDash: [5, 5],
+          tension: 0.25,
           pointRadius: 0,
           fill: false,
         },
       ],
     };
-  }, [activeTask, avgType, c, t]);
+  }, [activeTask, avgType, c, resolvedTheme, t]);
 
   if (!chartData) {
     return (
-      <div className="panel h-72 flex items-center justify-center text-text-faint text-xs transition-colors">
-        {t("chart.empty")}
+      <div className="panel p-6 rounded-2xl h-72 flex flex-col items-center justify-center text-text-faint text-xs transition-all">
+        <svg
+          className="w-8 h-8 mb-2 opacity-40 text-text-faint"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <line x1="18" y1="20" x2="18" y2="10" />
+          <line x1="12" y1="20" x2="12" y2="4" />
+          <line x1="6" y1="20" x2="6" y2="14" />
+        </svg>
+        <span>{t("chart.empty")}</span>
       </div>
     );
   }
 
   return (
-    <section className="panel p-5 transition-colors">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-edge pb-3 mb-4">
-        <div>
-          <h2 className="text-xs font-semibold uppercase tracking-wider text-text-main">
-            {t("chart.title")}
-          </h2>
-          <p className="text-[11px] text-text-faint">
-            {t("chart.subtitle")}
-          </p>
+    <section className="panel p-5 rounded-2xl transition-all duration-200">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+        <div className="flex items-center gap-2">
+          <div className="w-6 h-6 rounded-full bg-surface-subtle text-text-secondary border border-edge flex items-center justify-center">
+            <svg
+              className="w-3.5 h-3.5"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+            </svg>
+          </div>
+          <div>
+            <h2 className="text-xs font-bold uppercase tracking-wider text-text-main">
+              {t("chart.title")}
+            </h2>
+            <p className="text-[11px] text-text-faint">
+              {t("chart.subtitle")}
+            </p>
+          </div>
         </div>
         <div className="flex items-center gap-1.5">
           <select
             value={avgType}
             onChange={(e) => setAvgType(e.target.value as "moving" | "overall")}
-            className="minimal-input text-[11px] py-1 px-2 font-mono"
+            className="minimal-input text-xs py-1 px-2.5 font-medium cursor-pointer rounded-full"
           >
             <option value="moving">{t("chart.moving")}</option>
             <option value="overall">{t("chart.overall")}</option>
@@ -168,15 +210,22 @@ export function ProgressChart({ activeTask }: ProgressChartProps) {
           options={{
             responsive: true,
             maintainAspectRatio: false,
+            interaction: {
+              mode: "index",
+              intersect: false,
+            },
             plugins: {
               legend: {
                 position: "top",
                 align: "end",
                 labels: {
                   color: c.legend,
-                  font: { family: "'JetBrains Mono', monospace", size: 10 },
-                  boxWidth: 12,
+                  font: { family: '"Segoe UI Variable Text", "Segoe UI", -apple-system, sans-serif', size: 11, weight: 600 },
+                  boxWidth: 8,
+                  boxHeight: 8,
                   usePointStyle: true,
+                  pointStyle: "circle",
+                  padding: 14,
                 },
               },
               tooltip: {
@@ -185,20 +234,31 @@ export function ProgressChart({ activeTask }: ProgressChartProps) {
                 bodyColor: c.tooltipBody,
                 borderColor: c.tooltipBorder,
                 borderWidth: 1,
-                padding: 10,
-                boxPadding: 4,
-                titleFont: { family: "Inter", weight: "bold", size: 11 },
-                bodyFont: { family: "'JetBrains Mono', monospace", size: 11 },
+                cornerRadius: 12,
+                padding: 12,
+                boxPadding: 6,
+                titleFont: { family: '"Segoe UI Variable Text", "Segoe UI", -apple-system, sans-serif', weight: 700, size: 12 },
+                bodyFont: { family: '"Segoe UI Variable Text", "Segoe UI", -apple-system, sans-serif', size: 11 },
               },
             },
             scales: {
               x: {
                 grid: { color: c.grid },
-                ticks: { color: c.tick, font: { family: "'JetBrains Mono', monospace", size: 9 } },
+                ticks: {
+                  color: c.tick,
+                  font: { family: '"Segoe UI Variable Text", "Segoe UI", -apple-system, sans-serif', size: 11 },
+                  maxTicksLimit: 7,
+                  autoSkip: true,
+                  maxRotation: 0,
+                },
               },
               y: {
                 grid: { color: c.grid },
-                ticks: { color: c.tick, font: { family: "'JetBrains Mono', monospace", size: 9 } },
+                ticks: {
+                  color: c.tick,
+                  font: { family: '"Segoe UI Variable Text", "Segoe UI", -apple-system, sans-serif', size: 11 },
+                  maxTicksLimit: 6,
+                },
               },
             },
           }}

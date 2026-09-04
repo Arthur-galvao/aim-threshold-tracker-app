@@ -30,15 +30,31 @@ export function NewTaskModal({ open, onClose, onCreate }: NewTaskModalProps) {
   };
 
   return (
-    <div className="fixed inset-0 modal-scrim backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="panel bg-surface p-6 max-w-md w-full shadow-2xl border-edge-strong transition-colors">
-        <div className="flex justify-between items-center border-b border-edge pb-3">
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-text-main">
-            {t("modal.title")}
-          </h3>
+    <div className="fixed inset-0 modal-scrim z-50 flex items-center justify-center p-4">
+      <div className="panel p-6 max-w-md w-full shadow-2xl rounded-2xl transition-all duration-200">
+        <div className="flex justify-between items-center border-b border-edge pb-3.5">
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-6 rounded-full bg-surface-subtle text-text-secondary border border-edge flex items-center justify-center">
+              <svg
+                className="w-3.5 h-3.5"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+            </div>
+            <h3 className="text-xs font-bold uppercase tracking-wider text-text-main">
+              {t("modal.title")}
+            </h3>
+          </div>
           <button
             onClick={onClose}
-            className="text-text-faint hover:text-text-main text-sm"
+            className="w-7 h-7 rounded-full flex items-center justify-center text-text-faint hover:text-text-main hover:bg-surface-subtle transition-colors text-xs"
           >
             ✕
           </button>
@@ -46,7 +62,10 @@ export function NewTaskModal({ open, onClose, onCreate }: NewTaskModalProps) {
 
         <form onSubmit={handleSubmit} className="space-y-4 mt-4">
           <div>
-            <label htmlFor="newTaskName" className="block text-[11px] font-medium uppercase tracking-wider text-text-faint mb-1.5">
+            <label
+              htmlFor="newTaskName"
+              className="block text-[11px] font-semibold uppercase tracking-wider text-text-faint mb-1.5"
+            >
               {t("modal.name")}
             </label>
             <input
@@ -56,19 +75,19 @@ export function NewTaskModal({ open, onClose, onCreate }: NewTaskModalProps) {
               onChange={(e) => setName(e.target.value)}
               placeholder={t("modal.namePh")}
               required
-              className="minimal-input font-mono"
+              className="minimal-input text-xs font-medium"
             />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-[11px] font-medium uppercase tracking-wider text-text-faint mb-1.5">
+              <label className="block text-[11px] font-semibold uppercase tracking-wider text-text-faint mb-1.5">
                 {t("modal.category")}
               </label>
               <select
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
-                className="minimal-input"
+                className="minimal-input text-xs cursor-pointer font-medium"
               >
                 {Object.keys(VISCOSE_CATEGORIES).map((cat) => (
                   <option key={cat} value={cat}>
@@ -78,13 +97,13 @@ export function NewTaskModal({ open, onClose, onCreate }: NewTaskModalProps) {
               </select>
             </div>
             <div>
-              <label className="block text-[11px] font-medium uppercase tracking-wider text-text-faint mb-1.5">
+              <label className="block text-[11px] font-semibold uppercase tracking-wider text-text-faint mb-1.5">
                 {t("modal.subcategory")}
               </label>
               <select
                 value={subcategory}
                 onChange={(e) => setSubcategory(e.target.value)}
-                className="minimal-input"
+                className="minimal-input text-xs cursor-pointer font-medium"
               >
                 {(VISCOSE_CATEGORIES[category] ?? ["Geral"]).map((sub) => (
                   <option key={sub} value={sub}>
@@ -95,17 +114,17 @@ export function NewTaskModal({ open, onClose, onCreate }: NewTaskModalProps) {
             </div>
           </div>
 
-          <div className="flex justify-end gap-2 pt-3 border-t border-edge">
+          <div className="flex justify-end gap-2.5 pt-3 border-t border-edge">
             <button
               type="button"
               onClick={onClose}
-              className="px-3.5 py-2 minimal-btn-secondary text-xs"
+              className="px-4 py-2 minimal-btn-secondary text-xs font-semibold rounded-full"
             >
               {t("modal.cancel")}
             </button>
             <button
               type="submit"
-              className="px-4 py-2 minimal-btn text-xs font-semibold"
+              className="px-4 py-2 minimal-btn text-xs font-bold uppercase tracking-wider rounded-full"
             >
               {t("modal.create")}
             </button>

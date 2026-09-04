@@ -73,7 +73,9 @@ function Dashboard() {
   }, [activeTask, showToast, t]);
 
   return (
-    <div className="min-h-screen bg-base text-text-main flex flex-col transition-colors duration-200">
+    <div className="relative min-h-screen bg-base text-text-main flex flex-col selection:bg-blue-500/25 selection:text-blue-200">
+      <div className="dot-bg" aria-hidden="true" />
+
       <Header
         onOpenSettings={() => setSettingsOpen(true)}
         onExport={exportData}
@@ -83,34 +85,45 @@ function Dashboard() {
         watcherStatus={watcherStatus}
       />
 
-      <main className="max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1 grid grid-cols-1 lg:grid-cols-12 gap-6">
-        <div className="lg:col-span-4 space-y-6">
-          <TaskSelector
-            tasks={appData.tasks}
-            activeTaskId={appData.activeTaskId}
-            onTaskChange={setActiveTaskId}
-            onNewTask={() => setNewTaskOpen(true)}
-            onDeleteTask={deleteCurrentTask}
-          />
-
-          <SessionForm activeTask={activeTask} onSubmit={addManualSessions} />
-        </div>
-
-        <div className="lg:col-span-8 space-y-6">
+      <main className="relative z-10 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 flex-1 flex flex-col gap-6">
+        {/* Top Full-Width KPI Metrics Cards */}
+        <section aria-label="Métricas Principais">
           <MetricsCards activeTask={activeTask} />
-          <ProgressChart activeTask={activeTask} />
-          <HistoryTable
-            activeTask={activeTask}
-            onDeleteSession={deleteSession}
-            onCopyEscalate={handleCopyEscalate}
-          />
+        </section>
+
+        {/* 2-Column Dashboard Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          {/* Left Column: Task Selector & Manual Entry */}
+          <div className="lg:col-span-4 xl:col-span-4 space-y-6">
+            <TaskSelector
+              tasks={appData.tasks}
+              activeTaskId={appData.activeTaskId}
+              onTaskChange={setActiveTaskId}
+              onNewTask={() => setNewTaskOpen(true)}
+              onDeleteTask={deleteCurrentTask}
+            />
+
+            <SessionForm activeTask={activeTask} onSubmit={addManualSessions} />
+          </div>
+
+          {/* Right Column: Chart & History Table */}
+          <div className="lg:col-span-8 xl:col-span-8 space-y-6">
+            <ProgressChart activeTask={activeTask} />
+            <HistoryTable
+              activeTask={activeTask}
+              onDeleteSession={deleteSession}
+              onCopyEscalate={handleCopyEscalate}
+            />
+          </div>
         </div>
       </main>
 
-      <footer className="border-t border-edge py-6 px-4 text-center text-xs text-text-faint transition-colors">
-        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
-          <span>{t("app.footer")}</span>
-          <span className="font-mono text-[11px]">{t("app.footerFov")}</span>
+      <footer className="relative z-10 py-6 px-4 text-center text-xs text-text-faint">
+        <div className="max-w-7xl mx-auto border-t border-white/[0.04] pt-5 flex flex-col sm:flex-row items-center justify-between gap-3">
+          <span className="opacity-80">{t("app.footer")}</span>
+          <span className="font-medium text-[11px] px-2.5 py-0.5 rounded-full bg-surface-subtle text-text-secondary border border-edge">
+            {t("app.footerFov")}
+          </span>
         </div>
       </footer>
 

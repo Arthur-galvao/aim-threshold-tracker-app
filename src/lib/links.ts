@@ -1,1 +1,1 @@
-export const GUIDE_URL = "https://example.com/guide";
+export const GUIDE_URL = "https://arthur-galvao.github.io/guia-treino-mira/";

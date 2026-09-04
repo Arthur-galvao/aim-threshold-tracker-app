@@ -144,6 +144,32 @@ fn import_existing_csvs(app: AppHandle) -> Result<ImportStats, String> {
     watcher::import_existing(&app)
 }
 
+#[tauri::command]
+fn open_url(url: String) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        std::process::Command::new("cmd")
+            .args(["/c", "start", "", &url])
+            .creation_flags(0x08000000)
+            .spawn()
+            .map_err(|e| format!("Erro ao abrir link: {e}"))?;
+        Ok(())
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        #[cfg(target_os = "macos")]
+        let cmd = "open";
+        #[cfg(not(target_os = "macos"))]
+        let cmd = "xdg-open";
+        std::process::Command::new(cmd)
+            .arg(&url)
+            .spawn()
+            .map_err(|e| format!("Erro ao abrir link: {e}"))?;
+        Ok(())
+    }
+}
+
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
@@ -171,6 +197,7 @@ pub fn run() {
             stop_watcher,
             get_watcher_status,
             import_existing_csvs,
+            open_url,
         ])
         .run(tauri::generate_context!())
         .expect("erro ao executar o aplicativo Tauri");

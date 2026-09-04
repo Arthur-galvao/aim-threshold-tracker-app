@@ -127,3 +127,15 @@ export function onImportComplete(
     callback(event.payload)
   );
 }
+
+export async function openExternalUrl(url: string): Promise<void> {
+  if (isTauri()) {
+    try {
+      await invoke("open_url", { url });
+      return;
+    } catch (err) {
+      console.error("Erro ao abrir URL no Tauri:", err);
+    }
+  }
+  window.open(url, "_blank", "noopener,noreferrer");
+}
