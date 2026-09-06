@@ -1,18 +1,12 @@
 import type { Task } from "@/lib/types";
 import { buildEscalateFormat } from "@/lib/threshold";
 import { useI18n } from "@/lib/i18n";
+import { formatSensitivity } from "@/lib/sens-analytics";
 
 interface HistoryTableProps {
   activeTask: Task | null;
   onDeleteSession: (sessionId: string) => void;
   onCopyEscalate: () => void;
-}
-
-function formatSensitivity(sens: number): string {
-  if (!sens || sens <= 0) return "-";
-  const effectiveSens = sens < 2.5 ? 13062.857 / (800 * sens) : sens;
-  const rounded = Number(effectiveSens.toFixed(1));
-  return `${rounded % 1 === 0 ? rounded.toFixed(0) : rounded.toFixed(1)} cm`;
 }
 
 export function HistoryTable({
