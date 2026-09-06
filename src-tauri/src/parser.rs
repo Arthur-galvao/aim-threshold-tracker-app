@@ -130,7 +130,7 @@ pub fn convert_sens_to_cm(raw_sens: f64, scale_str: Option<&str>, dpi: f64) -> f
         // Fallback when scale is missing or unspecified:
         _ => {
             // Typical cm/360 physical range is 5.0 to 150.0
-            if raw_sens >= 5.0 && raw_sens <= 150.0 {
+            if (5.0..=150.0).contains(&raw_sens) {
                 return round_sens(raw_sens);
             }
             // Small values (< 2.5) with no scale are almost certainly in-game sens (Valorant yaw = 0.07)

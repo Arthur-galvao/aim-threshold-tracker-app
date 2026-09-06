@@ -192,11 +192,11 @@ pub fn import_existing(app: &AppHandle) -> Result<ImportStats, String> {
             let mut data = state.data.lock().unwrap();
             for task in &mut data.tasks {
                 for session in &mut task.sessions {
-                    if session.source_file.as_deref() == Some(&run.source_file) {
-                        if (session.sens - run.sens).abs() > 0.001 {
-                            session.sens = run.sens;
-                            new += 1;
-                        }
+                    if session.source_file.as_deref() == Some(&run.source_file)
+                        && (session.sens - run.sens).abs() > 0.001
+                    {
+                        session.sens = run.sens;
+                        new += 1;
                     }
                 }
             }

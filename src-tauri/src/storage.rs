@@ -15,10 +15,9 @@ pub fn data_dir(app: &AppHandle) -> Result<PathBuf, String> {
 }
 
 pub fn load_app_data(app: &AppHandle) -> AppData {
-    match data_dir(app).and_then(|d| read_json(d.join("app_data.json"))) {
-        Ok(data) => data,
-        Err(_) => AppData::default(),
-    }
+    data_dir(app)
+        .and_then(|d| read_json(d.join("app_data.json")))
+        .unwrap_or_default()
 }
 
 pub fn save_app_data(app: &AppHandle, data: &AppData) -> Result<(), String> {
@@ -27,10 +26,9 @@ pub fn save_app_data(app: &AppHandle, data: &AppData) -> Result<(), String> {
 }
 
 pub fn load_settings(app: &AppHandle) -> AppSettings {
-    match data_dir(app).and_then(|d| read_json(d.join("settings.json"))) {
-        Ok(s) => s,
-        Err(_) => AppSettings::default(),
-    }
+    data_dir(app)
+        .and_then(|d| read_json(d.join("settings.json")))
+        .unwrap_or_default()
 }
 
 pub fn save_settings(app: &AppHandle, settings: &AppSettings) -> Result<(), String> {
