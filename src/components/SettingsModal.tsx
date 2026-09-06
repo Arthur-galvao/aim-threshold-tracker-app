@@ -12,6 +12,11 @@ interface SettingsModalProps {
   onUpdatePath: (path: string) => Promise<void>;
   onToggleWatcher: () => Promise<void>;
   onReimport: () => Promise<void>;
+  rawaccelPath?: string | null;
+  rawaccelAvailable?: boolean;
+  onDetectRawaccel?: () => Promise<string | null>;
+  onUpdateRawaccelPath?: (path: string) => Promise<void>;
+  onTestRawaccel?: () => Promise<any>;
 }
 
 export function SettingsModal({
@@ -23,8 +28,14 @@ export function SettingsModal({
   onUpdatePath,
   onToggleWatcher,
   onReimport,
+  rawaccelPath,
+  rawaccelAvailable,
+  onDetectRawaccel,
+  onUpdateRawaccelPath,
+  onTestRawaccel,
 }: SettingsModalProps) {
   const [manualPath, setManualPath] = useState(settingsPath ?? "");
+  const [manualRawaccel, setManualRawaccel] = useState(rawaccelPath ?? "");
   const { t } = useI18n();
 
   if (!open) return null;
@@ -170,6 +181,82 @@ export function SettingsModal({
             >
               {t("settings.reimport")}
             </button>
+          </div>
+
+          {/* RawAccel Integration Section */}
+          <div className="pt-4 border-t border-edge space-y-3">
+            <div className="flex items-center justify-between">
+              <label className="block text-[11px] font-semibold uppercase tracking-wider text-text-faint">
+                {t("randomizer.rawaccelPath")}
+              </label>
+              <span
+                className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
+                  rawaccelAvailable
+                    ? "bg-emerald-500/10 text-emerald border-emerald-500/30"
+                    : "bg-red-500/10 text-red border-red-500/30"
+                }`}
+              >
+                <span
+                  className={`h-1.5 w-1.5 rounded-full ${
+                    rawaccelAvailable ? "bg-emerald animate-pulse" : "bg-red"
+                  }`}
+                />
+                {rawaccelAvailable ? t("randomizer.ready") : t("randomizer.notReady")}
+              </span>
+            </div>
+
+            <div className="bg-surface-subtle border border-edge rounded-xl px-3.5 py-2 text-xs font-mono text-text-secondary break-all">
+              {rawaccelPath ?? t("settings.rawaccelNone")}
+            </div>
+
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={manualRawaccel}
+                onChange={(e) => setManualRawaccel(e.target.value)}
+                placeholder={t("settings.rawaccelPh")}
+                className="flex-1 minimal-input font-mono text-xs"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  if (manualRawaccel.trim() && onUpdateRawaccelPath) {
+                    void onUpdateRawaccelPath(manualRawaccel.trim());
+                  }
+                }}
+                disabled={!manualRawaccel.trim()}
+                className="px-3.5 py-2 rounded-full minimal-btn text-xs font-bold uppercase tracking-wider disabled:opacity-40"
+              >
+                {t("settings.save")}
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 pt-1">
+              <button
+                type="button"
+                onClick={async () => {
+                  if (onDetectRawaccel) {
+                    const detected = await onDetectRawaccel();
+                    if (detected) setManualRawaccel(detected);
+                  }
+                }}
+                className="px-3 py-2 minimal-btn-secondary text-xs font-medium rounded-full"
+              >
+                {t("randomizer.detectPath")}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (onTestRawaccel) {
+                    void onTestRawaccel();
+                  }
+                }}
+                disabled={!rawaccelAvailable}
+                className="px-3 py-2 minimal-btn-secondary text-xs font-medium rounded-full disabled:opacity-40"
+              >
+                {t("randomizer.testWriter")}
+              </button>
+            </div>
           </div>
         </div>
       </div>

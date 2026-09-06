@@ -5,6 +5,9 @@ import { GUIDE_URL } from "@/lib/links";
 import { openExternalUrl } from "@/lib/tauri-bridge";
 
 interface HeaderProps {
+  activeTab: "dashboard" | "randomizer";
+  onTabChange: (tab: "dashboard" | "randomizer") => void;
+  rawaccelAvailable: boolean;
   onOpenSettings: () => void;
   onExport: () => void;
   onImport: (file: File) => void;
@@ -14,6 +17,9 @@ interface HeaderProps {
 }
 
 export function Header({
+  activeTab,
+  onTabChange,
+  rawaccelAvailable,
   onOpenSettings,
   onExport,
   onImport,
@@ -27,30 +33,89 @@ export function Header({
   return (
     <header className="sticky top-0 z-40 chrome border-b border-white/[0.06] transition-all duration-200">
       <div className="max-w-7xl mx-auto px-5 sm:px-8 py-4 min-h-[68px] flex items-center justify-between gap-4">
-        {/* Brand / Logo */}
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="h-8 w-8 rounded-full bg-surface-subtle border border-edge flex items-center justify-center shrink-0 text-text-main">
-            <svg
-              className="w-4 h-4"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
+        {/* Brand / Logo + Tabs */}
+        <div className="flex items-center gap-4 sm:gap-6 min-w-0">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="h-8 w-8 rounded-full bg-surface-subtle border border-edge flex items-center justify-center shrink-0 text-text-main">
+              <svg
+                className="w-4 h-4"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <circle cx="12" cy="12" r="8" />
+                <line x1="12" y1="2" x2="12" y2="6" />
+                <line x1="12" y1="18" x2="12" y2="22" />
+                <line x1="2" y1="12" x2="6" y2="12" />
+                <line x1="18" y1="12" x2="22" y2="12" />
+              </svg>
+            </div>
+            <div className="hidden sm:flex items-center gap-2.5 min-w-0">
+              <h1 className="text-xs font-bold tracking-wider uppercase text-text-main truncate">
+                Aim Threshold Tracker
+              </h1>
+            </div>
+          </div>
+
+          {/* Navigation Tabs with Safety Lock */}
+          <nav className="flex items-center gap-1 bg-surface-subtle p-1 rounded-xl border border-edge">
+            <button
+              type="button"
+              onClick={() => onTabChange("dashboard")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-150 ${
+                activeTab === "dashboard"
+                  ? "bg-blue-500 text-white shadow-sm"
+                  : "text-text-secondary hover:text-text-main"
+              }`}
             >
-              <circle cx="12" cy="12" r="8" />
-              <line x1="12" y1="2" x2="12" y2="6" />
-              <line x1="12" y1="18" x2="12" y2="22" />
-              <line x1="2" y1="12" x2="6" y2="12" />
-              <line x1="18" y1="12" x2="22" y2="12" />
-            </svg>
-          </div>
-          <div className="flex items-center gap-2.5 min-w-0">
-            <h1 className="text-xs font-bold tracking-wider uppercase text-text-main truncate">
-              Aim Threshold Tracker
-            </h1>
-          </div>
+              {t("tab.dashboard")}
+            </button>
+            <button
+              type="button"
+              disabled={!rawaccelAvailable}
+              onClick={() => {
+                if (rawaccelAvailable) {
+                  onTabChange("randomizer");
+                }
+              }}
+              title={
+                !rawaccelAvailable
+                  ? t("tab.lockedTooltip")
+                  : t("tab.randomizer")
+              }
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all duration-150 ${
+                !rawaccelAvailable
+                  ? "opacity-50 cursor-not-allowed text-text-faint hover:bg-transparent"
+                  : activeTab === "randomizer"
+                  ? "bg-blue-500 text-white shadow-sm"
+                  : "text-text-secondary hover:text-text-main"
+              }`}
+            >
+              {!rawaccelAvailable && (
+                <svg
+                  className="w-3 h-3 text-amber-400 shrink-0"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                </svg>
+              )}
+              <span>{t("tab.randomizer")}</span>
+              {!rawaccelAvailable && (
+                <span className="hidden md:inline-block text-[10px] uppercase tracking-wider px-1.5 py-0.2 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 font-mono">
+                  {t("tab.lockedBadge")}
+                </span>
+              )}
+            </button>
+          </nav>
         </div>
 
         {/* Navigation & Controls */}
@@ -85,7 +150,7 @@ export function Header({
             type="button"
             onClick={() => void openExternalUrl(GUIDE_URL)}
             className="guide-btn px-3.5 h-8 text-xs font-semibold gap-1.5 shrink-0 rounded-full cursor-pointer"
-            title="Guia de Treino de Mira"
+            title={t("header.guideTitle")}
           >
             <svg
               className="w-3.5 h-3.5 text-text-secondary"

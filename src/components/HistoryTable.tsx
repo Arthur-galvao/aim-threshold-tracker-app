@@ -8,6 +8,13 @@ interface HistoryTableProps {
   onCopyEscalate: () => void;
 }
 
+function formatSensitivity(sens: number): string {
+  if (!sens || sens <= 0) return "-";
+  const effectiveSens = sens < 2.5 ? 13062.857 / (800 * sens) : sens;
+  const rounded = Number(effectiveSens.toFixed(1));
+  return `${rounded % 1 === 0 ? rounded.toFixed(0) : rounded.toFixed(1)} cm`;
+}
+
 export function HistoryTable({
   activeTask,
   onDeleteSession,
@@ -100,8 +107,8 @@ export function HistoryTable({
                     <td className="py-3 pr-4 text-text-secondary tabular-nums font-medium">
                       {d}/{m}
                     </td>
-                    <td className="py-3 pr-4 text-text-faint tabular-nums">
-                      {session.sens}cm
+                    <td className="py-3 pr-4 text-text-faint tabular-nums font-mono font-medium">
+                      {formatSensitivity(session.sens)}
                     </td>
                     <td className="py-3 pr-4 font-bold tabular-nums text-text-main transition-colors">
                       {session.pb}

@@ -21,8 +21,14 @@ pub fn parse_stats_file(path: &Path) -> Option<KovaakRun> {
     }
 
     let score = find_number(&content, &["score"])?;
-    let sens = find_number(&content, &["horizsens", "sens", "sensscale", "sensitivity"])
+    let raw_sens = find_number(&content, &["horizsens", "sens", "sensitivity"])
+        .or_else(|| find_number(&content, &["sensscale"]))
         .unwrap_or(0.0);
+    let sens_scale = find_line_value(&content, &["sensscale", "sensitivityscale", "scale"])
+        .or_else(|| find_csv_string_field(&content, &["sensscale", "sensitivityscale", "scale"]));
+    let dpi = find_number(&content, &["dpi"]).unwrap_or(800.0);
+
+    let sens = convert_sens_to_cm(raw_sens, sens_scale.as_deref(), dpi);
     let fov = find_number(&content, &["fov"]).unwrap_or(103.0);
     let datetime = parse_filename_datetime(&file_name)
         .or_else(|| parse_datetime_field(&content))
@@ -87,6 +93,65 @@ fn parse_datetime_field(content: &str) -> Option<String> {
     None
 }
 
+pub fn convert_sens_to_cm(raw_sens: f64, scale_str: Option<&str>, dpi: f64) -> f64 {
+    if raw_sens <= 0.0 || raw_sens.is_nan() || raw_sens.is_infinite() {
+        return 0.0;
+    }
+
+    let effective_dpi = if dpi > 0.0 { dpi } else { 800.0 };
+    let scale_norm = scale_str.map(normalize).unwrap_or_default();
+
+    let yaw = match scale_norm.as_str() {
+        // cm/360 scale: already in physical distance
+        "cm360" | "cm" => return round_sens(raw_sens),
+
+        // Valorant: yaw = 0.07 degrees
+        "valorant" => 0.07,
+
+        // Source / Apex Legends / CS:GO / CS2 / Quake: yaw = 0.022 degrees
+        "source" | "quake" | "quakesource" | "apex" | "apexlegends" | "csgo" | "cs2"
+        | "counterstrike" => 0.022,
+
+        // Overwatch / Overwatch 2 / Call of Duty: yaw = 0.0066 degrees
+        "overwatch" | "overwatch2" | "ow" | "callofduty" | "cod" | "modernwarfare" => 0.0066,
+
+        // Fortnite Slider: yaw = 0.00555555 degrees (percent) or 0.555555 (decimal)
+        "fortnite" | "fortniteslider" | "fortnitepercentage" => {
+            if raw_sens > 1.0 {
+                0.0055555555
+            } else {
+                0.55555555
+            }
+        }
+
+        // Rainbow Six Siege: yaw = 0.00528 degrees
+        "rainbowsix" | "rainbowsixsiege" | "r6" => 0.00528,
+
+        // Fallback when scale is missing or unspecified:
+        _ => {
+            // Typical cm/360 physical range is 5.0 to 150.0
+            if raw_sens >= 5.0 && raw_sens <= 150.0 {
+                return round_sens(raw_sens);
+            }
+            // Small values (< 2.5) with no scale are almost certainly in-game sens (Valorant yaw = 0.07)
+            0.07
+        }
+    };
+
+    // cm/360 = (360 * 2.54) / (DPI * yaw * sens)
+    // 360 * 2.54 = 914.4
+    let cm = 914.4 / (effective_dpi * yaw * raw_sens);
+    if cm.is_nan() || cm.is_infinite() {
+        0.0
+    } else {
+        round_sens(cm)
+    }
+}
+
+fn round_sens(val: f64) -> f64 {
+    (val * 10.0).round() / 10.0
+}
+
 fn normalize(value: &str) -> String {
     value
         .chars()
@@ -114,9 +179,10 @@ fn find_line_value(content: &str, aliases: &[&str]) -> Option<String> {
                 let before = lower[..idx].trim();
                 if normalize(before) == *alias {
                     let after = trimmed[idx + 1..].trim();
-                    let value: String = after
+                    let cleaned = after.trim_start_matches(',').trim();
+                    let value: String = cleaned
                         .chars()
-                        .filter(|c| c.is_alphanumeric() || c.is_whitespace() || *c == '.')
+                        .filter(|c| c.is_alphanumeric() || c.is_whitespace() || *c == '.' || *c == '/' || *c == '-' || *c == '_')
                         .collect();
                     let value = value.trim();
                     if !value.is_empty() {
@@ -268,6 +334,23 @@ mod tests {
         assert_eq!(run.datetime, "2026-10-20T09:15:00");
         assert_eq!(run.score, 920.0);
         assert_eq!(run.sens, 55.0);
+        cleanup(&path);
+    }
+
+    #[test]
+    fn converts_valorant_sens_to_cm() {
+        assert_eq!(convert_sens_to_cm(0.24013, Some("Valorant"), 800.0), 68.0);
+        assert_eq!(convert_sens_to_cm(0.32676, Some("Valorant"), 800.0), 50.0);
+        assert_eq!(convert_sens_to_cm(0.23, Some("Valorant"), 800.0), 71.0);
+        assert_eq!(convert_sens_to_cm(50.0, Some("cm/360"), 800.0), 50.0);
+    }
+
+    #[test]
+    fn parses_real_kovaak_valorant_format() {
+        let content = "Score:,120.0\nScenario:,1w2ts Pasu\nSens Scale:,Valorant\nHoriz Sens:,0.24013\nDPI:,800\nFOV:,103.0\n";
+        let path = write_temp("1w2ts Pasu - Challenge - 2026.07.28-19.24.07 Stats.csv", content);
+        let run = parse_stats_file(&path).expect("deveria parsear");
+        assert_eq!(run.sens, 68.0);
         cleanup(&path);
     }
 }

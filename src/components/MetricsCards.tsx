@@ -82,7 +82,7 @@ export function MetricsCards({ activeTask }: MetricsCardsProps) {
           <span className={`text-3xl sm:text-4xl font-extrabold tracking-tight tabular-nums ${
             metrics.consistency !== null ? "text-text-main" : "text-text-faint/40"
           }`}>
-            {metrics.consistency !== null ? `${metrics.consistency}%` : "0%"}
+            {metrics.consistency ?? "0%"}
           </span>
         </div>
       </div>
@@ -104,7 +104,12 @@ export function MetricsCards({ activeTask }: MetricsCardsProps) {
           <span className={`text-3xl sm:text-4xl font-extrabold tracking-tight tabular-nums ${
             metrics.lastSens !== null ? "text-text-main" : "text-text-faint/40"
           }`}>
-            {metrics.lastSens ?? "0"}
+            {(() => {
+              if (metrics.lastSens === null) return "0";
+              const val = metrics.lastSens < 2.5 ? (13062.857 / (800 * metrics.lastSens)) : metrics.lastSens;
+              const rounded = Number(val.toFixed(1));
+              return rounded % 1 === 0 ? rounded.toFixed(0) : rounded.toFixed(1);
+            })()}
           </span>
           <span className="text-xs font-medium text-text-faint">cm/360</span>
         </div>

@@ -93,7 +93,7 @@ export function TaskSelector({
               <span className="text-[11px] text-text-faint ml-auto flex items-center gap-1.5">
                 <span>{t("task.sens")}</span>
                 <strong className="px-2 py-0.5 rounded-full bg-surface border border-edge text-text-main text-xs tabular-nums font-semibold">
-                  {recSens ? `${recSens}cm` : "Padrão"}
+                  {recSens ? `${recSens}cm` : t("task.defaultSens")}
                 </strong>
               </span>
             </div>

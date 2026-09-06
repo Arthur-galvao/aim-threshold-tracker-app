@@ -10,7 +10,7 @@ use notify::{Event, EventKind, RecursiveMode, Watcher};
 use tauri::{AppHandle, Emitter, Manager, State};
 
 use crate::model::{
-    ImportStats, KovaakRun, Session, Task, DEFAULT_CATEGORY, DEFAULT_SUBCATEGORY,
+    AppData, ImportStats, KovaakRun, Session, Task, DEFAULT_CATEGORY, DEFAULT_SUBCATEGORY,
 };
 use crate::parser;
 use crate::storage;
@@ -118,6 +118,21 @@ fn process_new_csv(app: &AppHandle, path: &Path) -> Result<bool, String> {
     }
 
     app.emit("new_run", &run).map_err(|e| e.to_string())?;
+
+    let is_randomizer_enabled = {
+        let s = state.settings.lock().unwrap();
+        s.randomizer.enabled
+    };
+
+    if is_randomizer_enabled {
+        let app_clone = app.clone();
+        let scenario = run.scenario.clone();
+        let score = run.score;
+        thread::spawn(move || {
+            let _ = crate::randomizer::apply_next_sens(&app_clone, Some(scenario), Some(score));
+        });
+    }
+
     Ok(true)
 }
 
@@ -173,6 +188,18 @@ pub fn import_existing(app: &AppHandle) -> Result<ImportStats, String> {
             has_source_file(&data.tasks, &run.source_file)
         };
         if already {
+            // Update session sensitivity if it changed (e.g. was 0.24, now converted to 68.0 cm/360)
+            let mut data = state.data.lock().unwrap();
+            for task in &mut data.tasks {
+                for session in &mut task.sessions {
+                    if session.source_file.as_deref() == Some(&run.source_file) {
+                        if (session.sens - run.sens).abs() > 0.001 {
+                            session.sens = run.sens;
+                            new += 1;
+                        }
+                    }
+                }
+            }
             skipped += 1;
             continue;
         }
@@ -193,6 +220,42 @@ pub fn import_existing(app: &AppHandle) -> Result<ImportStats, String> {
     };
     app.emit("import_complete", &stats).map_err(|e| e.to_string())?;
     Ok(stats)
+}
+
+pub fn migrate_existing_sensitivities(data: &mut AppData, stats_dir: Option<&str>) -> bool {
+    let mut updated = false;
+    let base_dir = stats_dir.map(PathBuf::from);
+
+    for task in &mut data.tasks {
+        for session in &mut task.sessions {
+            // Any sensitivity < 2.5 is clearly an in-game sens rather than physical cm/360
+            if session.sens > 0.0 && session.sens < 2.5 {
+                let mut converted = false;
+
+                // Try to re-parse from source file if available
+                if let (Some(ref dir), Some(ref file_name)) = (&base_dir, &session.source_file) {
+                    let csv_path = dir.join(file_name);
+                    if csv_path.exists() {
+                        if let Some(run) = parser::parse_stats_file(&csv_path) {
+                            if run.sens > 2.5 {
+                                session.sens = run.sens;
+                                converted = true;
+                                updated = true;
+                            }
+                        }
+                    }
+                }
+
+                // If source file not found or couldn't be parsed, fallback to Valorant conversion
+                if !converted {
+                    session.sens = parser::convert_sens_to_cm(session.sens, Some("Valorant"), 800.0);
+                    updated = true;
+                }
+            }
+        }
+    }
+
+    updated
 }
 
 fn has_source_file(tasks: &[Task], source_file: &str) -> bool {

@@ -1,6 +1,7 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { AppProvider, useApp } from "@/hooks/useAppData";
 import { useKovaakWatcher } from "@/hooks/useKovaakWatcher";
+import { useSensRandomizer } from "@/hooks/useSensRandomizer";
 import { I18nProvider, useI18n } from "@/lib/i18n";
 import { Header } from "@/components/Header";
 import { TaskSelector } from "@/components/TaskSelector";
@@ -8,6 +9,7 @@ import { SessionForm } from "@/components/SessionForm";
 import { MetricsCards } from "@/components/MetricsCards";
 import { ProgressChart } from "@/components/ProgressChart";
 import { HistoryTable, copyEscalateToClipboard } from "@/components/HistoryTable";
+import { SensRandomizerView } from "@/components/SensRandomizerView";
 import { NewTaskModal } from "@/components/NewTaskModal";
 import { SettingsModal } from "@/components/SettingsModal";
 import { Toast } from "@/components/Toast";
@@ -37,10 +39,27 @@ function Dashboard() {
     detectKovaakPath,
   } = useKovaakWatcher();
 
+  const {
+    settings: randomizerSettings,
+    rawaccelAvailable,
+    detectPath: detectRawaccelPath,
+    saveSettings: saveRandomizerSettings,
+    testWriter: testRawaccelWriter,
+  } = useSensRandomizer();
+
+  const [activeTab, setActiveTab] = useState<"dashboard" | "randomizer">("dashboard");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [newTaskOpen, setNewTaskOpen] = useState(false);
 
   const { t } = useI18n();
+
+  // Safety lock guard: if RawAccel is not available, guarantee user cannot remain on randomizer
+  useEffect(() => {
+    if (!rawaccelAvailable && activeTab === "randomizer") {
+      setActiveTab("dashboard");
+      showToast(t("toast.randomizerLocked"), "error");
+    }
+  }, [rawaccelAvailable, activeTab, showToast, t]);
 
   const handleDetectPath = useCallback(async () => {
     const detected = await detectKovaakPath();
@@ -77,6 +96,9 @@ function Dashboard() {
       <div className="dot-bg" aria-hidden="true" />
 
       <Header
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        rawaccelAvailable={rawaccelAvailable}
         onOpenSettings={() => setSettingsOpen(true)}
         onExport={exportData}
         onImport={importData}
@@ -86,36 +108,42 @@ function Dashboard() {
       />
 
       <main className="relative z-10 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 flex-1 flex flex-col gap-6">
-        {/* Top Full-Width KPI Metrics Cards */}
-        <section aria-label="Métricas Principais">
-          <MetricsCards activeTask={activeTask} />
-        </section>
+        {activeTab === "dashboard" ? (
+          <>
+            {/* Top Full-Width KPI Metrics Cards */}
+            <section aria-label="KPI Metrics">
+              <MetricsCards activeTask={activeTask} />
+            </section>
 
-        {/* 2-Column Dashboard Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-          {/* Left Column: Task Selector & Manual Entry */}
-          <div className="lg:col-span-4 xl:col-span-4 space-y-6">
-            <TaskSelector
-              tasks={appData.tasks}
-              activeTaskId={appData.activeTaskId}
-              onTaskChange={setActiveTaskId}
-              onNewTask={() => setNewTaskOpen(true)}
-              onDeleteTask={deleteCurrentTask}
-            />
+            {/* 2-Column Dashboard Grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+              {/* Left Column: Task Selector & Manual Entry */}
+              <div className="lg:col-span-4 xl:col-span-4 space-y-6">
+                <TaskSelector
+                  tasks={appData.tasks}
+                  activeTaskId={appData.activeTaskId}
+                  onTaskChange={setActiveTaskId}
+                  onNewTask={() => setNewTaskOpen(true)}
+                  onDeleteTask={deleteCurrentTask}
+                />
 
-            <SessionForm activeTask={activeTask} onSubmit={addManualSessions} />
-          </div>
+                <SessionForm activeTask={activeTask} onSubmit={addManualSessions} />
+              </div>
 
-          {/* Right Column: Chart & History Table */}
-          <div className="lg:col-span-8 xl:col-span-8 space-y-6">
-            <ProgressChart activeTask={activeTask} />
-            <HistoryTable
-              activeTask={activeTask}
-              onDeleteSession={deleteSession}
-              onCopyEscalate={handleCopyEscalate}
-            />
-          </div>
-        </div>
+              {/* Right Column: Chart & History Table */}
+              <div className="lg:col-span-8 xl:col-span-8 space-y-6">
+                <ProgressChart activeTask={activeTask} />
+                <HistoryTable
+                  activeTask={activeTask}
+                  onDeleteSession={deleteSession}
+                  onCopyEscalate={handleCopyEscalate}
+                />
+              </div>
+            </div>
+          </>
+        ) : (
+          <SensRandomizerView activeTask={activeTask} allTasks={appData.tasks} />
+        )}
       </main>
 
       <footer className="relative z-10 py-6 px-4 text-center text-xs text-text-faint">
@@ -142,6 +170,13 @@ function Dashboard() {
         onUpdatePath={handleUpdatePath}
         onToggleWatcher={toggleWatcher}
         onReimport={handleReimport}
+        rawaccelPath={randomizerSettings.rawaccelDir}
+        rawaccelAvailable={rawaccelAvailable}
+        onDetectRawaccel={detectRawaccelPath}
+        onUpdateRawaccelPath={async (path) => {
+          await saveRandomizerSettings({ ...randomizerSettings, rawaccelDir: path });
+        }}
+        onTestRawaccel={testRawaccelWriter}
       />
 
       <Toast />

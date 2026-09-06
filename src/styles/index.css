@@ -4,6 +4,7 @@
 
 @layer base {
   :root {
+    color-scheme: light;
     --base: #fafafa;
     --surface: #ffffff;
     --surface-subtle: #f4f4f5;
@@ -37,6 +38,7 @@
   }
 
   .dark {
+    color-scheme: dark;
     --base: #090a0f;
     --surface: #12131a;
     --surface-subtle: #0a0b10;
@@ -110,7 +112,8 @@ body {
   }
 
   /* Recessed Inputs */
-  .minimal-input {
+  .minimal-input,
+  .input {
     width: 100%;
     background-color: var(--surface-subtle);
     border: 1px solid var(--edge);
@@ -122,14 +125,27 @@ body {
     font-family: inherit;
   }
 
-  .minimal-input:focus {
+  .minimal-input:focus,
+  .input:focus {
     outline: none;
     border-color: var(--edge-strong);
     box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.08);
   }
 
-  .minimal-input::placeholder {
+  .minimal-input::placeholder,
+  .input::placeholder {
     color: var(--text-faint);
+  }
+
+  /* Clean number inputs without bulky browser spinners */
+  input[type="number"]::-webkit-outer-spin-button,
+  input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  input[type="number"] {
+    -moz-appearance: textfield;
   }
 
   .dark input[type="date"]::-webkit-calendar-picker-indicator {
