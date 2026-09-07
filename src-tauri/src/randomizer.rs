@@ -203,6 +203,11 @@ pub fn update_and_apply_scale(rawaccel_dir: &Path, scale: f64) -> Result<(), Str
 
     if let Some(profiles) = json.get_mut("profiles").and_then(|p| p.as_array_mut()) {
         if let Some(first_profile) = profiles.get_mut(0) {
+            let output_dpi = (scale * 1000.0 * 100.0).round() / 100.0;
+            if let Some(obj) = first_profile.as_object_mut() {
+                obj.insert("Output DPI".to_string(), serde_json::json!(output_dpi));
+            }
+
             if let Some(whole_params) = first_profile
                 .get_mut("Whole or horizontal accel parameters")
                 .and_then(|w| w.as_object_mut())
