@@ -88,8 +88,27 @@ pub fn is_valid_rawaccel_dir(dir: &Path) -> bool {
         && dir.join("settings.json").exists()
 }
 
-pub fn check_rawaccel_availability(configured_dir: Option<&str>) -> (bool, Option<PathBuf>, Option<String>) {
+pub fn is_rawaccel_gui_running() -> bool {
+    #[cfg(windows)]
+    {
+        let mut cmd = Command::new("tasklist");
+        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+        cmd.args(["/FI", "IMAGENAME eq rawaccel.exe", "/NH"]);
+        if let Ok(output) = cmd.output() {
+            let text = String::from_utf8_lossy(&output.stdout);
+            return text.to_lowercase().contains("rawaccel.exe");
+        }
+    }
+    false
+}
+
+pub fn restore_base_sens(rawaccel_dir: &Path) -> Result<(), String> {
+    update_and_apply_scale(rawaccel_dir, 1.0)
+}
+
+pub fn check_rawaccel_availability(configured_dir: Option<&str>) -> (bool, Option<PathBuf>, Option<String>, bool) {
     let found_dir = detect_rawaccel_dir(configured_dir);
+    let gui_running = is_rawaccel_gui_running();
 
     match found_dir {
         Some(dir) => {
@@ -99,15 +118,24 @@ pub fn check_rawaccel_availability(configured_dir: Option<&str>) -> (bool, Optio
                     false,
                     Some(dir),
                     Some("Pasta do RawAccel encontrada, mas o driver de kernel não está registrado. Execute o installer.exe e reinicie o PC.".into()),
+                    gui_running,
+                )
+            } else if gui_running {
+                (
+                    true,
+                    Some(dir),
+                    Some("Aviso: A interface gráfica do Raw Accel (rawaccel.exe) está aberta. Feche a janela para evitar que ela reverta a sensibilidade sorteada.".into()),
+                    true,
                 )
             } else {
-                (true, Some(dir), None)
+                (true, Some(dir), None, false)
             }
         }
         None => (
             false,
             None,
             Some("RawAccel não encontrado nos locais comuns nem configurado nas opções.".into()),
+            gui_running,
         ),
     }
 }
@@ -234,11 +262,12 @@ pub fn apply_next_sens(
         (s.randomizer.clone(), current)
     };
 
-    let (available, found_dir, err_msg) = check_rawaccel_availability(settings.rawaccel_dir.as_deref());
+    let (available, found_dir, err_msg, gui_running) = check_rawaccel_availability(settings.rawaccel_dir.as_deref());
 
     if !available {
         let mut r_state = state.randomizer_state.lock().unwrap();
         r_state.available = false;
+        r_state.rawaccel_gui_running = gui_running;
         r_state.error_message = err_msg.clone();
         let clone = r_state.clone();
         drop(r_state);
@@ -257,12 +286,13 @@ pub fn apply_next_sens(
     let new_state = {
         let mut r_state = state.randomizer_state.lock().unwrap();
         r_state.available = true;
+        r_state.rawaccel_gui_running = gui_running;
         r_state.active_sens_cm = next_cm;
         r_state.active_mult = next_mult;
         r_state.last_run_scenario = last_scenario;
         r_state.last_run_score = last_score;
         r_state.last_updated = Some(now_iso);
-        r_state.error_message = None;
+        r_state.error_message = err_msg;
         r_state.clone()
     };
 
@@ -270,4 +300,59 @@ pub fn apply_next_sens(
         .map_err(|e| e.to_string())?;
 
     Ok(new_state)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_generate_next_sens_cm_mode() {
+        let settings = RandomizerSettings {
+            enabled: true,
+            base_sens_cm: 50.0,
+            range_mode: "cm360".to_string(),
+            min_cm: 30.0,
+            max_cm: 60.0,
+            min_mult: 0.7,
+            max_mult: 1.3,
+            avoid_repeats: true,
+            rawaccel_dir: None,
+        };
+
+        for _ in 0..50 {
+            let (cm, mult) = generate_next_sens(&settings, 50.0);
+            assert!(cm >= 30.0 && cm <= 60.0);
+            assert!(mult > 0.0);
+            let expected_mult = (50.0 / cm * 10000.0).round() / 10000.0;
+            assert!((mult - expected_mult).abs() < 0.001);
+        }
+    }
+
+    #[test]
+    fn test_generate_next_sens_mult_mode() {
+        let settings = RandomizerSettings {
+            enabled: true,
+            base_sens_cm: 40.0,
+            range_mode: "multiplier".to_string(),
+            min_cm: 20.0,
+            max_cm: 80.0,
+            min_mult: 0.8,
+            max_mult: 1.2,
+            avoid_repeats: false,
+            rawaccel_dir: None,
+        };
+
+        for _ in 0..50 {
+            let (cm, mult) = generate_next_sens(&settings, 40.0);
+            assert!(mult >= 0.8 && mult <= 1.2);
+            assert!(cm > 0.0);
+        }
+    }
+
+    #[test]
+    fn test_is_valid_rawaccel_dir_nonexistent() {
+        let fake_dir = Path::new("C:\\nonexistent_dir_12345");
+        assert!(!is_valid_rawaccel_dir(fake_dir));
+    }
 }

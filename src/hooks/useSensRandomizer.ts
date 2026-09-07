@@ -24,6 +24,7 @@ export interface RandomizerState {
   lastRunScore: number | null;
   lastUpdated: string | null;
   errorMessage: string | null;
+  rawaccelGuiRunning?: boolean;
 }
 
 const DEFAULT_SETTINGS: RandomizerSettings = {
@@ -46,6 +47,7 @@ const DEFAULT_STATE: RandomizerState = {
   lastRunScore: null,
   lastUpdated: null,
   errorMessage: null,
+  rawaccelGuiRunning: false,
 };
 
 export function useSensRandomizer() {
@@ -78,13 +80,17 @@ export function useSensRandomizer() {
     let unlisten: (() => void) | undefined;
     listen<RandomizerState>("sens_updated", (event) => {
       setRandomizerState(event.payload);
-      showToast(
-        t("toast.sensUpdated", {
-          sens: event.payload.activeSensCm.toFixed(2),
-          mult: event.payload.activeMult.toFixed(2),
-        }),
-        "info"
-      );
+      if (event.payload.activeMult === 1.0 && event.payload.lastRunScenario === null) {
+        showToast(t("toast.sensRestored"), "info");
+      } else {
+        showToast(
+          t("toast.sensUpdated", {
+            sens: event.payload.activeSensCm.toFixed(2),
+            mult: event.payload.activeMult.toFixed(2),
+          }),
+          "info"
+        );
+      }
     }).then((fn) => {
       unlisten = fn;
     });
@@ -97,9 +103,8 @@ export function useSensRandomizer() {
   const saveSettings = useCallback(
     async (newSettings: RandomizerSettings) => {
       try {
-        await invoke("save_randomizer_settings", { settings: newSettings });
+        const updatedState = await invoke<RandomizerState>("save_randomizer_settings", { settings: newSettings });
         setSettings(newSettings);
-        const updatedState = await invoke<RandomizerState>("check_rawaccel_available");
         setRandomizerState(updatedState);
         showToast(t("randomizer.saveSettings"), "success");
       } catch (err) {

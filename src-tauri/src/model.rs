@@ -82,6 +82,8 @@ pub struct RandomizerState {
     pub last_run_score: Option<f64>,
     pub last_updated: Option<String>,
     pub error_message: Option<String>,
+    #[serde(default)]
+    pub rawaccel_gui_running: bool,
 }
 
 impl Default for RandomizerState {
@@ -94,6 +96,7 @@ impl Default for RandomizerState {
             last_run_score: None,
             last_updated: None,
             error_message: None,
+            rawaccel_gui_running: false,
         }
     }
 }

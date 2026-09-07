@@ -8,7 +8,7 @@ mod watcher;
 use std::collections::HashSet;
 use std::sync::Mutex;
 
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 
 use model::{AppData, AppSettings, ImportStats, RandomizerSettings, RandomizerState, WatcherStatus};
 
@@ -178,9 +178,10 @@ fn check_rawaccel_available(state: State<'_, AppState>) -> Result<RandomizerStat
         let s = state.settings.lock().unwrap();
         (s.randomizer.rawaccel_dir.clone(), s.randomizer.base_sens_cm)
     };
-    let (avail, _, err_msg) = randomizer::check_rawaccel_availability(configured_dir.as_deref());
+    let (avail, _, err_msg, gui_running) = randomizer::check_rawaccel_availability(configured_dir.as_deref());
     let mut r_state = state.randomizer_state.lock().unwrap();
     r_state.available = avail;
+    r_state.rawaccel_gui_running = gui_running;
     if r_state.active_sens_cm <= 0.0 {
         r_state.active_sens_cm = base_cm;
     }
@@ -198,7 +199,13 @@ fn save_randomizer_settings(
     app: AppHandle,
     state: State<'_, AppState>,
     settings: RandomizerSettings,
-) -> Result<(), String> {
+) -> Result<RandomizerState, String> {
+    let was_enabled = {
+        let s = state.settings.lock().unwrap();
+        s.randomizer.enabled
+    };
+    let is_enabled = settings.enabled;
+
     {
         let mut app_settings = state.settings.lock().unwrap();
         app_settings.randomizer = settings.clone();
@@ -206,12 +213,34 @@ fn save_randomizer_settings(
     let app_settings = state.settings.lock().unwrap().clone();
     storage::save_settings(&app, &app_settings)?;
 
-    let (avail, _, err_msg) = randomizer::check_rawaccel_availability(settings.rawaccel_dir.as_deref());
-    let mut r_state = state.randomizer_state.lock().unwrap();
-    r_state.available = avail;
-    r_state.error_message = err_msg;
+    let (avail, found_dir, err_msg, gui_running) = randomizer::check_rawaccel_availability(settings.rawaccel_dir.as_deref());
+    {
+        let mut r_state = state.randomizer_state.lock().unwrap();
+        r_state.available = avail;
+        r_state.rawaccel_gui_running = gui_running;
+        r_state.error_message = err_msg;
+    }
 
-    Ok(())
+    if !was_enabled && is_enabled && avail {
+        return randomizer::apply_next_sens(&app, None, None);
+    } else if was_enabled && !is_enabled && avail {
+        if let Some(ref dir) = found_dir {
+            let _ = randomizer::restore_base_sens(dir);
+        }
+        let now_iso = chrono::Local::now().to_rfc3339();
+        let base_cm = if settings.base_sens_cm > 0.0 { settings.base_sens_cm } else { 40.0 };
+        let new_state = {
+            let mut r_state = state.randomizer_state.lock().unwrap();
+            r_state.active_sens_cm = base_cm;
+            r_state.active_mult = 1.0;
+            r_state.last_updated = Some(now_iso);
+            r_state.clone()
+        };
+        let _ = app.emit("sens_updated", &new_state);
+        return Ok(new_state);
+    }
+
+    Ok(state.randomizer_state.lock().unwrap().clone())
 }
 
 #[tauri::command]
@@ -263,7 +292,7 @@ pub fn run() {
                 let _ = storage::save_app_data(app.handle(), &data);
             }
 
-            let (avail, found_dir, err_msg) = randomizer::check_rawaccel_availability(settings.randomizer.rawaccel_dir.as_deref());
+            let (avail, found_dir, err_msg, gui_running) = randomizer::check_rawaccel_availability(settings.randomizer.rawaccel_dir.as_deref());
 
             if settings.randomizer.rawaccel_dir.is_none() {
                 if let Some(ref dir) = found_dir {
@@ -274,6 +303,7 @@ pub fn run() {
 
             let initial_r_state = RandomizerState {
                 available: avail,
+                rawaccel_gui_running: gui_running,
                 active_sens_cm: if settings.randomizer.base_sens_cm > 0.0 { settings.randomizer.base_sens_cm } else { 40.0 },
                 active_mult: 1.0,
                 last_run_scenario: None,
