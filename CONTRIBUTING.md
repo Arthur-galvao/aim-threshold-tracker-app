@@ -1,50 +1,52 @@
-# Contribuindo
+# Contributing
 
-Obrigado pelo interesse em contribuir com o Aim Threshold Tracker.
+[English](CONTRIBUTING.md) | [Português (Brasil)](CONTRIBUTING.pt-BR.md)
 
-## Rodando o projeto localmente
+Thank you for your interest in contributing to Aim Threshold Tracker.
 
-Pré-requisitos:
+## Running the project locally
+
+Prerequisites:
 - Node.js 18+
 - Rust (via [rustup](https://rustup.rs))
-- No Windows, o Microsoft C++ Build Tools
+- On Windows, Microsoft C++ Build Tools
 
 ```bash
 npm install
-npm run tauri:dev    # app desktop, com hot reload
-npm run dev           # só o frontend, no navegador (sem os recursos do Tauri)
+npm run tauri:dev    # desktop app with hot reload
+npm run dev           # frontend only, in browser (without Tauri backend features)
 ```
 
-## Build local do instalador
+## Local installer build
 
 ```bash
 npm run tauri:build
 ```
 
-O instalador é gerado em `src-tauri/target/release/bundle/nsis/`.
+The installer will be generated in `src-tauri/target/release/bundle/nsis/`.
 
-## Publicando uma nova versão
+## Publishing a new release
 
-O repositório tem um workflow do GitHub Actions (`.github/workflows/release.yml`) que builda o instalador Windows automaticamente e cria um Release em rascunho.
+The repository includes a GitHub Actions workflow (`.github/workflows/release.yml`) that automatically builds the Windows installer and creates a draft Release.
 
 ```bash
 git tag v1.0.1
 git push origin v1.0.1
 ```
 
-Depois é só revisar o rascunho gerado na aba Releases e publicar.
+After pushing the tag, review the draft release created under the Releases tab and publish it.
 
-## Estrutura do projeto
+## Project structure
 
-- `src/` — interface (React, Tailwind, Chart.js)
-  - `components/` — componentes de UI
-  - `hooks/` — hooks customizados (`useAppData`, `useKovaakWatcher`)
-  - `lib/` — cálculo de threshold, i18n, temas e ponte com o Tauri
-- `src-tauri/` — backend Rust (detecção e watcher da pasta do KovaaK's, persistência local, parser de CSV)
-- `.github/workflows/` — build e release automático do instalador
+- `src/` — UI frontend (React, Tailwind, Chart.js)
+  - `components/` — UI components
+  - `hooks/` — custom hooks (`useAppData`, `useKovaakWatcher`, `useSensRandomizer`)
+  - `lib/` — threshold algorithms, i18n, themes, and Tauri bridge
+- `src-tauri/` — Rust backend (KovaaK's folder detection & file watcher, local persistence, CSV parsing, Raw Accel configuration writer)
+- `.github/workflows/` — automated installer build and release pipeline
 
-## Enviando mudanças
+## Submitting changes
 
-1. Faça um fork do repositório
-2. Crie uma branch a partir da `main`
-3. Abra um Pull Request descrevendo a mudança
+1. Fork the repository
+2. Create a branch from `main`
+3. Open a Pull Request describing your changes

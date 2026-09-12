@@ -486,7 +486,11 @@ function format(template: string, params?: Params): string {
 export function I18nProvider({ children }: { children: ReactNode }) {
   const [lang, setLangState] = useState<Lang>(() => {
     const stored = localStorage.getItem(STORAGE_KEY);
-    return stored === "en" ? "en" : "pt";
+    if (stored === "en" || stored === "pt") return stored;
+    if (typeof navigator !== "undefined" && navigator.language?.toLowerCase().startsWith("pt")) {
+      return "pt";
+    }
+    return "en";
   });
 
   useEffect(() => {

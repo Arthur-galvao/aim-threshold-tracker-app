@@ -29,8 +29,8 @@
   "bundle": {
     "active": true,
     "targets": ["nsis"],
-    "shortDescription": "Rastreador de thresholds de mira com detecção automática das runs do KovaaK's",
-    "longDescription": "Aplicativo desktop que monitora a pasta de stats do KovaaK's em tempo real, extrai pontuações dos CSVs e atualiza automaticamente thresholds, médias móveis e gráficos.",
+    "shortDescription": "Aim threshold tracker with automatic KovaaK's runs detection and sensitivity randomizer",
+    "longDescription": "Desktop application that monitors KovaaK's stats folder in real time, extracts scores from CSVs, and automatically tracks thresholds, moving averages, and sweet spot analysis.",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
