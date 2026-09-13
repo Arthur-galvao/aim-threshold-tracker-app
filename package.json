@@ -1,7 +1,7 @@
 {
   "name": "aim-threshold-tracker",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Desktop app to track KovaaK's aim thresholds with sensitivity randomization and sweet spot analysis",
   "type": "module",
   "scripts": {
