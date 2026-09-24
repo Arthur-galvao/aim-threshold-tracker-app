@@ -5,6 +5,8 @@ import {
   formatSensitivity,
   calculateParabolicTrendline,
   computeSweetSpotAnalytics,
+  predictOptimalSensitivity,
+  PREDICTOR_PROFILES,
 } from "../src/lib/sens-analytics.ts";
 
 describe("sens-analytics", () => {
@@ -76,37 +78,170 @@ describe("sens-analytics", () => {
       assert.equal(computeSweetSpotAnalytics([]), null);
     });
 
-    it("applies Bayesian shrinkage and sample variance correctly", () => {
+    it("groups by specific sensitivities instead of ranges", () => {
       const runs = [
-        // Bucket 35-40: 5 runs, high scores, high consistency
-        { sens: 37, score: 98 },
-        { sens: 38, score: 99 },
-        { sens: 36, score: 97 },
-        { sens: 37.5, score: 98.5 },
-        { sens: 39, score: 97.5 },
-        // Bucket 50-55: 1 lucky run with 100 score
-        { sens: 52, score: 100 },
+        { sens: 67.5, score: 95 },
+        { sens: 67.5, score: 97 },
+        { sens: 67.5, score: 96 },
+        { sens: 50.0, score: 90 },
+        { sens: 108.4, score: 85 },
+      ];
+
+      const analysis = computeSweetSpotAnalytics(runs);
+      assert.ok(analysis !== null);
+      assert.equal(analysis.totalRuns, 5);
+
+      // Best entry should be specific sensitivity 67.5 cm
+      assert.ok(analysis.bestBucket !== null);
+      assert.equal(analysis.bestBucket.sens, 67.5);
+      assert.equal(analysis.bestBucket.rangeLabel, "67.5 cm");
+      assert.equal(analysis.bestBucket.count, 3);
+
+      // Buckets should NOT have range formats like "65 - 70 cm"
+      for (const bucket of analysis.buckets) {
+        assert.ok(!bucket.rangeLabel.includes("-"), `rangeLabel should not be a range: ${bucket.rangeLabel}`);
+        assert.equal(typeof bucket.sens, "number");
+      }
+
+      const sens50 = analysis.buckets.find((b) => b.sens === 50.0);
+      assert.ok(sens50 !== undefined);
+      assert.equal(sens50.rangeLabel, "50 cm");
+      assert.equal(sens50.count, 1);
+    });
+
+    it("applies Bayesian shrinkage and sample variance correctly across specific sensitivities", () => {
+      const runs = [
+        // 68 cm: 5 runs, high scores, high consistency
+        { sens: 68.0, score: 98 },
+        { sens: 68.0, score: 99 },
+        { sens: 68.0, score: 97 },
+        { sens: 68.0, score: 98.5 },
+        { sens: 68.0, score: 97.5 },
+        // 50 cm: 1 lucky run with 100 score
+        { sens: 50.0, score: 100 },
       ];
 
       const analysis = computeSweetSpotAnalytics(runs);
       assert.ok(analysis !== null);
       assert.equal(analysis.totalRuns, 6);
 
-      // Best bucket should be 35-40 due to sample qualification and Bayesian shrinkage,
-      // NOT the single-run bucket 50-55
+      // Best bucket should be specific 68.0 cm due to sample qualification and Bayesian shrinkage
       assert.ok(analysis.bestBucket !== null);
-      assert.equal(analysis.bestBucket.min, 35);
+      assert.equal(analysis.bestBucket.sens, 68.0);
+      assert.equal(analysis.bestBucket.rangeLabel, "68 cm");
       assert.equal(analysis.bestBucket.count, 5);
       assert.ok(analysis.bestBucket.stdDev !== null && analysis.bestBucket.stdDev < 2);
       assert.ok(analysis.bestBucket.confidenceLevel === "medium");
 
-      // The single-run bucket should have null stdDev and insufficient confidence
-      const singleBucket = analysis.buckets.find((b) => b.min === 50);
-      assert.ok(singleBucket !== undefined);
-      assert.equal(singleBucket.count, 1);
-      assert.equal(singleBucket.stdDev, null);
-      assert.equal(singleBucket.consistency, null);
-      assert.equal(singleBucket.confidenceLevel, "insufficient");
+      // Single-run specific sensitivity should have insufficient confidence
+      const single = analysis.buckets.find((b) => b.sens === 50.0);
+      assert.ok(single !== undefined);
+      assert.equal(single.count, 1);
+      assert.equal(single.stdDev, null);
+      assert.equal(single.consistency, null);
+      assert.equal(single.confidenceLevel, "insufficient");
+    });
+  });
+
+  describe("predictOptimalSensitivity", () => {
+    it("returns null when runs array is empty", () => {
+      assert.equal(predictOptimalSensitivity([]), null);
+    });
+
+    it("predicts optimal sensitivity combining parabolic apex and empirical sweet spot", () => {
+      // Create a quadratic curve peaking around 60 cm: y = -(x-60)^2 + 1000
+      const runs = [
+        { sens: 40.0, score: 600 },
+        { sens: 45.0, score: 775 },
+        { sens: 50.0, score: 900 },
+        { sens: 55.0, score: 975 },
+        { sens: 60.0, score: 1000 },
+        { sens: 60.0, score: 990 },
+        { sens: 65.0, score: 975 },
+        { sens: 70.0, score: 900 },
+        { sens: 75.0, score: 775 },
+        { sens: 80.0, score: 600 },
+      ];
+
+      const prediction = predictOptimalSensitivity(runs);
+      assert.ok(prediction !== null);
+      assert.ok(typeof prediction.predictedSens === "number");
+      // The predicted sensitivity should be close to 60 cm
+      assert.ok(Math.abs(prediction.predictedSens - 60.0) <= 2.5);
+      assert.ok(prediction.label.includes("cm"));
+      assert.ok(prediction.confidence === "medium" || prediction.confidence === "high");
+      assert.ok(prediction.vertexSens !== null && Math.abs(prediction.vertexSens - 60.0) <= 1.0);
+    });
+
+    it("marks confidence as insufficient when fewer than 5 runs are supplied", () => {
+      const runs = [
+        { sens: 50.0, score: 900 },
+        { sens: 55.0, score: 950 },
+        { sens: 60.0, score: 920 },
+      ];
+
+      const prediction = predictOptimalSensitivity(runs);
+      assert.ok(prediction !== null);
+      assert.equal(prediction.confidence, "insufficient");
+    });
+
+    it("falls back gracefully to empirical best when parabolic vertex is convex or invalid", () => {
+      // Linear or flat distribution: y = x + 100
+      const runs = [
+        { sens: 40.0, score: 140 },
+        { sens: 50.0, score: 150 },
+        { sens: 60.0, score: 160 },
+        { sens: 70.0, score: 170 },
+        { sens: 80.0, score: 180 },
+        { sens: 80.0, score: 182 },
+      ];
+
+      const prediction = predictOptimalSensitivity(runs);
+      assert.ok(prediction !== null);
+      // Empirical best is 80 cm
+      assert.equal(prediction.empiricalSens, 80.0);
+      assert.ok(Math.abs(prediction.predictedSens - 80.0) < 5.0);
+    });
+
+    it("applies customizable profile weights correctly", () => {
+      // Curve with vertex at ~68.9 cm, but high-count empirical stability at 50 cm
+      const runs = [
+        { sens: 40, score: 800 },
+        { sens: 50, score: 920 },
+        { sens: 50, score: 920 },
+        { sens: 50, score: 920 },
+        { sens: 50, score: 920 },
+        { sens: 50, score: 920 },
+        { sens: 60, score: 960 },
+        { sens: 70, score: 980 },
+        { sens: 80, score: 960 },
+        { sens: 90, score: 900 },
+      ];
+
+      const predDefault = predictOptimalSensitivity(runs, "equilibrado");
+      const predNeutral = predictOptimalSensitivity(runs, "neutro");
+      const predTheoretical = predictOptimalSensitivity(runs, "teorico");
+      const predConsistency = predictOptimalSensitivity(runs, "consistencia");
+
+      assert.ok(predDefault && predNeutral && predTheoretical && predConsistency);
+      assert.equal(predDefault.profile, "equilibrado");
+      assert.equal(predNeutral.profile, "neutro");
+      assert.equal(predTheoretical.profile, "teorico");
+      assert.equal(predConsistency.profile, "consistencia");
+
+      // Theoretical apex is > empirical best (50 cm), so higher theoretical weight must produce higher predicted sensitivity
+      assert.ok(
+        predTheoretical.predictedSens > predDefault.predictedSens,
+        `Theoretical (${predTheoretical.predictedSens}) should be > Default (${predDefault.predictedSens})`
+      );
+      assert.ok(
+        predDefault.predictedSens > predNeutral.predictedSens,
+        `Default (${predDefault.predictedSens}) should be > Neutral (${predNeutral.predictedSens})`
+      );
+      assert.ok(
+        predNeutral.predictedSens > predConsistency.predictedSens,
+        `Neutral (${predNeutral.predictedSens}) should be > Consistency (${predConsistency.predictedSens})`
+      );
     });
   });
 });

@@ -1,6 +1,4 @@
-import type { AppData, Task } from "./types";
-import { categorizeScenario } from "./viscose";
-import { recalculateAllTaskThresholds } from "./threshold";
+import type { AppData } from "./types";
 
 export const SAMPLE_DATA: AppData = {
   activeTaskId: "task_1",
@@ -35,58 +33,9 @@ export const SAMPLE_DATA: AppData = {
   ],
 };
 
-export function findTaskByScenario(tasks: Task[], scenario: string): Task | undefined {
-  const normalized = scenario.trim().toLowerCase();
-  return tasks.find((t) => t.name.trim().toLowerCase() === normalized);
-}
-
-export function createTaskFromScenario(scenario: string): Task {
-  const { category, subcategory } = categorizeScenario(scenario);
-  return {
-    id: `task_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-    name: scenario.trim(),
-    category,
-    subcategory,
-    sessions: [],
-  };
-}
-
-export function addSessionsFromRun(
-  data: AppData,
-  scenario: string,
-  date: string,
-  sens: number,
-  score: number,
-  sourceFile?: string
-): { task: Task; isNew: boolean } {
-  let task = findTaskByScenario(data.tasks, scenario);
-  let isNew = false;
-
-  if (!task) {
-    task = createTaskFromScenario(scenario);
-    data.tasks.push(task);
-    isNew = true;
-  }
-
-  const newSession = {
-    id: `sess_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-    date,
-    sens,
-    pb: score,
-    threshold: 0,
-    sourceFile,
-  };
-
-  task.sessions.push(newSession);
-  recalculateAllTaskThresholds(task);
-
-  if (isNew || data.activeTaskId === null) {
-    data.activeTaskId = task.id;
-  }
-
-  return { task, isNew };
-}
-
-export function cloneAppData(data: AppData): AppData {
-  return JSON.parse(JSON.stringify(data));
-}
+export {
+  cloneAppData,
+  findTaskByScenario,
+  createTaskFromScenario,
+  addSessionsFromRun,
+} from "./threshold";

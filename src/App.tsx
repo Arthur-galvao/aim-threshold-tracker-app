@@ -100,10 +100,6 @@ function Dashboard() {
         onTabChange={setActiveTab}
         rawaccelAvailable={rawaccelAvailable}
         onOpenSettings={() => setSettingsOpen(true)}
-        onExport={exportData}
-        onImport={importData}
-        onLoadDemo={loadDemoData}
-        onClear={clearAllData}
         watcherStatus={watcherStatus}
       />
 
@@ -177,6 +173,10 @@ function Dashboard() {
           await saveRandomizerSettings({ ...randomizerSettings, rawaccelDir: path });
         }}
         onTestRawaccel={testRawaccelWriter}
+        onExport={exportData}
+        onImport={importData}
+        onLoadDemo={loadDemoData}
+        onClear={clearAllData}
       />
 
       <Toast />

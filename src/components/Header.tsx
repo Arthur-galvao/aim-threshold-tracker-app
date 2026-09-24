@@ -1,18 +1,14 @@
 import type { WatcherStatus } from "@/lib/types";
 import { useTheme } from "@/lib/theme";
 import { useI18n } from "@/lib/i18n";
-import { GUIDE_URL } from "@/lib/links";
 import { openExternalUrl } from "@/lib/tauri-bridge";
+import { GUIDE_URL } from "@/lib/links";
 
 interface HeaderProps {
   activeTab: "dashboard" | "randomizer";
   onTabChange: (tab: "dashboard" | "randomizer") => void;
   rawaccelAvailable: boolean;
   onOpenSettings: () => void;
-  onExport: () => void;
-  onImport: (file: File) => void;
-  onLoadDemo: () => void;
-  onClear: () => void;
   watcherStatus: WatcherStatus;
 }
 
@@ -21,10 +17,6 @@ export function Header({
   onTabChange,
   rawaccelAvailable,
   onOpenSettings,
-  onExport,
-  onImport,
-  onLoadDemo,
-  onClear,
   watcherStatus,
 }: HeaderProps) {
   const { theme, cycleTheme } = useTheme();
@@ -201,52 +193,22 @@ export function Header({
           {/* Settings */}
           <button
             onClick={onOpenSettings}
-            className="w-8 h-8 rounded-full minimal-btn-secondary text-xs"
+            className="w-8 h-8 rounded-full minimal-btn-secondary text-xs flex items-center justify-center text-text-secondary hover:text-text-main"
             title={t("header.settings")}
           >
-            ⚙
+            <svg
+              className="w-4 h-4"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <circle cx="12" cy="12" r="3" />
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+            </svg>
           </button>
-
-          {/* Export */}
-          <button
-            onClick={onExport}
-            className="px-3 h-8 rounded-full minimal-btn-secondary text-xs font-medium hidden sm:inline-flex"
-          >
-            {t("header.export")}
-          </button>
-
-          {/* Import */}
-          <label className="px-3 h-8 rounded-full minimal-btn-secondary text-xs font-medium hidden sm:inline-flex cursor-pointer">
-            {t("header.import")}
-            <input
-              type="file"
-              accept=".json"
-              className="hidden"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) onImport(file);
-                e.target.value = "";
-              }}
-            />
-          </label>
-
-          {/* Demo */}
-          <button
-            onClick={onLoadDemo}
-            className="px-3 h-8 rounded-full minimal-btn-secondary text-xs font-medium"
-          >
-            {t("header.demo")}
-          </button>
-
-          {/* Clear */}
-          <button
-            onClick={onClear}
-            className="px-3 h-8 rounded-full minimal-btn-secondary text-xs text-text-faint hover:text-red hover:border-red-500/30"
-            title={t("header.clearTitle")}
-          >
-            {t("header.clear")}
-          </button>
-
         </div>
       </div>
     </header>

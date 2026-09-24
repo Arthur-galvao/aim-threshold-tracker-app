@@ -1,4 +1,6 @@
 export interface BucketStat {
+  sens: number;
+  label: string;
   rangeLabel: string;
   min: number;
   max: number;
@@ -20,6 +22,60 @@ export interface SweetSpotAnalysis {
   minEligibleRuns: number;
   buckets: BucketStat[];
   globalMeanScore: number;
+}
+
+export type PredictorProfile = "equilibrado" | "neutro" | "teorico" | "consistencia";
+
+export interface PredictorProfileConfig {
+  id: PredictorProfile;
+  labelKey: string;
+  descKey: string;
+  teoricoWeight: number;
+  consistenciaWeight: number;
+}
+
+export const PREDICTOR_PROFILES: Record<PredictorProfile, PredictorProfileConfig> = {
+  equilibrado: {
+    id: "equilibrado",
+    labelKey: "randomizer.profileBalanced",
+    descKey: "randomizer.profileBalancedDesc",
+    teoricoWeight: 0.6,
+    consistenciaWeight: 0.4,
+  },
+  neutro: {
+    id: "neutro",
+    labelKey: "randomizer.profileNeutral",
+    descKey: "randomizer.profileNeutralDesc",
+    teoricoWeight: 0.5,
+    consistenciaWeight: 0.5,
+  },
+  teorico: {
+    id: "teorico",
+    labelKey: "randomizer.profileTheoretical",
+    descKey: "randomizer.profileTheoreticalDesc",
+    teoricoWeight: 0.7,
+    consistenciaWeight: 0.3,
+  },
+  consistencia: {
+    id: "consistencia",
+    labelKey: "randomizer.profileConsistency",
+    descKey: "randomizer.profileConsistencyDesc",
+    teoricoWeight: 0.3,
+    consistenciaWeight: 0.7,
+  },
+};
+
+export interface SensPrediction {
+  predictedSens: number;
+  label: string;
+  confidence: "high" | "medium" | "low" | "insufficient";
+  basis: "curvature_blend" | "empirical_best";
+  vertexSens: number | null;
+  empiricalSens: number;
+  scoreEstimate: number | null;
+  profile: PredictorProfile;
+  teoricoWeight: number;
+  consistenciaWeight: number;
 }
 
 export interface RunDataPoint {
@@ -141,15 +197,14 @@ export function calculateParabolicTrendline(
 
 /**
  * Executa analise estatistica de Sweet Spot sobre sessoes de treino:
- * 1. Agrupamento dinamico por faixas de sensibilidade (tamanho default: 5 cm).
+ * 1. Agrupamento por sensibilidade especifica (arredondada para 1 casa decimal).
  * 2. Encolhimento Bayesiano empirico (k=3) para mitigar distorcoes de amostra pequena.
  * 3. Variancia amostral com correcao de Bessel (n-1).
  * 4. Atribuicao de confianca estatistica (Alta, Media, Baixa, Insuficiente).
- * 5. Selecao da melhor faixa baseada no score ponderado Bayesiano.
+ * 5. Selecao da melhor sensibilidade baseada no score ponderado Bayesiano.
  */
 export function computeSweetSpotAnalytics(
-  runs: RunDataPoint[],
-  bucketSize: number = 5
+  runs: RunDataPoint[]
 ): SweetSpotAnalysis | null {
   if (!runs || runs.length === 0) {
     return null;
@@ -166,17 +221,16 @@ export function computeSweetSpotAnalytics(
   const bucketMap = new Map<number, number[]>();
 
   for (const sess of runs) {
-    const bucketIndex = Math.floor(sess.sens / bucketSize) * bucketSize;
-    const scores = bucketMap.get(bucketIndex) || [];
+    const sensKey = Number(sess.sens.toFixed(1));
+    const scores = bucketMap.get(sensKey) || [];
     scores.push(sess.score);
-    bucketMap.set(bucketIndex, scores);
+    bucketMap.set(sensKey, scores);
   }
 
   const buckets: BucketStat[] = [];
   const k = 3; // peso do prior global no encolhimento bayesiano
 
-  for (const [bMin, scores] of bucketMap.entries()) {
-    const bMax = bMin + bucketSize;
+  for (const [sensKey, scores] of bucketMap.entries()) {
     const count = scores.length;
     const avg = scores.reduce((a, b) => a + b, 0) / count;
     const max = Math.max(...scores);
@@ -207,10 +261,14 @@ export function computeSweetSpotAnalytics(
       confidenceLevel = "insufficient";
     }
 
+    const formattedLabel = formatSensitivity(sensKey);
+
     buckets.push({
-      rangeLabel: `${bMin.toFixed(0)} - ${bMax.toFixed(0)} cm`,
-      min: bMin,
-      max: bMax,
+      sens: sensKey,
+      label: formattedLabel,
+      rangeLabel: formattedLabel,
+      min: sensKey,
+      max: sensKey,
       count,
       avgScore: avg,
       maxScore: max,
@@ -253,5 +311,139 @@ export function computeSweetSpotAnalytics(
     minEligibleRuns,
     buckets,
     globalMeanScore,
+  };
+}
+
+/**
+ * Ajusta os coeficientes a, b, c da parabola y = ax^2 + bx + c e calcula o vertice se for concava (pico maximo).
+ */
+export function fitParabolaCoefficients(
+  points: Array<{ x: number; y: number }>
+): { a: number; b: number; c: number; vertex: number | null } | null {
+  if (points.length < 4) return null;
+  const sorted = [...points].sort((p1, p2) => p1.x - p2.x);
+  const xMin = sorted[0].x;
+  const xMax = sorted[sorted.length - 1].x;
+  if (xMax - xMin < 0.1) return null;
+
+  let sumX = 0;
+  let sumX2 = 0;
+  let sumX3 = 0;
+  let sumX4 = 0;
+  let sumY = 0;
+  let sumXY = 0;
+  let sumX2Y = 0;
+  const n = sorted.length;
+
+  for (const pt of sorted) {
+    const x = pt.x;
+    const y = pt.y;
+    sumX += x;
+    sumX2 += x * x;
+    sumX3 += x * x * x;
+    sumX4 += x * x * x * x;
+    sumY += y;
+    sumXY += x * y;
+    sumX2Y += x * x * y;
+  }
+
+  const d =
+    n * (sumX2 * sumX4 - sumX3 * sumX3) -
+    sumX * (sumX * sumX4 - sumX2 * sumX3) +
+    sumX2 * (sumX * sumX3 - sumX2 * sumX2);
+
+  if (Math.abs(d) <= 1e-7) return null;
+
+  const da =
+    sumY * (sumX2 * sumX4 - sumX3 * sumX3) -
+    sumX * (sumXY * sumX4 - sumX2Y * sumX3) +
+    sumX2 * (sumXY * sumX3 - sumX2Y * sumX2);
+  const db =
+    n * (sumXY * sumX4 - sumX2Y * sumX3) -
+    sumY * (sumX * sumX4 - sumX2 * sumX3) +
+    sumX2 * (sumX * sumX2Y - sumX2 * sumXY);
+  const dc =
+    n * (sumX2 * sumX2Y - sumX3 * sumXY) -
+    sumX * (sumX * sumX2Y - sumX2 * sumXY) +
+    sumY * (sumX * sumX3 - sumX2 * sumX2);
+
+  const c = da / d;
+  const b = db / d;
+  const a = dc / d;
+
+  let vertex: number | null = null;
+  // Parabola concava para baixo (a < 0) possui ponto maximo
+  if (a < -1e-6) {
+    const v = -b / (2 * a);
+    if (v >= xMin * 0.8 && v <= xMax * 1.2) {
+      vertex = Number(v.toFixed(1));
+    }
+  }
+
+  return { a, b, c, vertex };
+}
+
+/**
+ * Preditor experimental de sensibilidade ideal.
+ * Combina o vertice da curva de dispersao quadratica com o ponto otimo bayesiano empirico
+ * de acordo com o perfil de ponderacao selecionado.
+ */
+export function predictOptimalSensitivity(
+  runs: RunDataPoint[],
+  profile: PredictorProfile = "equilibrado"
+): SensPrediction | null {
+  if (!runs || runs.length === 0) return null;
+
+  const sweetSpot = computeSweetSpotAnalytics(runs);
+  const empiricalBest = sweetSpot?.bestBucket?.sens ?? runs[0].sens;
+
+  const points = runs.map((r) => ({
+    x: valorantToCm360(r.sens),
+    y: r.score,
+  }));
+
+  const parabola = fitParabolaCoefficients(points);
+  const total = runs.length;
+
+  let confidence: "high" | "medium" | "low" | "insufficient";
+  if (total >= 20) {
+    confidence = "high";
+  } else if (total >= 10) {
+    confidence = "medium";
+  } else if (total >= 5) {
+    confidence = "low";
+  } else {
+    confidence = "insufficient";
+  }
+
+  const profileConfig = PREDICTOR_PROFILES[profile] ?? PREDICTOR_PROFILES.equilibrado;
+  const { teoricoWeight, consistenciaWeight } = profileConfig;
+
+  let predicted: number;
+  let basis: "curvature_blend" | "empirical_best";
+  const vertexSens: number | null = parabola?.vertex ?? null;
+  let scoreEstimate: number | null = null;
+
+  if (parabola && vertexSens !== null) {
+    predicted = Number((teoricoWeight * vertexSens + consistenciaWeight * empiricalBest).toFixed(1));
+    basis = "curvature_blend";
+    scoreEstimate = Math.round(parabola.a * predicted * predicted + parabola.b * predicted + parabola.c);
+  } else {
+    predicted = Number(empiricalBest.toFixed(1));
+    basis = "empirical_best";
+    scoreEstimate = sweetSpot?.bestBucket?.avgScore ? Math.round(sweetSpot.bestBucket.avgScore) : null;
+  }
+
+  return {
+    predictedSens: predicted,
+    label: formatSensitivity(predicted),
+    confidence,
+    basis,
+    vertexSens,
+    empiricalSens: Number(empiricalBest.toFixed(1)),
+    scoreEstimate,
+    profile,
+    teoricoWeight,
+    consistenciaWeight,
   };
 }

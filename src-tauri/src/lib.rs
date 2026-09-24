@@ -312,6 +312,8 @@ pub fn run() {
                 error_message: err_msg,
             };
 
+            let is_randomizer_enabled = settings.randomizer.enabled;
+
             app.manage(AppState {
                 data: Mutex::new(data),
                 settings: Mutex::new(settings),
@@ -319,6 +321,12 @@ pub fn run() {
                 emitted: Mutex::new(HashSet::new()),
                 randomizer_state: Mutex::new(initial_r_state),
             });
+
+            if is_randomizer_enabled && avail {
+                let handle = app.handle().clone();
+                let _ = randomizer::apply_next_sens(&handle, None, None);
+            }
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

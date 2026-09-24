@@ -1,6 +1,13 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useI18n } from "@/lib/i18n";
-import type { SweetSpotAnalysis, RunDataPoint, BucketStat } from "@/lib/sens-analytics";
+import {
+  predictOptimalSensitivity,
+  PREDICTOR_PROFILES,
+  type PredictorProfile,
+  type SweetSpotAnalysis,
+  type RunDataPoint,
+  type BucketStat,
+} from "@/lib/sens-analytics";
 
 interface SensRandomizerAnalyticsProps {
   analysis: SweetSpotAnalysis | null;
@@ -20,6 +27,33 @@ export function SensRandomizerAnalytics({
   const recentRuns = useMemo(() => {
     return [...relevantSessions].slice(-10).reverse();
   }, [relevantSessions]);
+
+  const [selectedProfile, setSelectedProfile] = useState<PredictorProfile>(() => {
+    if (typeof localStorage !== "undefined") {
+      const saved = localStorage.getItem("att-predictor-profile");
+      if (
+        saved &&
+        (saved === "equilibrado" ||
+          saved === "neutro" ||
+          saved === "teorico" ||
+          saved === "consistencia")
+      ) {
+        return saved as PredictorProfile;
+      }
+    }
+    return "equilibrado";
+  });
+
+  const handleSelectProfile = (profile: PredictorProfile) => {
+    setSelectedProfile(profile);
+    if (typeof localStorage !== "undefined") {
+      localStorage.setItem("att-predictor-profile", profile);
+    }
+  };
+
+  const prediction = useMemo(() => {
+    return predictOptimalSensitivity(relevantSessions, selectedProfile);
+  }, [relevantSessions, selectedProfile]);
 
   const bestBucket = analysis?.bestBucket ?? null;
 
@@ -83,12 +117,12 @@ export function SensRandomizerAnalytics({
 
             <button
               type="button"
-              onClick={() => onApplySens((bestBucket.min + bestBucket.max) / 2)}
+              onClick={() => onApplySens(bestBucket.sens)}
               className="minimal-btn px-4 py-2 text-xs font-bold uppercase tracking-wider rounded-xl shadow-sm flex items-center gap-2 self-stretch sm:self-auto justify-center"
             >
               <span>{t("randomizer.applySensBtn")}</span>
               <span className="font-mono text-blue-200">
-                {((bestBucket.min + bestBucket.max) / 2).toFixed(1)} cm
+                {bestBucket.label}
               </span>
             </button>
           </div>
@@ -99,10 +133,7 @@ export function SensRandomizerAnalytics({
                 {t("randomizer.optimalRange")}
               </span>
               <span className="text-2xl font-mono font-bold text-text-main mt-1 block">
-                {bestBucket.rangeLabel}
-              </span>
-              <span className="text-[10px] text-text-faint mt-0.5 block">
-                {t("randomizer.midpoint")}: {((bestBucket.min + bestBucket.max) / 2).toFixed(1)} cm
+                {bestBucket.label}
               </span>
             </div>
 
@@ -149,6 +180,136 @@ export function SensRandomizerAnalytics({
         </div>
       )}
 
+      {/* Experimental Sensitivity Predictor Card */}
+      {prediction && (
+        <div className="panel p-5 rounded-2xl border border-edge bg-surface/60 space-y-4">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-edge pb-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold uppercase tracking-wider text-blue-400">
+                  {t("randomizer.predictorTitle")}
+                </span>
+                <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.2 rounded font-mono font-bold bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                  {t("randomizer.predictorTag")}
+                </span>
+              </div>
+              <p className="text-xs text-text-secondary mt-0.5">
+                {t("randomizer.predictorSubtitle")}
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => onApplySens(prediction.predictedSens)}
+              className="minimal-btn px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider rounded-xl shadow-sm flex items-center gap-1.5 self-stretch sm:self-auto justify-center"
+            >
+              <span>{t("randomizer.applySensBtn")}</span>
+              <span className="font-mono text-blue-200">
+                {prediction.label}
+              </span>
+            </button>
+          </div>
+
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            {/* Predicted Sens */}
+            <div className="p-3.5 rounded-xl bg-surface-subtle border border-edge">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-text-faint block">
+                {t("randomizer.predictorSens")}
+              </span>
+              <div className="flex items-baseline gap-1 mt-1">
+                <span className="text-2xl font-mono font-bold text-blue-400 tabular-nums">
+                  {prediction.predictedSens.toFixed(1)}
+                </span>
+                <span className="text-xs font-mono text-text-secondary">cm/360</span>
+              </div>
+            </div>
+
+            {/* Theoretical Apex */}
+            <div className="p-3.5 rounded-xl bg-surface-subtle border border-edge">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-text-faint block">
+                {t("randomizer.predictorApex")}
+              </span>
+              <span className="text-xl font-mono font-bold text-text-main mt-1 block tabular-nums">
+                {prediction.vertexSens !== null ? `${prediction.vertexSens.toFixed(1)} cm` : "-"}
+              </span>
+            </div>
+
+            {/* Observed Empirical Peak */}
+            <div className="p-3.5 rounded-xl bg-surface-subtle border border-edge">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-text-faint block">
+                {t("randomizer.predictorObserved")}
+              </span>
+              <span className="text-xl font-mono font-bold text-emerald-400 mt-1 block tabular-nums">
+                {prediction.empiricalSens.toFixed(1)} cm
+              </span>
+            </div>
+
+            {/* Basis of Calculation */}
+            <div className="p-3.5 rounded-xl bg-surface-subtle border border-edge">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-text-faint block">
+                {t("randomizer.predictorBasis")}
+              </span>
+              <span className="text-xs font-mono font-bold text-blue-300 mt-1 block leading-tight">
+                {prediction.basis === "curvature_blend"
+                  ? `${Math.round(prediction.teoricoWeight * 100)}% / ${Math.round(prediction.consistenciaWeight * 100)}%`
+                  : t("randomizer.predictorBasisEmpirical")}
+              </span>
+              <span className="text-[10px] text-text-faint block mt-0.5">
+                {prediction.basis === "curvature_blend"
+                  ? t("randomizer.predictorBasisBlend")
+                  : t("randomizer.predictorBasisEmpirical")}
+              </span>
+            </div>
+          </div>
+
+          {/* Profile Level Selector */}
+          <div className="space-y-1.5 pt-1 border-t border-edge">
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-text-faint block">
+              {t("randomizer.predictorProfile")}
+            </span>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 p-1 bg-surface-subtle rounded-xl border border-edge">
+              {(["equilibrado", "neutro", "teorico", "consistencia"] as PredictorProfile[]).map((p) => {
+                const config = PREDICTOR_PROFILES[p];
+                const isActive = selectedProfile === p;
+                return (
+                  <button
+                    key={p}
+                    type="button"
+                    onClick={() => handleSelectProfile(p)}
+                    title={t(config.descKey as any)}
+                    className={`py-1.5 px-2 rounded-lg text-xs font-semibold transition-all text-center ${
+                      isActive
+                        ? "bg-surface text-text-main shadow-sm border border-edge-strong"
+                        : "text-text-secondary hover:text-text-main"
+                    }`}
+                  >
+                    <span>{t(config.labelKey as any)}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Test Disclaimer Notice */}
+          <div className="p-3 rounded-xl bg-surface-subtle/80 border border-edge text-[11px] text-text-faint leading-relaxed flex items-start gap-2">
+            <svg
+              className="w-4 h-4 text-text-secondary shrink-0 mt-0.5"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="8" x2="12" y2="12" />
+              <line x1="12" y1="16" x2="12.01" y2="16" />
+            </svg>
+            <span>{t("randomizer.predictorDisclaimer")}</span>
+          </div>
+        </div>
+      )}
+
       {/* Sensitivity Buckets Breakdown Table */}
       {analysis && analysis.buckets.length > 0 && (
         <div className="panel p-6 rounded-2xl space-y-4">
@@ -186,10 +347,10 @@ export function SensRandomizerAnalytics({
               </thead>
               <tbody className="divide-y divide-white/[0.04]">
                 {analysis.buckets.map((b, idx) => {
-                  const isTop = bestBucket && b.min === bestBucket.min;
+                  const isTop = bestBucket && b.sens === bestBucket.sens;
                   return (
                     <tr
-                      key={b.min}
+                      key={b.sens}
                       className={`hover:bg-surface-subtle/50 transition-colors ${
                         isTop ? "bg-amber-500/[0.03] font-medium" : ""
                       }`}
@@ -198,7 +359,7 @@ export function SensRandomizerAnalytics({
                         {isTop && (
                           <span className="w-1.5 h-1.5 rounded-full bg-amber" />
                         )}
-                        <span>{b.rangeLabel}</span>
+                        <span>{b.label}</span>
                         {idx === 0 && (
                           <span className="text-[10px] px-1.5 py-0.2 rounded bg-amber-500/10 text-amber font-sans font-bold">
                             #1
@@ -225,7 +386,7 @@ export function SensRandomizerAnalytics({
                       <td className="py-3 pr-3 text-right">
                         <button
                           type="button"
-                          onClick={() => onApplySens((b.min + b.max) / 2)}
+                          onClick={() => onApplySens(b.sens)}
                           className="text-[11px] font-semibold text-text-secondary hover:text-text-main hover:underline"
                         >
                           {t("randomizer.useMidpoint")}

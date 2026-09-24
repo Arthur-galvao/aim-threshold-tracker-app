@@ -1,13 +1,14 @@
 {
   "name": "aim-threshold-tracker",
   "private": true,
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Desktop app to track KovaaK's aim thresholds with sensitivity randomization and sweet spot analysis",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
+    "test": "node --test test/sens-analytics.test.ts",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build"

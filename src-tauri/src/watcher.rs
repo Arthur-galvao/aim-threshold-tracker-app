@@ -100,9 +100,32 @@ fn is_stats_csv(path: &Path) -> bool {
 }
 
 fn process_new_csv(app: &AppHandle, path: &Path) -> Result<bool, String> {
-    let run = wait_for_parse(path)?;
-
     let state: State<AppState> = app.state();
+
+    let (is_randomizer_enabled, active_sens) = {
+        let s = state.settings.lock().unwrap();
+        let r = state.randomizer_state.lock().unwrap();
+        (s.randomizer.enabled, r.active_sens_cm)
+    };
+
+    if is_randomizer_enabled && active_sens > 0.0 {
+        let mut updated = false;
+        for _ in 0..5 {
+            thread::sleep(Duration::from_millis(300));
+            if let Ok(()) = update_kovaak_csv_sensitivity(path, active_sens) {
+                updated = true;
+                break;
+            }
+        }
+        if !updated {
+            if let Err(e) = update_kovaak_csv_sensitivity(path, active_sens) {
+                eprintln!("[Watcher] Erro ao atualizar sensibilidade no CSV: {e}");
+            }
+        }
+    }
+
+    let mut run = wait_for_parse(path)?;
+
     {
         let mut emitted = state.emitted.lock().unwrap();
         if !emitted.insert(run.source_file.clone()) {
@@ -117,12 +140,11 @@ fn process_new_csv(app: &AppHandle, path: &Path) -> Result<bool, String> {
         return Ok(false);
     }
 
-    app.emit("new_run", &run).map_err(|e| e.to_string())?;
+    if is_randomizer_enabled && active_sens > 0.0 {
+        run.sens = active_sens;
+    }
 
-    let is_randomizer_enabled = {
-        let s = state.settings.lock().unwrap();
-        s.randomizer.enabled
-    };
+    app.emit("new_run", &run).map_err(|e| e.to_string())?;
 
     if is_randomizer_enabled {
         let app_clone = app.clone();
@@ -134,6 +156,35 @@ fn process_new_csv(app: &AppHandle, path: &Path) -> Result<bool, String> {
     }
 
     Ok(true)
+}
+
+pub fn update_kovaak_csv_sensitivity(path: &Path, sens_cm: f64) -> Result<(), String> {
+    let content = fs::read_to_string(path)
+        .map_err(|e| format!("Falha ao ler arquivo CSV para atualização: {e}"))?;
+
+    let sens_str = format!("{:.2}", sens_cm);
+    let mut new_lines = Vec::new();
+
+    for line in content.lines() {
+        let trimmed = line.trim();
+        let lower = trimmed.to_lowercase();
+
+        if lower.starts_with("horiz sens:") || lower.starts_with("horizsens:") {
+            new_lines.push(format!("Horiz Sens:,{sens_str}"));
+        } else if lower.starts_with("vert sens:") || lower.starts_with("vertsens:") {
+            new_lines.push(format!("Vert Sens:,{sens_str}"));
+        } else if lower.starts_with("sens scale:") || lower.starts_with("sensscale:") {
+            new_lines.push("Sens Scale:,cm/360".to_string());
+        } else {
+            new_lines.push(line.to_string());
+        }
+    }
+
+    let updated = new_lines.join("\r\n");
+    fs::write(path, updated)
+        .map_err(|e| format!("Falha ao gravar arquivo CSV atualizado: {e}"))?;
+
+    Ok(())
 }
 
 fn wait_for_parse(path: &Path) -> Result<KovaakRun, String> {
@@ -188,12 +239,14 @@ pub fn import_existing(app: &AppHandle) -> Result<ImportStats, String> {
             has_source_file(&data.tasks, &run.source_file)
         };
         if already {
-            // Update session sensitivity if it changed (e.g. was 0.24, now converted to 68.0 cm/360)
+            // Update session sensitivity only if it was stored as an unconverted in-game sensitivity (< 2.5)
             let mut data = state.data.lock().unwrap();
             for task in &mut data.tasks {
                 for session in &mut task.sessions {
                     if session.source_file.as_deref() == Some(&run.source_file)
-                        && (session.sens - run.sens).abs() > 0.001
+                        && session.sens > 0.0
+                        && session.sens < 2.5
+                        && run.sens >= 2.5
                     {
                         session.sens = run.sens;
                         new += 1;
@@ -305,4 +358,108 @@ fn timestamp_id() -> u128 {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_millis())
         .unwrap_or(0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_update_kovaak_csv_sensitivity() {
+        let tmp_path = std::env::temp_dir().join("test_update_sens.csv");
+        let initial_content = "Score:,940.0\r\nScenario:,WALLHACK - VBRClick Easy\r\nSens Scale:,cm/360\r\nHoriz Sens:,50.0\r\nVert Sens:,50.0\r\nDPI:,800\r\nFOV:,103.0\r\n";
+        std::fs::write(&tmp_path, initial_content).unwrap();
+
+        let result = update_kovaak_csv_sensitivity(&tmp_path, 108.35);
+        assert!(result.is_ok());
+
+        let updated_content = std::fs::read_to_string(&tmp_path).unwrap();
+        assert!(updated_content.contains("Horiz Sens:,108.35"));
+        assert!(updated_content.contains("Vert Sens:,108.35"));
+        assert!(updated_content.contains("Sens Scale:,cm/360"));
+
+        let _ = std::fs::remove_file(tmp_path);
+    }
+
+    #[test]
+    fn test_migrate_preserves_randomized_and_cm_sens() {
+        let mut data = AppData {
+            active_task_id: Some("t1".into()),
+            tasks: vec![Task {
+                id: "t1".into(),
+                name: "1w2ts Pasu".into(),
+                category: "Clicking".into(),
+                subcategory: "Dynamic".into(),
+                sessions: vec![
+                    Session {
+                        id: "s1".into(),
+                        date: "2026-09-18".into(),
+                        sens: 75.0, // Randomized sensitivity
+                        pb: 120.0,
+                        threshold: 110.0,
+                        source_file: Some("run1.csv".into()),
+                    },
+                    Session {
+                        id: "s2".into(),
+                        date: "2026-09-18".into(),
+                        sens: 50.0, // Base sensitivity
+                        pb: 115.0,
+                        threshold: 110.0,
+                        source_file: Some("run2.csv".into()),
+                    },
+                ],
+            }],
+        };
+
+        let changed = migrate_existing_sensitivities(&mut data, None);
+        assert!(!changed, "Sensitividades em cm/360 não devem ser modificadas");
+        assert_eq!(data.tasks[0].sessions[0].sens, 75.0);
+        assert_eq!(data.tasks[0].sessions[1].sens, 50.0);
+    }
+
+    #[test]
+    fn test_migrate_converts_legacy_in_game_sens() {
+        let mut data = AppData {
+            active_task_id: Some("t1".into()),
+            tasks: vec![Task {
+                id: "t1".into(),
+                name: "1w2ts Pasu".into(),
+                category: "Clicking".into(),
+                subcategory: "Dynamic".into(),
+                sessions: vec![Session {
+                    id: "s1".into(),
+                    date: "2026-09-18".into(),
+                    sens: 0.24, // Legacy Valorant sensitivity (< 2.5)
+                    pb: 120.0,
+                    threshold: 110.0,
+                    source_file: None,
+                }],
+            }],
+        };
+
+        let changed = migrate_existing_sensitivities(&mut data, None);
+        assert!(changed, "Sensitividade legada (< 2.5) deve ser migrada");
+        assert_eq!(data.tasks[0].sessions[0].sens, 68.0);
+    }
+
+    #[test]
+    fn test_has_source_file() {
+        let tasks = vec![Task {
+            id: "t1".into(),
+            name: "Scenario".into(),
+            category: "Clicking".into(),
+            subcategory: "Dynamic".into(),
+            sessions: vec![Session {
+                id: "s1".into(),
+                date: "2026-09-18".into(),
+                sens: 75.0,
+                pb: 100.0,
+                threshold: 90.0,
+                source_file: Some("target_run.csv".into()),
+            }],
+        }];
+
+        assert!(has_source_file(&tasks, "target_run.csv"));
+        assert!(!has_source_file(&tasks, "other_run.csv"));
+    }
 }

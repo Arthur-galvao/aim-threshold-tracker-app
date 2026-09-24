@@ -5,45 +5,38 @@ export type ResolvedTheme = "light" | "dark";
 
 const STORAGE_KEY = "att-theme";
 
-function getSystemTheme(): ResolvedTheme {
-  return window.matchMedia("(prefers-color-scheme: dark)").matches
+const getSystemTheme = (): ResolvedTheme =>
+  typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: dark)").matches
     ? "dark"
     : "light";
-}
-
-function applyTheme(resolved: ResolvedTheme) {
-  document.documentElement.classList.toggle("dark", resolved === "dark");
-}
 
 export function useTheme() {
   const [theme, setTheme] = useState<Theme>(() => {
     const stored = localStorage.getItem(STORAGE_KEY);
-    return stored === "light" || stored === "dark" || stored === "system"
-      ? stored
-      : "system";
+    return stored === "light" || stored === "dark" || stored === "system" ? stored : "system";
   });
 
-  const [systemPref, setSystemPref] = useState<ResolvedTheme>(getSystemTheme);
+  const [resolvedTheme, setResolvedTheme] = useState<ResolvedTheme>(() =>
+    theme === "system" ? getSystemTheme() : theme
+  );
 
   useEffect(() => {
     const mql = window.matchMedia("(prefers-color-scheme: dark)");
-    const handler = (e: MediaQueryListEvent) =>
-      setSystemPref(e.matches ? "dark" : "light");
-    mql.addEventListener("change", handler);
-    return () => mql.removeEventListener("change", handler);
-  }, []);
+    const update = () => {
+      const resolved = theme === "system" ? (mql.matches ? "dark" : "light") : theme;
+      setResolvedTheme(resolved);
+      document.documentElement.classList.toggle("dark", resolved === "dark");
+    };
 
-  const resolvedTheme: ResolvedTheme = theme === "system" ? systemPref : theme;
-
-  useEffect(() => {
     localStorage.setItem(STORAGE_KEY, theme);
-    applyTheme(resolvedTheme);
-  }, [theme, resolvedTheme]);
+    update();
+
+    mql.addEventListener("change", update);
+    return () => mql.removeEventListener("change", update);
+  }, [theme]);
 
   const cycleTheme = useCallback(() => {
-    setTheme((prev) =>
-      prev === "light" ? "dark" : prev === "dark" ? "system" : "light"
-    );
+    setTheme((prev) => (prev === "light" ? "dark" : prev === "dark" ? "system" : "light"));
   }, []);
 
   return { theme, resolvedTheme, setTheme, cycleTheme };

@@ -17,6 +17,10 @@ interface SettingsModalProps {
   onDetectRawaccel?: () => Promise<string | null>;
   onUpdateRawaccelPath?: (path: string) => Promise<void>;
   onTestRawaccel?: () => Promise<any>;
+  onExport?: () => void;
+  onImport?: (file: File) => void;
+  onLoadDemo?: () => void;
+  onClear?: () => void;
 }
 
 export function SettingsModal({
@@ -33,6 +37,10 @@ export function SettingsModal({
   onDetectRawaccel,
   onUpdateRawaccelPath,
   onTestRawaccel,
+  onExport,
+  onImport,
+  onLoadDemo,
+  onClear,
 }: SettingsModalProps) {
   const [manualPath, setManualPath] = useState(settingsPath ?? "");
   const [manualRawaccel, setManualRawaccel] = useState(rawaccelPath ?? "");
@@ -256,6 +264,96 @@ export function SettingsModal({
               >
                 {t("randomizer.testWriter")}
               </button>
+            </div>
+          </div>
+
+          {/* Data Management Section */}
+          <div className="space-y-3 pt-3 border-t border-edge">
+            <div>
+              <h4 className="text-xs font-bold uppercase tracking-wider text-text-main">
+                {t("settings.dataTitle")}
+              </h4>
+              <p className="text-[11px] text-text-faint mt-0.5">
+                {t("settings.dataSubtitle")}
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              {onExport && (
+                <button
+                  type="button"
+                  onClick={onExport}
+                  className="px-3 py-2 minimal-btn-secondary text-xs font-semibold rounded-xl flex items-center justify-center gap-1.5"
+                >
+                  <svg
+                    className="w-3.5 h-3.5"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                    <polyline points="7 10 12 15 17 10" />
+                    <line x1="12" y1="15" x2="12" y2="3" />
+                  </svg>
+                  <span>{t("settings.exportBtn")}</span>
+                </button>
+              )}
+
+              {onImport && (
+                <label className="px-3 py-2 minimal-btn-secondary text-xs font-semibold rounded-xl flex items-center justify-center gap-1.5 cursor-pointer">
+                  <svg
+                    className="w-3.5 h-3.5"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                    <polyline points="17 8 12 3 7 8" />
+                    <line x1="12" y1="3" x2="12" y2="15" />
+                  </svg>
+                  <span>{t("settings.importBtn")}</span>
+                  <input
+                    type="file"
+                    accept=".json"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) onImport(file);
+                      e.target.value = "";
+                    }}
+                  />
+                </label>
+              )}
+
+              {onLoadDemo && (
+                <button
+                  type="button"
+                  onClick={onLoadDemo}
+                  className="px-3 py-2 minimal-btn-secondary text-xs font-semibold rounded-xl flex items-center justify-center gap-1.5"
+                >
+                  <span>{t("settings.demoBtn")}</span>
+                </button>
+              )}
+
+              {onClear && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (window.confirm(t("settings.clearConfirm"))) {
+                      onClear();
+                    }
+                  }}
+                  className="px-3 py-2 minimal-btn-secondary text-xs font-semibold rounded-xl text-rose-400 hover:text-rose-300 border-rose-500/20 hover:border-rose-500/40 flex items-center justify-center gap-1.5"
+                >
+                  <span>{t("settings.clearBtn")}</span>
+                </button>
+              )}
             </div>
           </div>
         </div>
