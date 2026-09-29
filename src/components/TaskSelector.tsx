@@ -1,5 +1,7 @@
+import { useMemo } from "react";
 import type { Task } from "@/lib/types";
-import { getRecommendedSens } from "@/lib/viscose";
+import { getDisplaySens } from "@/lib/viscose";
+import { valorantToCm360, type RunDataPoint } from "@/lib/sens-analytics";
 import { useI18n } from "@/lib/i18n";
 
 interface TaskSelectorProps {
@@ -18,8 +20,32 @@ export function TaskSelector({
   onDeleteTask,
 }: TaskSelectorProps) {
   const activeTask = tasks.find((t) => t.id === activeTaskId) ?? null;
-  const recSens = activeTask
-    ? getRecommendedSens(activeTask.category, activeTask.subcategory)
+
+  const groupRuns = useMemo(() => {
+    if (!activeTask) return [];
+    const runs: RunDataPoint[] = [];
+    for (const t of tasks) {
+      if (
+        t.category === activeTask.category &&
+        t.subcategory === activeTask.subcategory
+      ) {
+        for (const s of t.sessions) {
+          const sensCm = valorantToCm360(s.sens);
+          if (sensCm >= 5 && s.pb > 0) {
+            runs.push({
+              sens: Number(sensCm.toFixed(1)),
+              score: s.pb,
+              date: s.date,
+            });
+          }
+        }
+      }
+    }
+    return runs;
+  }, [activeTask, tasks]);
+
+  const displaySens = activeTask
+    ? getDisplaySens(activeTask.category, activeTask.subcategory, groupRuns)
     : null;
   const { t } = useI18n();
 
@@ -92,9 +118,26 @@ export function TaskSelector({
               </div>
               <span className="text-[11px] text-text-faint ml-auto flex items-center gap-1.5">
                 <span>{t("task.sens")}</span>
-                <strong className="px-2 py-0.5 rounded-full bg-surface border border-edge text-text-main text-xs tabular-nums font-semibold">
-                  {recSens ? `${recSens}cm` : t("task.defaultSens")}
-                </strong>
+                {displaySens ? (
+                  <strong
+                    title={
+                      displaySens.source === "predicted"
+                        ? t("categorySens.sourcePredicted")
+                        : t("categorySens.sourceViscose")
+                    }
+                    className={`px-2 py-0.5 rounded-full border text-xs tabular-nums font-semibold ${
+                      displaySens.source === "predicted"
+                        ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
+                        : "bg-surface border-edge text-text-main"
+                    }`}
+                  >
+                    {displaySens.value}cm
+                  </strong>
+                ) : (
+                  <strong className="px-2 py-0.5 rounded-full bg-surface border border-edge text-text-main text-xs tabular-nums font-semibold">
+                    {t("task.defaultSens")}
+                  </strong>
+                )}
               </span>
             </div>
           </div>

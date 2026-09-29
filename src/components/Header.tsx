@@ -5,8 +5,8 @@ import { openExternalUrl } from "@/lib/tauri-bridge";
 import { GUIDE_URL } from "@/lib/links";
 
 interface HeaderProps {
-  activeTab: "dashboard" | "randomizer";
-  onTabChange: (tab: "dashboard" | "randomizer") => void;
+  activeTab: "dashboard" | "randomizer" | "playlist";
+  onTabChange: (tab: "dashboard" | "randomizer" | "playlist") => void;
   rawaccelAvailable: boolean;
   onOpenSettings: () => void;
   watcherStatus: WatcherStatus;
@@ -106,6 +106,17 @@ export function Header({
                   {t("tab.lockedBadge")}
                 </span>
               )}
+            </button>
+            <button
+              type="button"
+              onClick={() => onTabChange("playlist")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-150 ${
+                activeTab === "playlist"
+                  ? "bg-blue-500 text-white shadow-sm"
+                  : "text-text-secondary hover:text-text-main"
+              }`}
+            >
+              {t("tab.playlist")}
             </button>
           </nav>
         </div>

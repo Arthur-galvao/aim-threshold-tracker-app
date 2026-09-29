@@ -25,11 +25,31 @@ pub struct Task {
     pub sessions: Vec<Session>,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlaylistItem {
+    pub id: String,
+    pub task_id: String,
+    pub target_mode: String, // "reps" | "time"
+    pub target_value: f64,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Playlist {
+    pub id: String,
+    pub name: String,
+    pub items: Vec<PlaylistItem>,
+    pub created_at: String,
+}
+
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AppData {
     pub active_task_id: Option<String>,
     pub tasks: Vec<Task>,
+    #[serde(default)]
+    pub playlists: Vec<Playlist>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -124,4 +144,47 @@ pub struct WatcherStatus {
     pub active: bool,
     pub path: Option<String>,
     pub error: Option<String>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_app_data_deserialization_without_playlists() {
+        let legacy_json = r#"{"activeTaskId":"task_1","tasks":[]}"#;
+        let parsed: AppData = serde_json::from_str(legacy_json).expect("should deserialize legacy json");
+        assert_eq!(parsed.active_task_id, Some("task_1".to_string()));
+        assert!(parsed.tasks.is_empty());
+        assert!(parsed.playlists.is_empty());
+    }
+
+    #[test]
+    fn test_app_data_deserialization_with_playlists() {
+        let json_with_playlists = r#"{
+            "activeTaskId": null,
+            "tasks": [],
+            "playlists": [
+                {
+                    "id": "pl_1",
+                    "name": "Daily Warmup",
+                    "items": [
+                        {
+                            "id": "item_1",
+                            "taskId": "task_1",
+                            "targetMode": "reps",
+                            "targetValue": 5.0
+                        }
+                    ],
+                    "createdAt": "2026-09-24T00:00:00Z"
+                }
+            ]
+        }"#;
+        let parsed: AppData = serde_json::from_str(json_with_playlists).expect("should deserialize playlist json");
+        assert_eq!(parsed.playlists.len(), 1);
+        assert_eq!(parsed.playlists[0].name, "Daily Warmup");
+        assert_eq!(parsed.playlists[0].items.len(), 1);
+        assert_eq!(parsed.playlists[0].items[0].target_mode, "reps");
+        assert_eq!(parsed.playlists[0].items[0].target_value, 5.0);
+    }
 }

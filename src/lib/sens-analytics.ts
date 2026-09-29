@@ -314,11 +314,42 @@ export function computeSweetSpotAnalytics(
   };
 }
 
+export interface CategoryRunPoint extends RunDataPoint {
+  taskId: string;
+}
+
 /**
- * Ajusta os coeficientes a, b, c da parabola y = ax^2 + bx + c e calcula o vertice se for concava (pico maximo).
+ * Junta os runs de todas as tasks que compartilham categoria e subcategoria.
  */
-export function fitParabolaCoefficients(
-  points: Array<{ x: number; y: number }>
+export function poolCategoryRuns(
+  runsByTask: Record<string, CategoryRunPoint[]>
+): CategoryRunPoint[] {
+  return Object.values(runsByTask).flat();
+}
+
+/**
+ * Peso exponencial por idade do run. halfLifeDays=60 significa que um run de 60 dias atras
+ * pesa metade de um run de hoje. halfLifeDays <= 0 ou dateIso omitido desativa o decaimento.
+ */
+export function recencyWeight(
+  dateIso: string | undefined,
+  now: number,
+  halfLifeDays: number
+): number {
+  if (!dateIso || !halfLifeDays || halfLifeDays <= 0) return 1;
+  const time = new Date(dateIso).getTime();
+  if (isNaN(time)) return 1;
+  const ageDays = (now - time) / 86_400_000;
+  if (ageDays <= 0) return 1;
+  return Math.pow(0.5, ageDays / halfLifeDays);
+}
+
+/**
+ * Ajusta os coeficientes a, b, c da parabola ponderada y = ax^2 + bx + c
+ * utilizando minimos quadrados ponderados e regra de Cramer.
+ */
+export function fitWeightedParabolaCoefficients(
+  points: Array<{ x: number; y: number; weight?: number }>
 ): { a: number; b: number; c: number; vertex: number | null } | null {
   if (points.length < 4) return null;
   const sorted = [...points].sort((p1, p2) => p1.x - p2.x);
@@ -326,46 +357,49 @@ export function fitParabolaCoefficients(
   const xMax = sorted[sorted.length - 1].x;
   if (xMax - xMin < 0.1) return null;
 
-  let sumX = 0;
-  let sumX2 = 0;
-  let sumX3 = 0;
-  let sumX4 = 0;
-  let sumY = 0;
-  let sumXY = 0;
-  let sumX2Y = 0;
-  const n = sorted.length;
+  let sumW = 0;
+  let sumWX = 0;
+  let sumWX2 = 0;
+  let sumWX3 = 0;
+  let sumWX4 = 0;
+  let sumWY = 0;
+  let sumWXY = 0;
+  let sumWX2Y = 0;
 
   for (const pt of sorted) {
+    const w = typeof pt.weight === "number" ? pt.weight : 1;
     const x = pt.x;
     const y = pt.y;
-    sumX += x;
-    sumX2 += x * x;
-    sumX3 += x * x * x;
-    sumX4 += x * x * x * x;
-    sumY += y;
-    sumXY += x * y;
-    sumX2Y += x * x * y;
+
+    sumW += w;
+    sumWX += w * x;
+    sumWX2 += w * x * x;
+    sumWX3 += w * x * x * x;
+    sumWX4 += w * x * x * x * x;
+    sumWY += w * y;
+    sumWXY += w * x * y;
+    sumWX2Y += w * x * x * y;
   }
 
   const d =
-    n * (sumX2 * sumX4 - sumX3 * sumX3) -
-    sumX * (sumX * sumX4 - sumX2 * sumX3) +
-    sumX2 * (sumX * sumX3 - sumX2 * sumX2);
+    sumW * (sumWX2 * sumWX4 - sumWX3 * sumWX3) -
+    sumWX * (sumWX * sumWX4 - sumWX2 * sumWX3) +
+    sumWX2 * (sumWX * sumWX3 - sumWX2 * sumWX2);
 
   if (Math.abs(d) <= 1e-7) return null;
 
   const da =
-    sumY * (sumX2 * sumX4 - sumX3 * sumX3) -
-    sumX * (sumXY * sumX4 - sumX2Y * sumX3) +
-    sumX2 * (sumXY * sumX3 - sumX2Y * sumX2);
+    sumWY * (sumWX2 * sumWX4 - sumWX3 * sumWX3) -
+    sumWX * (sumWXY * sumWX4 - sumWX2Y * sumWX3) +
+    sumWX2 * (sumWXY * sumWX3 - sumWX2Y * sumWX2);
   const db =
-    n * (sumXY * sumX4 - sumX2Y * sumX3) -
-    sumY * (sumX * sumX4 - sumX2 * sumX3) +
-    sumX2 * (sumX * sumX2Y - sumX2 * sumXY);
+    sumW * (sumWXY * sumWX4 - sumWX2Y * sumWX3) -
+    sumWY * (sumWX * sumWX4 - sumWX2 * sumWX3) +
+    sumWX2 * (sumWX * sumWX2Y - sumWX2 * sumWXY);
   const dc =
-    n * (sumX2 * sumX2Y - sumX3 * sumXY) -
-    sumX * (sumX * sumX2Y - sumX2 * sumXY) +
-    sumY * (sumX * sumX3 - sumX2 * sumX2);
+    sumW * (sumWX2 * sumWX2Y - sumWX3 * sumWXY) -
+    sumWX * (sumWX * sumWX2Y - sumWX2 * sumWXY) +
+    sumWY * (sumWX * sumWX3 - sumWX2 * sumWX2);
 
   const c = da / d;
   const b = db / d;
@@ -384,66 +418,150 @@ export function fitParabolaCoefficients(
 }
 
 /**
- * Preditor experimental de sensibilidade ideal.
+ * Ajusta os coeficientes a, b, c da parabola y = ax^2 + bx + c e calcula o vertice se for concava (pico maximo).
+ * Wrapper de retrocompatibilidade para fitWeightedParabolaCoefficients com pesos uniformes.
+ */
+export function fitParabolaCoefficients(
+  points: Array<{ x: number; y: number }>
+): { a: number; b: number; c: number; vertex: number | null } | null {
+  return fitWeightedParabolaCoefficients(points);
+}
+
+export interface HierarchicalOptions {
+  groupRuns?: RunDataPoint[];
+  shrinkageK?: number;
+  recencyHalfLifeDays?: number;
+  now?: number;
+}
+
+/**
+ * Preditor de sensibilidade ideal.
  * Combina o vertice da curva de dispersao quadratica com o ponto otimo bayesiano empirico
- * de acordo com o perfil de ponderacao selecionado.
+ * de acordo com o perfil de ponderacao e suporta blend hierarquico com o grupo da categoria.
  */
 export function predictOptimalSensitivity(
   runs: RunDataPoint[],
-  profile: PredictorProfile = "equilibrado"
+  profile: PredictorProfile = "equilibrado",
+  options: HierarchicalOptions = {}
 ): SensPrediction | null {
-  if (!runs || runs.length === 0) return null;
+  const hasLocal = runs && runs.length > 0;
+  const groupRuns = options.groupRuns;
+  const hasGroup = groupRuns && groupRuns.length > 0;
 
-  const sweetSpot = computeSweetSpotAnalytics(runs);
-  const empiricalBest = sweetSpot?.bestBucket?.sens ?? runs[0].sens;
+  if (!hasLocal && !hasGroup) return null;
 
-  const points = runs.map((r) => ({
-    x: valorantToCm360(r.sens),
-    y: r.score,
-  }));
+  const halfLife = options.recencyHalfLifeDays ?? 60;
+  const now = options.now ?? Date.now();
 
-  const parabola = fitParabolaCoefficients(points);
-  const total = runs.length;
+  const evaluateSingleSet = (dataPoints: RunDataPoint[]): SensPrediction | null => {
+    if (!dataPoints || dataPoints.length === 0) return null;
+    const sweetSpot = computeSweetSpotAnalytics(dataPoints);
+    const empiricalBest = sweetSpot?.bestBucket?.sens ?? dataPoints[0].sens;
 
-  let confidence: "high" | "medium" | "low" | "insufficient";
-  if (total >= 20) {
-    confidence = "high";
-  } else if (total >= 10) {
-    confidence = "medium";
-  } else if (total >= 5) {
-    confidence = "low";
-  } else {
-    confidence = "insufficient";
-  }
+    const points = dataPoints.map((r) => ({
+      x: valorantToCm360(r.sens),
+      y: r.score,
+      weight: halfLife > 0 ? recencyWeight(r.date, now, halfLife) : 1,
+    }));
 
-  const profileConfig = PREDICTOR_PROFILES[profile] ?? PREDICTOR_PROFILES.equilibrado;
-  const { teoricoWeight, consistenciaWeight } = profileConfig;
+    const parabola = fitWeightedParabolaCoefficients(points);
+    const total = dataPoints.length;
 
-  let predicted: number;
-  let basis: "curvature_blend" | "empirical_best";
-  const vertexSens: number | null = parabola?.vertex ?? null;
-  let scoreEstimate: number | null = null;
+    let confidence: "high" | "medium" | "low" | "insufficient";
+    if (total >= 20) {
+      confidence = "high";
+    } else if (total >= 10) {
+      confidence = "medium";
+    } else if (total >= 5) {
+      confidence = "low";
+    } else {
+      confidence = "insufficient";
+    }
 
-  if (parabola && vertexSens !== null) {
-    predicted = Number((teoricoWeight * vertexSens + consistenciaWeight * empiricalBest).toFixed(1));
-    basis = "curvature_blend";
-    scoreEstimate = Math.round(parabola.a * predicted * predicted + parabola.b * predicted + parabola.c);
-  } else {
-    predicted = Number(empiricalBest.toFixed(1));
-    basis = "empirical_best";
-    scoreEstimate = sweetSpot?.bestBucket?.avgScore ? Math.round(sweetSpot.bestBucket.avgScore) : null;
-  }
+    const profileConfig = PREDICTOR_PROFILES[profile] ?? PREDICTOR_PROFILES.equilibrado;
+    const { teoricoWeight, consistenciaWeight } = profileConfig;
 
-  return {
-    predictedSens: predicted,
-    label: formatSensitivity(predicted),
-    confidence,
-    basis,
-    vertexSens,
-    empiricalSens: Number(empiricalBest.toFixed(1)),
-    scoreEstimate,
-    profile,
-    teoricoWeight,
-    consistenciaWeight,
+    let predicted: number;
+    let basis: "curvature_blend" | "empirical_best";
+    const vertexSens: number | null = parabola?.vertex ?? null;
+    let scoreEstimate: number | null = null;
+
+    if (parabola && vertexSens !== null) {
+      predicted = Number((teoricoWeight * vertexSens + consistenciaWeight * empiricalBest).toFixed(1));
+      basis = "curvature_blend";
+      scoreEstimate = Math.round(parabola.a * predicted * predicted + parabola.b * predicted + parabola.c);
+    } else {
+      predicted = Number(empiricalBest.toFixed(1));
+      basis = "empirical_best";
+      scoreEstimate = sweetSpot?.bestBucket?.avgScore ? Math.round(sweetSpot.bestBucket.avgScore) : null;
+    }
+
+    return {
+      predictedSens: predicted,
+      label: formatSensitivity(predicted),
+      confidence,
+      basis,
+      vertexSens,
+      empiricalSens: Number(empiricalBest.toFixed(1)),
+      scoreEstimate,
+      profile,
+      teoricoWeight,
+      consistenciaWeight,
+    };
   };
+
+  if (!hasLocal) {
+    if (!groupRuns) return null;
+    return evaluateSingleSet(groupRuns);
+  }
+
+  const localPred = evaluateSingleSet(runs);
+  if (!localPred) return null;
+
+  if (groupRuns && groupRuns.length > 0) {
+    const distinctSens = new Set(
+      groupRuns.map((r) => Number(valorantToCm360(r.sens).toFixed(1)))
+    );
+    if (distinctSens.size >= 4) {
+      const groupPred = evaluateSingleSet(groupRuns);
+      if (groupPred) {
+        const n_local = runs.length;
+        const k = typeof options.shrinkageK === "number" ? options.shrinkageK : 6;
+        const peso_local = n_local + k > 0 ? n_local / (n_local + k) : 1;
+        const blendedSens = Number(
+          (peso_local * localPred.predictedSens + (1 - peso_local) * groupPred.predictedSens).toFixed(1)
+        );
+
+        let blendedConfidence = localPred.confidence;
+        if (groupRuns.length > n_local && groupPred.confidence !== "insufficient") {
+          const confidenceLevels: Array<SensPrediction["confidence"]> = [
+            "insufficient",
+            "low",
+            "medium",
+            "high",
+          ];
+          const currentIndex = confidenceLevels.indexOf(localPred.confidence);
+          if (currentIndex < confidenceLevels.length - 1) {
+            blendedConfidence = confidenceLevels[currentIndex + 1];
+          }
+        }
+
+        const basis =
+          localPred.basis === "curvature_blend" || groupPred.basis === "curvature_blend"
+            ? "curvature_blend"
+            : "empirical_best";
+
+        return {
+          ...localPred,
+          predictedSens: blendedSens,
+          label: formatSensitivity(blendedSens),
+          confidence: blendedConfidence,
+          basis,
+          vertexSens: localPred.vertexSens ?? groupPred.vertexSens,
+        };
+      }
+    }
+  }
+
+  return localPred;
 }

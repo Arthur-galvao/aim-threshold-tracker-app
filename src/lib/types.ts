@@ -15,9 +15,24 @@ export interface Task {
   sessions: Session[];
 }
 
+export interface PlaylistItem {
+  id: string;
+  taskId: string;
+  targetMode: "reps" | "time";
+  targetValue: number; // reps: número de sessões; time: segundos
+}
+
+export interface Playlist {
+  id: string;
+  name: string;
+  items: PlaylistItem[];
+  createdAt: string;
+}
+
 export interface AppData {
   activeTaskId: string | null;
   tasks: Task[];
+  playlists: Playlist[];
 }
 
 export interface KovaakRun {
@@ -27,6 +42,17 @@ export interface KovaakRun {
   fov: number;
   datetime: string;
   source_file: string;
+}
+
+export interface KovaakPlaylistItemRaw {
+  scenarioName: string;
+  playCount: number;
+}
+
+export interface KovaakPlaylistRaw {
+  playlistName: string;
+  scenarioList: KovaakPlaylistItemRaw[];
+  description?: string;
 }
 
 export interface AppSettings {

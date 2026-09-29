@@ -409,6 +409,7 @@ mod tests {
                     },
                 ],
             }],
+            playlists: Vec::new(),
         };
 
         let changed = migrate_existing_sensitivities(&mut data, None);
@@ -421,6 +422,7 @@ mod tests {
     fn test_migrate_converts_legacy_in_game_sens() {
         let mut data = AppData {
             active_task_id: Some("t1".into()),
+            playlists: Vec::new(),
             tasks: vec![Task {
                 id: "t1".into(),
                 name: "1w2ts Pasu".into(),

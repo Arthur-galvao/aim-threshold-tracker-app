@@ -5,6 +5,7 @@ import type {
   AppData,
   AppSettings,
   ImportStats,
+  KovaakPlaylistRaw,
   KovaakRun,
   WatcherStatus,
 } from "./types";
@@ -45,6 +46,11 @@ export async function importJsonBackup(json: string): Promise<AppData> {
 export async function detectKovaakPath(): Promise<string | null> {
   if (!isTauri()) return null;
   return invoke<string | null>("detect_kovaak_path");
+}
+
+export async function getKovaakPlaylists(): Promise<KovaakPlaylistRaw[]> {
+  if (!isTauri()) return [];
+  return invoke<KovaakPlaylistRaw[]>("get_kovaak_playlists");
 }
 
 export async function pickStatsFolder(): Promise<string | null> {

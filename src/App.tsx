@@ -4,15 +4,20 @@ import { useKovaakWatcher } from "@/hooks/useKovaakWatcher";
 import { useSensRandomizer } from "@/hooks/useSensRandomizer";
 import { I18nProvider, useI18n } from "@/lib/i18n";
 import { Header } from "@/components/Header";
-import { TaskSelector } from "@/components/TaskSelector";
+import { ScenarioList } from "@/components/ScenarioList";
 import { SessionForm } from "@/components/SessionForm";
 import { MetricsCards } from "@/components/MetricsCards";
 import { ProgressChart } from "@/components/ProgressChart";
 import { HistoryTable, copyEscalateToClipboard } from "@/components/HistoryTable";
 import { SensRandomizerView } from "@/components/SensRandomizerView";
+import { PlaylistRunnerView } from "@/components/playlist/PlaylistRunnerView";
+import { PlaylistManagerModal } from "@/components/playlist/PlaylistManagerModal";
+import { DashboardPlaylistRunner } from "@/components/playlist/DashboardPlaylistRunner";
+import { usePlaylistRunner } from "@/hooks/usePlaylistRunner";
 import { NewTaskModal } from "@/components/NewTaskModal";
 import { SettingsModal } from "@/components/SettingsModal";
 import { Toast } from "@/components/Toast";
+import type { Playlist } from "@/lib/types";
 
 function Dashboard() {
   const {
@@ -28,6 +33,10 @@ function Dashboard() {
     deleteCurrentTask,
     addManualSessions,
     deleteSession,
+    createPlaylist,
+    updatePlaylist,
+    deletePlaylist,
+    syncKovaakPlaylists,
   } = useApp();
 
   const {
@@ -47,9 +56,28 @@ function Dashboard() {
     testWriter: testRawaccelWriter,
   } = useSensRandomizer();
 
-  const [activeTab, setActiveTab] = useState<"dashboard" | "randomizer">("dashboard");
+  const [activeTab, setActiveTab] = useState<"dashboard" | "randomizer" | "playlist">("dashboard");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [newTaskOpen, setNewTaskOpen] = useState(false);
+  const [playlistManagerOpen, setPlaylistManagerOpen] = useState(false);
+  const [pendingPlaylistTaskIds, setPendingPlaylistTaskIds] = useState<string[]>([]);
+
+  const playlistRunner = usePlaylistRunner({
+    tasks: appData.tasks,
+    setActiveTaskId,
+  });
+
+  const handleAddToPlaylist = useCallback((taskIds: string[]) => {
+    setPendingPlaylistTaskIds(taskIds);
+    setPlaylistManagerOpen(true);
+  }, []);
+
+  const handleStartPlaylist = useCallback(
+    (playlist: Playlist) => {
+      playlistRunner.start(playlist);
+    },
+    [playlistRunner]
+  );
 
   const { t } = useI18n();
 
@@ -106,6 +134,9 @@ function Dashboard() {
       <main className="relative z-10 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 flex-1 flex flex-col gap-6">
         {activeTab === "dashboard" ? (
           <>
+            {/* Active Playlist Runner Banner in Dashboard */}
+            <DashboardPlaylistRunner runner={playlistRunner} />
+
             {/* Top Full-Width KPI Metrics Cards */}
             <section aria-label="KPI Metrics">
               <MetricsCards activeTask={activeTask} />
@@ -113,14 +144,28 @@ function Dashboard() {
 
             {/* 2-Column Dashboard Grid */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-              {/* Left Column: Task Selector & Manual Entry */}
+              {/* Left Column: Scenario List & Manual Entry */}
               <div className="lg:col-span-4 xl:col-span-4 space-y-6">
-                <TaskSelector
+                <ScenarioList
                   tasks={appData.tasks}
                   activeTaskId={appData.activeTaskId}
                   onTaskChange={setActiveTaskId}
                   onNewTask={() => setNewTaskOpen(true)}
                   onDeleteTask={deleteCurrentTask}
+                  onAddToPlaylist={handleAddToPlaylist}
+                  playlists={appData.playlists ?? []}
+                  onStartPlaylist={handleStartPlaylist}
+                  onStopPlaylist={playlistRunner.stop}
+                  runningPlaylistId={playlistRunner.isRunning ? playlistRunner.activePlaylist?.id : null}
+                  runningStepIndex={playlistRunner.currentStepIndex}
+                  onJumpToStep={playlistRunner.jumpToStep}
+                  onOpenPlaylistManager={() => {
+                    setPendingPlaylistTaskIds([]);
+                    setPlaylistManagerOpen(true);
+                  }}
+                  onSyncKovaak={async () => {
+                    await syncKovaakPlaylists(true);
+                  }}
                 />
 
                 <SessionForm activeTask={activeTask} onSubmit={addManualSessions} />
@@ -137,8 +182,21 @@ function Dashboard() {
               </div>
             </div>
           </>
-        ) : (
+        ) : activeTab === "randomizer" ? (
           <SensRandomizerView activeTask={activeTask} allTasks={appData.tasks} />
+        ) : (
+          <PlaylistRunnerView
+            runner={playlistRunner}
+            playlists={appData.playlists ?? []}
+            tasks={appData.tasks}
+            onOpenManager={() => {
+              setPendingPlaylistTaskIds([]);
+              setPlaylistManagerOpen(true);
+            }}
+            onSyncKovaak={async () => {
+              await syncKovaakPlaylists(true);
+            }}
+          />
         )}
       </main>
 
@@ -177,6 +235,26 @@ function Dashboard() {
         onImport={importData}
         onLoadDemo={loadDemoData}
         onClear={clearAllData}
+      />
+
+      <PlaylistManagerModal
+        open={playlistManagerOpen}
+        onClose={() => {
+          setPlaylistManagerOpen(false);
+          setPendingPlaylistTaskIds([]);
+        }}
+        playlists={appData.playlists ?? []}
+        tasks={appData.tasks}
+        initialTaskIds={pendingPlaylistTaskIds}
+        onCreatePlaylist={async (pl) => {
+          await createPlaylist(pl.name, pl.items);
+        }}
+        onUpdatePlaylist={updatePlaylist}
+        onDeletePlaylist={deletePlaylist}
+        onStartPlaylist={handleStartPlaylist}
+        onSyncKovaak={async () => {
+          await syncKovaakPlaylists(true);
+        }}
       />
 
       <Toast />

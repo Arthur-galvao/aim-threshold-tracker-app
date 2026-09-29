@@ -2,6 +2,7 @@ import type { AppData } from "./types";
 
 export const SAMPLE_DATA: AppData = {
   activeTaskId: "task_1",
+  playlists: [],
   tasks: [
     {
       id: "task_1",

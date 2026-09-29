@@ -54,6 +54,15 @@ fn detect_kovaak_path() -> Result<Option<String>, String> {
 }
 
 #[tauri::command]
+fn get_kovaak_playlists(state: State<'_, AppState>) -> Result<Vec<kovaaak::KovaakPlaylist>, String> {
+    let stats_path = {
+        let settings = state.settings.lock().unwrap();
+        settings.kovaak_stats_path.clone()
+    };
+    Ok(kovaaak::load_all_kovaak_playlists(stats_path.as_deref()))
+}
+
+#[tauri::command]
 fn get_settings(state: State<'_, AppState>) -> Result<AppSettings, String> {
     Ok(state.settings.lock().unwrap().clone())
 }
@@ -334,6 +343,7 @@ pub fn run() {
             save_app_data,
             import_json_backup,
             detect_kovaak_path,
+            get_kovaak_playlists,
             get_settings,
             save_settings,
             set_stats_path,

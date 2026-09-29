@@ -10,6 +10,7 @@ import {
 import { SensRandomizerControls } from "./randomizer/SensRandomizerControls";
 import { SensRandomizerChart } from "./randomizer/SensRandomizerChart";
 import { SensRandomizerAnalytics } from "./randomizer/SensRandomizerAnalytics";
+import { CategorySensCard } from "./CategorySensCard";
 
 interface SensRandomizerViewProps {
   activeTask: Task | null;
@@ -114,6 +115,11 @@ export function SensRandomizerView({ activeTask, allTasks }: SensRandomizerViewP
         analysis={analysis}
         relevantSessions={relevantSessions}
         scopeAllTasks={scopeAllTasks}
+        onApplySens={handleApplySens}
+      />
+
+      <CategorySensCard
+        tasks={allTasks}
         onApplySens={handleApplySens}
       />
     </div>

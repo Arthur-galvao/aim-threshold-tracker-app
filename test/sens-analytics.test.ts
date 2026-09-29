@@ -5,9 +5,16 @@ import {
   formatSensitivity,
   calculateParabolicTrendline,
   computeSweetSpotAnalytics,
+  fitParabolaCoefficients,
+  fitWeightedParabolaCoefficients,
+  recencyWeight,
+  poolCategoryRuns,
   predictOptimalSensitivity,
   PREDICTOR_PROFILES,
+  type CategoryRunPoint,
+  type RunDataPoint,
 } from "../src/lib/sens-analytics.ts";
+import { getDisplaySens, getRecommendedSens } from "../src/lib/viscose.ts";
 
 describe("sens-analytics", () => {
   describe("valorantToCm360", () => {
@@ -242,6 +249,265 @@ describe("sens-analytics", () => {
         predNeutral.predictedSens > predConsistency.predictedSens,
         `Neutral (${predNeutral.predictedSens}) should be > Consistency (${predConsistency.predictedSens})`
       );
+    });
+  });
+
+  describe("fitWeightedParabolaCoefficients", () => {
+    it("produces identical results to fitParabolaCoefficients when all weights are 1", () => {
+      const points = [
+        { x: 30, y: 0 },
+        { x: 35, y: 75 },
+        { x: 40, y: 100 },
+        { x: 45, y: 75 },
+        { x: 50, y: 0 },
+      ];
+      const unweighted = fitParabolaCoefficients(points);
+      const weightedAll1 = fitWeightedParabolaCoefficients(
+        points.map((p) => ({ ...p, weight: 1 }))
+      );
+      assert.ok(unweighted !== null);
+      assert.ok(weightedAll1 !== null);
+      assert.ok(Math.abs(unweighted.a - weightedAll1.a) < 1e-9);
+      assert.ok(Math.abs(unweighted.b - weightedAll1.b) < 1e-9);
+      assert.ok(Math.abs(unweighted.c - weightedAll1.c) < 1e-9);
+      assert.equal(unweighted.vertex, weightedAll1.vertex);
+    });
+
+    it("approaches uncorrupted vertex when setting weight 0 on an extreme outlier", () => {
+      // Vertex at 40
+      const cleanPoints = [
+        { x: 30, y: 0 },
+        { x: 35, y: 75 },
+        { x: 40, y: 100 },
+        { x: 45, y: 75 },
+        { x: 50, y: 0 },
+      ];
+      const cleanResult = fitWeightedParabolaCoefficients(cleanPoints);
+      assert.ok(cleanResult && cleanResult.vertex !== null);
+      assert.equal(cleanResult.vertex, 40);
+
+      // Outlier that pulls the concave peak towards ~43
+      const corruptedPoints = [
+        ...cleanPoints.map((p) => ({ ...p, weight: 1 })),
+        { x: 48, y: 150, weight: 1 },
+      ];
+      const corruptedResult = fitWeightedParabolaCoefficients(corruptedPoints);
+      assert.ok(corruptedResult && corruptedResult.vertex !== null);
+      // Vertex with outlier is displaced from 40
+      assert.ok(Math.abs(corruptedResult.vertex - 40) > 0.5);
+
+      // Weight 0 suppresses outlier
+      const suppressedPoints = [
+        ...cleanPoints.map((p) => ({ ...p, weight: 1 })),
+        { x: 48, y: 150, weight: 0 },
+      ];
+      const suppressedResult = fitWeightedParabolaCoefficients(suppressedPoints);
+      assert.ok(suppressedResult && suppressedResult.vertex !== null);
+      assert.ok(Math.abs(suppressedResult.vertex - 40) < 0.2);
+    });
+  });
+
+  describe("recencyWeight", () => {
+    const DAY_MS = 86_400_000;
+    const now = new Date("2026-09-24T12:00:00Z").getTime();
+
+    it("returns 1 if dateIso is undefined, invalid or halfLifeDays <= 0", () => {
+      assert.equal(recencyWeight(undefined, now, 60), 1);
+      assert.equal(recencyWeight("invalid-date", now, 60), 1);
+      assert.equal(recencyWeight("2026-09-20T00:00:00Z", now, 0), 1);
+      assert.equal(recencyWeight("2026-09-20T00:00:00Z", now, -10), 1);
+    });
+
+    it("returns 1 for dates in the future (ageDays <= 0)", () => {
+      const tomorrow = new Date(now + DAY_MS).toISOString();
+      assert.equal(recencyWeight(tomorrow, now, 60), 1);
+    });
+
+    it("calculates exponential decay correctly based on half life", () => {
+      const exact60DaysAgo = new Date(now - 60 * DAY_MS).toISOString();
+      const weight60 = recencyWeight(exact60DaysAgo, now, 60);
+      assert.ok(Math.abs(weight60 - 0.5) < 1e-4);
+
+      const exact120DaysAgo = new Date(now - 120 * DAY_MS).toISOString();
+      const weight120 = recencyWeight(exact120DaysAgo, now, 60);
+      assert.ok(Math.abs(weight120 - 0.25) < 1e-4);
+
+      const today = new Date(now).toISOString();
+      assert.equal(recencyWeight(today, now, 60), 1);
+    });
+  });
+
+  describe("poolCategoryRuns", () => {
+    it("flattens runs from multiple tasks belonging to the same category", () => {
+      const runsByTask: Record<string, CategoryRunPoint[]> = {
+        task1: [
+          { taskId: "task1", sens: 45, score: 100 },
+          { taskId: "task1", sens: 50, score: 120 },
+        ],
+        task2: [
+          { taskId: "task2", sens: 55, score: 110 },
+        ],
+      };
+      const pooled = poolCategoryRuns(runsByTask);
+      assert.equal(pooled.length, 3);
+      assert.equal(pooled[0].taskId, "task1");
+      assert.equal(pooled[2].taskId, "task2");
+    });
+  });
+
+  describe("predictOptimalSensitivity with hierarchical group prior", () => {
+    it("preserves identical output when options is omitted (backward compatibility)", () => {
+      const runs = [
+        { sens: 40.0, score: 600 },
+        { sens: 45.0, score: 775 },
+        { sens: 50.0, score: 900 },
+        { sens: 55.0, score: 975 },
+        { sens: 60.0, score: 1000 },
+        { sens: 60.0, score: 990 },
+        { sens: 65.0, score: 975 },
+        { sens: 70.0, score: 900 },
+        { sens: 75.0, score: 775 },
+        { sens: 80.0, score: 600 },
+      ];
+      const withoutOptions = predictOptimalSensitivity(runs);
+      const withEmptyOptions = predictOptimalSensitivity(runs, "equilibrado", {});
+      assert.deepEqual(withoutOptions, withEmptyOptions);
+    });
+
+    it("shrinks local prediction towards category group when local sample is small (3 runs)", () => {
+      // Local task with only 3 runs around 40 cm (insufficient for curvature)
+      const localRuns = [
+        { sens: 40.0, score: 100 },
+        { sens: 40.0, score: 102 },
+        { sens: 42.0, score: 101 },
+      ];
+
+      // Group runs from sister scenarios in same subcategory peaking strongly around 60 cm
+      const groupRuns = [
+        { sens: 40.0, score: 600 },
+        { sens: 45.0, score: 775 },
+        { sens: 50.0, score: 900 },
+        { sens: 55.0, score: 975 },
+        { sens: 60.0, score: 1000 },
+        { sens: 60.0, score: 990 },
+        { sens: 65.0, score: 975 },
+        { sens: 70.0, score: 900 },
+        { sens: 75.0, score: 775 },
+        { sens: 80.0, score: 600 },
+      ];
+
+      const localOnly = predictOptimalSensitivity(localRuns);
+      assert.ok(localOnly);
+      assert.equal(localOnly.predictedSens, 40.0);
+      assert.equal(localOnly.confidence, "insufficient");
+
+      // With group runs: n_local = 3, k = 6 => peso_local = 3 / 9 = 0.333
+      // groupPred ~ 60 cm
+      // blended should be pulled significantly toward 60 cm
+      const blended = predictOptimalSensitivity(localRuns, "equilibrado", {
+        groupRuns,
+        shrinkageK: 6,
+      });
+
+      assert.ok(blended);
+      assert.ok(
+        blended.predictedSens > 50,
+        `Expected blended prediction pulled toward group apex (~60), got ${blended.predictedSens}`
+      );
+      assert.ok(blended.confidence !== "insufficient");
+    });
+
+    it("allows local prediction to dominate when local sample is large (25 runs)", () => {
+      // Local scenario with 25 runs peaking at 45 cm
+      const localRuns: RunDataPoint[] = [];
+      for (let i = 0; i < 5; i++) {
+        localRuns.push({ sens: 35.0, score: 700 });
+        localRuns.push({ sens: 40.0, score: 850 });
+        localRuns.push({ sens: 45.0, score: 1000 });
+        localRuns.push({ sens: 50.0, score: 850 });
+        localRuns.push({ sens: 55.0, score: 700 });
+      }
+
+      // Group runs peaking at 65 cm
+      const groupRuns: RunDataPoint[] = [
+        { sens: 50.0, score: 700 },
+        { sens: 55.0, score: 850 },
+        { sens: 65.0, score: 1000 },
+        { sens: 75.0, score: 850 },
+        { sens: 80.0, score: 700 },
+      ];
+
+      const localOnly = predictOptimalSensitivity(localRuns);
+      assert.ok(localOnly);
+
+      const blended = predictOptimalSensitivity(localRuns, "equilibrado", {
+        groupRuns,
+        shrinkageK: 6,
+      });
+
+      assert.ok(blended);
+      assert.ok(
+        Math.abs(blended.predictedSens - localOnly.predictedSens) <= 4.0,
+        `Expected local dominance near ${localOnly.predictedSens}, got ${blended.predictedSens}`
+      );
+      assert.equal(blended.confidence, "high");
+    });
+
+    it("supports evaluating pure groupRuns when local runs array is empty", () => {
+      const groupRuns = [
+        { sens: 40.0, score: 600 },
+        { sens: 45.0, score: 775 },
+        { sens: 50.0, score: 900 },
+        { sens: 55.0, score: 975 },
+        { sens: 60.0, score: 1000 },
+        { sens: 60.0, score: 990 },
+        { sens: 65.0, score: 975 },
+        { sens: 70.0, score: 900 },
+        { sens: 75.0, score: 775 },
+        { sens: 80.0, score: 600 },
+      ];
+
+      const pred = predictOptimalSensitivity([], "equilibrado", { groupRuns });
+      assert.ok(pred !== null);
+      assert.ok(Math.abs(pred.predictedSens - 60.0) <= 2.5);
+      assert.ok(pred.confidence !== "insufficient");
+    });
+  });
+
+  describe("getDisplaySens", () => {
+    it("returns viscose source and static recommendation when groupRuns has fewer than 8 runs", () => {
+      const fewRuns = [
+        { sens: 45, score: 100 },
+        { sens: 50, score: 105 },
+        { sens: 55, score: 110 },
+      ];
+      const result = getDisplaySens("Control Tracking", "Wrist", fewRuns);
+      assert.equal(result.source, "viscose");
+      assert.equal(result.value, getRecommendedSens("Control Tracking", "Wrist"));
+    });
+
+    it("returns viscose source when groupRuns is undefined", () => {
+      const result = getDisplaySens("Click Timing", "Precision");
+      assert.equal(result.source, "viscose");
+      assert.equal(result.value, 60);
+    });
+
+    it("returns predicted source when groupRuns has >= 8 runs with sufficient confidence", () => {
+      const groupRuns = [
+        { sens: 40.0, score: 600 },
+        { sens: 45.0, score: 775 },
+        { sens: 50.0, score: 900 },
+        { sens: 55.0, score: 975 },
+        { sens: 60.0, score: 1000 },
+        { sens: 60.0, score: 990 },
+        { sens: 65.0, score: 975 },
+        { sens: 70.0, score: 900 },
+        { sens: 75.0, score: 775 },
+        { sens: 80.0, score: 600 },
+      ];
+      const result = getDisplaySens("Click Timing", "Precision", groupRuns);
+      assert.equal(result.source, "predicted");
+      assert.ok(Math.abs(result.value - 60.0) <= 2.5);
     });
   });
 });

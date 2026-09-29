@@ -1,4 +1,5 @@
 import type { Task } from "./types";
+import { predictOptimalSensitivity, type RunDataPoint } from "./sens-analytics.ts";
 
 export const VISCOSE_CATEGORIES: Record<string, string[]> = {
   "Flick Tech": ["Speed", "Stability", "Micro", "Post-Flick"],
@@ -148,4 +149,27 @@ export function migrateAndCategorizeTasks(tasks: Task[]): boolean {
     }
   }
   return changed;
+}
+
+/**
+ * Retorna a sensibilidade recomendada para uma dada categoria e subcategoria.
+ * Prioriza a sensibilidade predita se houver pelo menos 8 runs com confianca suficiente;
+ * caso contrario, recorre a tabela estatica do benchmark Viscose.
+ */
+export function getDisplaySens(
+  category: string,
+  subcategory: string,
+  groupRuns?: RunDataPoint[]
+): { value: number; source: "predicted" | "viscose" } {
+  if (groupRuns && groupRuns.length >= 8) {
+    const predicted = predictOptimalSensitivity([], "equilibrado", { groupRuns });
+    if (predicted && predicted.confidence !== "insufficient") {
+      return { value: predicted.predictedSens, source: "predicted" };
+    }
+  }
+  const fallback =
+    getRecommendedSens(category, subcategory) ??
+    getRecommendedSens(DEFAULT_CATEGORY, DEFAULT_SUBCATEGORY) ??
+    45;
+  return { value: fallback, source: "viscose" };
 }
