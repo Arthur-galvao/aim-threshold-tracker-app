@@ -102,10 +102,10 @@ fn is_stats_csv(path: &Path) -> bool {
 fn process_new_csv(app: &AppHandle, path: &Path) -> Result<bool, String> {
     let state: State<AppState> = app.state();
 
-    let (is_randomizer_enabled, active_sens) = {
+    let (is_randomizer_enabled, active_sens, stats_path, auto_detect_playlist) = {
         let s = state.settings.lock().unwrap();
         let r = state.randomizer_state.lock().unwrap();
-        (s.randomizer.enabled, r.active_sens_cm)
+        (s.randomizer.enabled, r.active_sens_cm, s.kovaak_stats_path.clone(), s.auto_detect_playlist)
     };
 
     if is_randomizer_enabled && active_sens > 0.0 {
@@ -145,6 +145,12 @@ fn process_new_csv(app: &AppHandle, path: &Path) -> Result<bool, String> {
     }
 
     app.emit("new_run", &run).map_err(|e| e.to_string())?;
+
+    if auto_detect_playlist {
+        if let Some(playlist) = crate::kovaaak::detect_playlist_in_progress(stats_path.as_deref()) {
+            let _ = app.emit("kovaak_playlist_active", &playlist);
+        }
+    }
 
     if is_randomizer_enabled {
         let app_clone = app.clone();

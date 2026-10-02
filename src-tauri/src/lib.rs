@@ -8,7 +8,9 @@ mod watcher;
 use std::collections::HashSet;
 use std::sync::Mutex;
 
-use tauri::{AppHandle, Emitter, Manager, State};
+use tauri::menu::{MenuBuilder, MenuItemBuilder, PredefinedMenuItem};
+use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+use tauri::{AppHandle, Emitter, Manager, State, WindowEvent};
 
 use model::{AppData, AppSettings, ImportStats, RandomizerSettings, RandomizerState, WatcherStatus};
 
@@ -60,6 +62,15 @@ fn get_kovaak_playlists(state: State<'_, AppState>) -> Result<Vec<kovaaak::Kovaa
         settings.kovaak_stats_path.clone()
     };
     Ok(kovaaak::load_all_kovaak_playlists(stats_path.as_deref()))
+}
+
+#[tauri::command]
+fn get_playlist_in_progress(state: State<'_, AppState>) -> Result<Option<kovaaak::KovaakPlaylist>, String> {
+    let stats_path = {
+        let settings = state.settings.lock().unwrap();
+        settings.kovaak_stats_path.clone()
+    };
+    Ok(kovaaak::detect_playlist_in_progress(stats_path.as_deref()))
 }
 
 #[tauri::command]
@@ -336,7 +347,79 @@ pub fn run() {
                 let _ = randomizer::apply_next_sens(&handle, None, None);
             }
 
+            let open_item = MenuItemBuilder::with_id("open", "Abrir Aim Threshold Tracker").build(app)?;
+            let separator = PredefinedMenuItem::separator(app)?;
+            let quit_item = MenuItemBuilder::with_id("quit", "Sair").build(app)?;
+            let menu = MenuBuilder::new(app)
+                .items(&[&open_item, &separator, &quit_item])
+                .build()?;
+
+            let mut tray_builder = TrayIconBuilder::new()
+                .tooltip("Aim Threshold Tracker")
+                .menu(&menu)
+                .show_menu_on_left_click(false)
+                .on_menu_event(|app, event| {
+                    match event.id().as_ref() {
+                        "open" => {
+                            let window = app.get_webview_window("main")
+                                .or_else(|| app.webview_windows().values().next().cloned());
+                            if let Some(w) = window {
+                                let _ = w.show();
+                                let _ = w.unminimize();
+                                let _ = w.set_focus();
+                            }
+                        }
+                        "quit" => {
+                            app.exit(0);
+                        }
+                        _ => {}
+                    }
+                })
+                .on_tray_icon_event(|tray, event| {
+                    if let TrayIconEvent::Click {
+                        button: MouseButton::Left,
+                        button_state: MouseButtonState::Up,
+                        ..
+                    } = event
+                    {
+                        let app = tray.app_handle();
+                        let window = app.get_webview_window("main")
+                            .or_else(|| app.webview_windows().values().next().cloned());
+                        if let Some(w) = window {
+                            if w.is_visible().unwrap_or(false) {
+                                let _ = w.hide();
+                            } else {
+                                let _ = w.show();
+                                let _ = w.unminimize();
+                                let _ = w.set_focus();
+                            }
+                        }
+                    }
+                });
+
+            if let Some(icon) = app.default_window_icon().cloned() {
+                tray_builder = tray_builder.icon(icon);
+            }
+
+            let _tray = tray_builder.build(app)?;
+
             Ok(())
+        })
+        .on_window_event(|window, event| {
+            if let WindowEvent::CloseRequested { api, .. } = event {
+                let close_to_tray = {
+                    let state: Option<State<AppState>> = window.try_state();
+                    if let Some(s) = state {
+                        s.settings.lock().unwrap().close_to_tray
+                    } else {
+                        true
+                    }
+                };
+                if close_to_tray {
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
+            }
         })
         .invoke_handler(tauri::generate_handler![
             load_app_data,
@@ -344,6 +427,7 @@ pub fn run() {
             import_json_backup,
             detect_kovaak_path,
             get_kovaak_playlists,
+            get_playlist_in_progress,
             get_settings,
             save_settings,
             set_stats_path,

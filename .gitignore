@@ -72,3 +72,4 @@ pnpm-debug.log*
 .gemini/
 .agents/
 .antigravity/
+.superpowers/

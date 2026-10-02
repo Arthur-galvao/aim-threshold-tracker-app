@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -20,6 +20,8 @@ fn default_play_count() -> f64 {
 pub struct KovaakPlaylist {
     #[serde(alias = "playlistName", alias = "playlist_name")]
     pub playlist_name: String,
+    #[serde(alias = "playlistId", alias = "playlist_id", default)]
+    pub playlist_id: Option<serde_json::Value>,
     #[serde(alias = "scenarioList", alias = "scenario_list", default)]
     pub scenario_list: Vec<KovaakPlaylistItem>,
     #[serde(default)]
@@ -134,6 +136,53 @@ pub fn load_all_kovaak_playlists(stats_path: Option<&str>) -> Vec<KovaakPlaylist
     playlists
 }
 
+pub fn detect_playlist_in_progress(stats_path: Option<&str>) -> Option<KovaakPlaylist> {
+    let mut candidates: Vec<PathBuf> = Vec::new();
+
+    if let Some(sp) = stats_path {
+        let p = Path::new(sp);
+        if let Some(parent) = p.parent() {
+            candidates.push(parent.join("Saved").join("SaveGames").join("PlaylistInProgress.json"));
+        }
+        candidates.push(p.join("Saved").join("SaveGames").join("PlaylistInProgress.json"));
+    }
+
+    #[cfg(windows)]
+    if let Some(steam_path) = steam_install_path() {
+        candidates.push(steam_path.join(r"steamapps\common\FPSAimTrainer\FPSAimTrainer\Saved\SaveGames\PlaylistInProgress.json"));
+        let vdf = steam_path.join(r"steamapps\libraryfolders.vdf");
+        if let Ok(content) = fs::read_to_string(&vdf) {
+            for line in content.lines() {
+                if let Some(lib) = parse_library_vdf_line(line) {
+                    candidates.push(lib.join(r"steamapps\common\FPSAimTrainer\FPSAimTrainer\Saved\SaveGames\PlaylistInProgress.json"));
+                }
+            }
+        }
+    }
+
+    #[cfg(not(windows))]
+    if let Some(home) = dirs::home_dir() {
+        candidates.push(home.join(".steam/steam/steamapps/common/FPSAimTrainer/FPSAimTrainer/Saved/SaveGames/PlaylistInProgress.json"));
+        candidates.push(home.join("Library/Steam/steamapps/common/FPSAimTrainer/FPSAimTrainer/Saved/SaveGames/PlaylistInProgress.json"));
+        candidates.push(home.join("Steam/steamapps/common/FPSAimTrainer/FPSAimTrainer/Saved/SaveGames/PlaylistInProgress.json"));
+    }
+
+    candidates.push(PathBuf::from(r"C:\Program Files (x86)\Steam\steamapps\common\FPSAimTrainer\FPSAimTrainer\Saved\SaveGames\PlaylistInProgress.json"));
+    candidates.push(PathBuf::from(r"C:\Program Files\Steam\steamapps\common\FPSAimTrainer\FPSAimTrainer\Saved\SaveGames\PlaylistInProgress.json"));
+
+    for candidate in candidates {
+        if candidate.exists() && candidate.is_file() {
+            if let Ok(content) = fs::read_to_string(&candidate) {
+                if let Ok(parsed) = serde_json::from_str::<KovaakPlaylist>(&content) {
+                    return Some(parsed);
+                }
+            }
+        }
+    }
+
+    None
+}
+
 #[cfg(windows)]
 fn steam_install_path() -> Option<PathBuf> {
     use winreg::enums::HKEY_CURRENT_USER;
@@ -224,6 +273,62 @@ mod tests {
         assert_eq!(loaded[1].playlist_name, "Playlist B");
         assert_eq!(loaded[0].scenario_list[0].scenario_name, "S2");
         assert_eq!(loaded[0].scenario_list[0].play_count, 3.0);
+
+        let _ = fs::remove_dir_all(tmp_dir);
+    }
+
+    #[test]
+    fn test_parse_kovaak_playlist_in_progress_json() {
+        let sample = r#"{
+            "playlistName": "Voltaic Daily - Tracking",
+            "playlistId": 987654,
+            "scenarioList": [
+                {
+                    "scenario_name": "Smoothbot Unranked",
+                    "play_Count": 3
+                },
+                {
+                    "scenario_name": "Air Angelic 4",
+                    "play_Count": 2
+                }
+            ],
+            "description": "Daily tracking routine"
+        }"#;
+
+        let parsed: KovaakPlaylist = serde_json::from_str(sample).expect("failed to parse playlist in progress");
+        assert_eq!(parsed.playlist_name, "Voltaic Daily - Tracking");
+        assert_eq!(parsed.playlist_id, Some(serde_json::json!(987654)));
+        assert_eq!(parsed.scenario_list.len(), 2);
+        assert_eq!(parsed.scenario_list[0].scenario_name, "Smoothbot Unranked");
+        assert_eq!(parsed.scenario_list[0].play_count, 3.0);
+        assert_eq!(parsed.scenario_list[1].scenario_name, "Air Angelic 4");
+        assert_eq!(parsed.scenario_list[1].play_count, 2.0);
+    }
+
+    #[test]
+    fn test_detect_playlist_in_progress_from_stats_parent() {
+        let tmp_dir = std::env::temp_dir().join(format!("kovaak_pip_test_{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis()));
+        let save_games_dir = tmp_dir.join(r"Saved\SaveGames");
+        let stats_dir = tmp_dir.join("stats");
+        fs::create_dir_all(&save_games_dir).unwrap();
+        fs::create_dir_all(&stats_dir).unwrap();
+
+        let json_content = r#"{
+            "playlistName": "VT Advanced S4",
+            "playlistId": 12345,
+            "scenarioList": [
+                {"scenario_name": "Pasu Small", "play_Count": 3}
+            ]
+        }"#;
+        fs::write(save_games_dir.join("PlaylistInProgress.json"), json_content).unwrap();
+
+        let detected = detect_playlist_in_progress(Some(stats_dir.to_str().unwrap()));
+        assert!(detected.is_some());
+        let pl = detected.unwrap();
+        assert_eq!(pl.playlist_name, "VT Advanced S4");
+        assert_eq!(pl.playlist_id, Some(serde_json::json!(12345)));
+        assert_eq!(pl.scenario_list.len(), 1);
+        assert_eq!(pl.scenario_list[0].scenario_name, "Pasu Small");
 
         let _ = fs::remove_dir_all(tmp_dir);
     }

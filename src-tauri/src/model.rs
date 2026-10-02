@@ -121,13 +121,38 @@ impl Default for RandomizerState {
     }
 }
 
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+fn default_true() -> bool {
+    true
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(default)]
 pub struct AppSettings {
     pub kovaak_stats_path: Option<String>,
     pub watcher_active: bool,
     pub import_on_first_run: bool,
     #[serde(default)]
     pub randomizer: RandomizerSettings,
+    #[serde(default = "default_true")]
+    pub close_to_tray: bool,
+    #[serde(default = "default_true")]
+    pub auto_detect_playlist: bool,
+    #[serde(default = "default_true")]
+    pub notify_step_advance: bool,
+}
+
+impl Default for AppSettings {
+    fn default() -> Self {
+        Self {
+            kovaak_stats_path: None,
+            watcher_active: false,
+            import_on_first_run: false,
+            randomizer: RandomizerSettings::default(),
+            close_to_tray: true,
+            auto_detect_playlist: true,
+            notify_step_advance: true,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -186,5 +211,37 @@ mod tests {
         assert_eq!(parsed.playlists[0].items.len(), 1);
         assert_eq!(parsed.playlists[0].items[0].target_mode, "reps");
         assert_eq!(parsed.playlists[0].items[0].target_value, 5.0);
+    }
+
+    #[test]
+    fn test_app_settings_default_values() {
+        let settings = AppSettings::default();
+        assert!(settings.close_to_tray);
+        assert!(settings.auto_detect_playlist);
+        assert!(settings.notify_step_advance);
+        assert_eq!(settings.kovaak_stats_path, None);
+        assert!(!settings.watcher_active);
+    }
+
+    #[test]
+    fn test_app_settings_deserialization_defaults() {
+        let json = r#"{"watcher_active": false, "import_on_first_run": false}"#;
+        let parsed: AppSettings = serde_json::from_str(json).expect("should deserialize settings");
+        assert!(parsed.close_to_tray);
+        assert!(parsed.auto_detect_playlist);
+        assert!(parsed.notify_step_advance);
+    }
+
+    #[test]
+    fn test_app_settings_deserialization_explicit_values() {
+        let json = r#"{
+            "close_to_tray": false,
+            "auto_detect_playlist": false,
+            "notify_step_advance": false
+        }"#;
+        let parsed: AppSettings = serde_json::from_str(json).expect("should deserialize explicit settings");
+        assert!(!parsed.close_to_tray);
+        assert!(!parsed.auto_detect_playlist);
+        assert!(!parsed.notify_step_advance);
     }
 }
