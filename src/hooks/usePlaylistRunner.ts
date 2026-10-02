@@ -24,6 +24,7 @@ export interface PlaylistRunnerState {
   stop: () => void;
   restart: () => void;
   jumpToStep: (index: number) => void;
+  syncWithDetectedScenario: (scenarioName: string, playlistName?: string) => void;
 }
 
 export function usePlaylistRunner({
@@ -47,6 +48,7 @@ export function usePlaylistRunner({
     startedAt,
     isFinished,
     isRunning,
+    completedStepIndices,
   });
 
   useEffect(() => {
@@ -57,6 +59,7 @@ export function usePlaylistRunner({
       startedAt,
       isFinished,
       isRunning,
+      completedStepIndices,
     };
   });
 
@@ -151,6 +154,73 @@ export function usePlaylistRunner({
     [goToStep]
   );
 
+  const syncWithDetectedScenario = useCallback(
+    (scenarioName: string, playlistName?: string) => {
+      const {
+        activePlaylist: pl,
+        currentStepIndex: curIdx,
+        isRunning: running,
+        isFinished: finished,
+        completedStepIndices: completed,
+      } = stateRef.current;
+
+      if (!pl) return;
+
+      const cleanScenario = scenarioName.trim().toLowerCase();
+      if (!cleanScenario) return;
+
+      const playlistMatches =
+        Boolean(playlistName && playlistName.trim()) &&
+        pl.name.trim().toLowerCase() === playlistName!.trim().toLowerCase();
+
+      const targetStepIndex = pl.items.findIndex((item) => {
+        const task = taskMap.get(item.taskId);
+        const nameInTask = task ? task.name.trim().toLowerCase() : "";
+        const nameInItem = (item as any).scenarioName
+          ? String((item as any).scenarioName).trim().toLowerCase()
+          : "";
+        return nameInTask === cleanScenario || nameInItem === cleanScenario;
+      });
+
+      if (!playlistMatches && targetStepIndex === -1) {
+        return;
+      }
+
+      if (targetStepIndex === -1) {
+        return;
+      }
+
+      if (!running || finished) {
+        setIsFinished(false);
+        setIsRunning(true);
+      }
+
+      if (targetStepIndex === curIdx) {
+        const item = pl.items[targetStepIndex];
+        const task = taskMap.get(item.taskId);
+        const count = task ? task.sessions.length : 0;
+        const startCount = stateRef.current.sessionCountAtStart;
+        const completedReps = count - startCount;
+
+        if (item.targetMode === "reps" && completedReps >= item.targetValue) {
+          next();
+        }
+      } else if (targetStepIndex > curIdx) {
+        setCompletedStepIndices((prev) => {
+          const nextSet = new Set(prev);
+          for (let i = 0; i < targetStepIndex; i++) {
+            nextSet.add(i);
+          }
+          return nextSet;
+        });
+        goToStep(targetStepIndex, pl);
+      } else if (finished || !completed.has(targetStepIndex)) {
+        goToStep(targetStepIndex, pl);
+      }
+    },
+    [taskMap, next, goToStep]
+  );
+
   // Tick timer for time-based targets
   useEffect(() => {
     if (!isRunning || isFinished) return;
@@ -211,5 +281,6 @@ export function usePlaylistRunner({
     stop,
     restart,
     jumpToStep,
+    syncWithDetectedScenario,
   };
 }

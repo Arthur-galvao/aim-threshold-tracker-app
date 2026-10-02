@@ -8,20 +8,29 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import type { AppData, Playlist, PlaylistItem, Task, ToastState } from "@/lib/types";
+import type { AppData, Playlist, PlaylistItem, Task, ToastState, DetectedPlaylistEvent } from "@/lib/types";
 import { cloneAppData, SAMPLE_DATA } from "@/lib/sample-data";
 import {
   loadAppData,
   saveAppData,
   importJsonBackup,
   getKovaakPlaylists,
+  getPlaylistInProgress,
+  listenKovaakPlaylistActive,
+  getSettings,
 } from "@/lib/tauri-bridge";
+import {
+  isPermissionGranted,
+  requestPermission,
+  sendNotification,
+} from "@tauri-apps/plugin-notification";
 import {
   recalculateAllTaskThresholds,
   recalculateAllTasks,
 } from "@/lib/threshold";
 import { categorizeScenario, migrateAndCategorizeTasks } from "@/lib/viscose";
 import { useI18n } from "@/lib/i18n";
+import { usePlaylistRunner, type PlaylistRunnerState } from "./usePlaylistRunner";
 
 interface AppContextValue {
   appData: AppData;
@@ -44,6 +53,7 @@ interface AppContextValue {
   updatePlaylist: (playlist: Playlist) => Promise<void>;
   deletePlaylist: (id: string) => Promise<void>;
   syncKovaakPlaylists: (manual?: boolean) => Promise<{ imported: number; total: number }>;
+  playlistRunner: PlaylistRunnerState;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -218,6 +228,169 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [updateAppData]
   );
 
+  const playlistRunner = usePlaylistRunner({
+    tasks: appData.tasks,
+    setActiveTaskId,
+  });
+
+  const appDataRef = useRef(appData);
+  appDataRef.current = appData;
+
+  const playlistRunnerRef = useRef(playlistRunner);
+  playlistRunnerRef.current = playlistRunner;
+
+  const handleDetectedPlaylist = useCallback(
+    async (event: DetectedPlaylistEvent) => {
+      try {
+        const settings = await getSettings();
+        if (settings.auto_detect_playlist === false) {
+          return;
+        }
+
+        const eventPlaylistName = event.playlist_name.trim();
+        if (!eventPlaylistName) return;
+
+        let targetPlaylist: Playlist | null =
+          (appDataRef.current.playlists || []).find(
+            (p) => p.name.trim().toLowerCase() === eventPlaylistName.toLowerCase()
+          ) ?? null;
+
+        if (!targetPlaylist && event.scenario_list && event.scenario_list.length > 0) {
+          await updateAppData((prev) => {
+            const currentPlaylists = prev.playlists ?? [];
+            const existing = currentPlaylists.find(
+              (p) => p.name.trim().toLowerCase() === eventPlaylistName.toLowerCase()
+            );
+            if (existing) {
+              targetPlaylist = existing;
+              return prev;
+            }
+
+            const updatedTasks = [...prev.tasks];
+            const items: PlaylistItem[] = [];
+
+            for (let idx = 0; idx < event.scenario_list.length; idx++) {
+              const sItem = event.scenario_list[idx];
+              const scenarioName = sItem.scenario_name.trim();
+              if (!scenarioName) continue;
+
+              let task = updatedTasks.find(
+                (t) => t.name.trim().toLowerCase() === scenarioName.toLowerCase()
+              );
+              if (!task) {
+                const { category, subcategory } = categorizeScenario(scenarioName);
+                task = {
+                  id: `task_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+                  name: scenarioName,
+                  category,
+                  subcategory,
+                  sessions: [],
+                };
+                updatedTasks.push(task);
+              }
+
+              items.push({
+                id: `item_${Date.now()}_${idx}_${Math.random().toString(36).substring(2, 5)}`,
+                taskId: task.id,
+                targetMode: "reps",
+                targetValue: Math.max(1, Math.round(sItem.play_count || 1)),
+              });
+            }
+
+            if (items.length === 0) return prev;
+
+            const newPl: Playlist = {
+              id: `pl_${Date.now()}_${Math.random().toString(36).substring(2, 5)}`,
+              name: eventPlaylistName,
+              items,
+              createdAt: new Date().toISOString(),
+            };
+
+            targetPlaylist = newPl;
+
+            return {
+              ...prev,
+              tasks: updatedTasks,
+              playlists: [...currentPlaylists, newPl],
+              activeTaskId: prev.activeTaskId ?? (updatedTasks[0]?.id ?? null),
+            };
+          });
+        }
+
+        if (!targetPlaylist) return;
+
+        const runner = playlistRunnerRef.current;
+        const isSamePlaylistRunning =
+          runner.isRunning &&
+          runner.activePlaylist &&
+          runner.activePlaylist.name.trim().toLowerCase() === targetPlaylist.name.trim().toLowerCase();
+
+        if (isSamePlaylistRunning) {
+          const currentItem = runner.currentItem;
+          const currentTaskName = currentItem
+            ? appDataRef.current.tasks.find((t) => t.id === currentItem.taskId)?.name
+            : undefined;
+          const detectedScenarioName =
+            currentTaskName ||
+            (event.scenario_list[0] ? event.scenario_list[0].scenario_name : "");
+
+          if (detectedScenarioName) {
+            runner.syncWithDetectedScenario(detectedScenarioName, targetPlaylist.name);
+          }
+        } else {
+          runner.start(targetPlaylist);
+        }
+
+        if (settings.notify_step_advance !== false) {
+          try {
+            let granted = await isPermissionGranted();
+            if (!granted) {
+              const perm = await requestPermission();
+              granted = perm === "granted";
+            }
+            if (granted) {
+              sendNotification({
+                title: "Aim Threshold Tracker",
+                body: `Playlist detectada: ${targetPlaylist.name}`,
+              });
+            }
+          } catch (notifErr) {
+            console.error("Erro ao enviar notificacao:", notifErr);
+          }
+        }
+      } catch (err) {
+        console.error("Erro ao sincronizar playlist ativa do KovaaK:", err);
+      }
+    },
+    [updateAppData]
+  );
+
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    let isMounted = true;
+
+    const setupListeners = async () => {
+      unlisten = await listenKovaakPlaylistActive((event: DetectedPlaylistEvent) => {
+        if (!isMounted) return;
+        void handleDetectedPlaylist(event);
+      });
+
+      try {
+        const initialPip = await getPlaylistInProgress();
+        if (isMounted && initialPip && initialPip.playlist_name) {
+          void handleDetectedPlaylist(initialPip);
+        }
+      } catch {}
+    };
+
+    void setupListeners();
+
+    return () => {
+      isMounted = false;
+      unlisten?.();
+    };
+  }, [handleDetectedPlaylist]);
+
   const loadDemoData = useCallback(async () => {
     await saveData(cloneAppData(SAMPLE_DATA));
     showToast(t("toast.demoLoaded"), "success");
@@ -389,6 +562,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     updatePlaylist,
     deletePlaylist,
     syncKovaakPlaylists,
+    playlistRunner,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

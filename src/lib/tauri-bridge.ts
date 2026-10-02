@@ -4,6 +4,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 import type {
   AppData,
   AppSettings,
+  DetectedPlaylistEvent,
   ImportStats,
   KovaakPlaylistRaw,
   KovaakRun,
@@ -53,6 +54,31 @@ export async function getKovaakPlaylists(): Promise<KovaakPlaylistRaw[]> {
   return invoke<KovaakPlaylistRaw[]>("get_kovaak_playlists");
 }
 
+export async function getPlaylistInProgress(): Promise<DetectedPlaylistEvent | null> {
+  if (!isTauri()) return null;
+  try {
+    const raw = await invoke<any>("get_playlist_in_progress");
+    if (!raw) return null;
+    const name = raw.playlist_name || raw.playlistName || "";
+    const id = raw.playlist_id ?? raw.playlistId;
+    const listRaw = raw.scenario_list || raw.scenarioList || [];
+    const normalizedList = Array.isArray(listRaw)
+      ? listRaw.map((s: any) => ({
+          scenario_name: s.scenario_name || s.scenarioName || "",
+          play_count: Number(s.play_count ?? s.playCount ?? 1),
+        }))
+      : [];
+    return {
+      playlist_name: name,
+      playlist_id: id !== undefined && id !== null ? String(id) : undefined,
+      scenario_list: normalizedList,
+    };
+  } catch (err) {
+    console.error("Erro ao obter playlist em andamento:", err);
+    return null;
+  }
+}
+
 export async function pickStatsFolder(): Promise<string | null> {
   if (!isTauri()) return null;
   const selected = await open({
@@ -70,6 +96,9 @@ export async function getSettings(): Promise<AppSettings> {
       kovaak_stats_path: null,
       watcher_active: false,
       import_on_first_run: true,
+      close_to_tray: true,
+      auto_detect_playlist: true,
+      notify_step_advance: true,
     };
   }
   return invoke<AppSettings>("get_settings");
@@ -132,6 +161,32 @@ export function onImportComplete(
   return listen<ImportStats>("import_complete", (event) =>
     callback(event.payload)
   );
+}
+
+export function listenKovaakPlaylistActive(
+  handler: (event: DetectedPlaylistEvent) => void
+): Promise<UnlistenFn> {
+  if (!isTauri()) {
+    return Promise.resolve(() => {});
+  }
+  return listen<any>("kovaak_playlist_active", (event) => {
+    const raw = event.payload;
+    if (!raw) return;
+    const name = raw.playlist_name || raw.playlistName || "";
+    const id = raw.playlist_id ?? raw.playlistId;
+    const listRaw = raw.scenario_list || raw.scenarioList || [];
+    const normalizedList = Array.isArray(listRaw)
+      ? listRaw.map((s: any) => ({
+          scenario_name: s.scenario_name || s.scenarioName || "",
+          play_count: Number(s.play_count ?? s.playCount ?? 1),
+        }))
+      : [];
+    handler({
+      playlist_name: name,
+      playlist_id: id !== undefined && id !== null ? String(id) : undefined,
+      scenario_list: normalizedList,
+    });
+  });
 }
 
 export async function openExternalUrl(url: string): Promise<void> {

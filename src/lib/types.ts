@@ -55,10 +55,19 @@ export interface KovaakPlaylistRaw {
   description?: string;
 }
 
+export interface DetectedPlaylistEvent {
+  playlist_name: string;
+  playlist_id?: string;
+  scenario_list: Array<{ scenario_name: string; play_count: number }>;
+}
+
 export interface AppSettings {
   kovaak_stats_path: string | null;
   watcher_active: boolean;
   import_on_first_run: boolean;
+  close_to_tray?: boolean;
+  auto_detect_playlist?: boolean;
+  notify_step_advance?: boolean;
 }
 
 export interface ImportStats {

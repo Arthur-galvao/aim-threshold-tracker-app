@@ -13,7 +13,6 @@ import { SensRandomizerView } from "@/components/SensRandomizerView";
 import { PlaylistRunnerView } from "@/components/playlist/PlaylistRunnerView";
 import { PlaylistManagerModal } from "@/components/playlist/PlaylistManagerModal";
 import { DashboardPlaylistRunner } from "@/components/playlist/DashboardPlaylistRunner";
-import { usePlaylistRunner } from "@/hooks/usePlaylistRunner";
 import { NewTaskModal } from "@/components/NewTaskModal";
 import { SettingsModal } from "@/components/SettingsModal";
 import { Toast } from "@/components/Toast";
@@ -37,6 +36,7 @@ function Dashboard() {
     updatePlaylist,
     deletePlaylist,
     syncKovaakPlaylists,
+    playlistRunner,
   } = useApp();
 
   const {
@@ -61,11 +61,6 @@ function Dashboard() {
   const [newTaskOpen, setNewTaskOpen] = useState(false);
   const [playlistManagerOpen, setPlaylistManagerOpen] = useState(false);
   const [pendingPlaylistTaskIds, setPendingPlaylistTaskIds] = useState<string[]>([]);
-
-  const playlistRunner = usePlaylistRunner({
-    tasks: appData.tasks,
-    setActiveTaskId,
-  });
 
   const handleAddToPlaylist = useCallback((taskIds: string[]) => {
     setPendingPlaylistTaskIds(taskIds);
