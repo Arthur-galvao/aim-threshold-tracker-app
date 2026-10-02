@@ -98,6 +98,22 @@ export async function pickStatsFolder(): Promise<string | null> {
 
 export async function getSettings(): Promise<AppSettings> {
   if (!isTauri()) {
+    if (typeof localStorage !== "undefined") {
+      const stored = localStorage.getItem("AIM_SETTINGS");
+      if (stored) {
+        try {
+          return {
+            kovaak_stats_path: null,
+            watcher_active: false,
+            import_on_first_run: true,
+            close_to_tray: true,
+            auto_detect_playlist: true,
+            notify_step_advance: true,
+            ...JSON.parse(stored),
+          };
+        } catch {}
+      }
+    }
     return {
       kovaak_stats_path: null,
       watcher_active: false,
@@ -111,7 +127,12 @@ export async function getSettings(): Promise<AppSettings> {
 }
 
 export async function saveSettings(settings: AppSettings): Promise<void> {
-  if (!isTauri()) return;
+  if (!isTauri()) {
+    if (typeof localStorage !== "undefined") {
+      localStorage.setItem("AIM_SETTINGS", JSON.stringify(settings));
+    }
+    return;
+  }
   await invoke("save_settings", { settings });
 }
 

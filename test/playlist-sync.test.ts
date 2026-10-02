@@ -1,5 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
 import type { AppSettings, DetectedPlaylistEvent, Playlist, PlaylistItem, Task } from "../src/lib/types.ts";
 import { categorizeScenario } from "../src/lib/viscose.ts";
 
@@ -420,6 +422,56 @@ describe("playlist-sync and detection", () => {
       handlePlaylistEvent(anotherEvent, currentActivePlaylist, true);
       assert.equal(dispatchedNotifications.length, 3);
       assert.equal(dispatchedNotifications[2].body, "Playlist detectada: Speed Routine");
+    });
+  });
+
+  describe("Task 3: Settings modal and i18n keys for background automation", () => {
+    it("verifies i18n keys and values in src/lib/i18n.tsx match verbatim", () => {
+      const i18nContent = fs.readFileSync(
+        path.resolve("src/lib/i18n.tsx"),
+        "utf-8"
+      );
+
+      // Verify pt translations
+      assert.ok(i18nContent.includes('"settings.automationSection": "Segundo Plano & Automação"'));
+      assert.ok(i18nContent.includes('"settings.closeToTray": "Minimizar para a bandeja ao fechar"'));
+      assert.ok(i18nContent.includes('"settings.closeToTrayDesc": "Mantém o monitoramento de scores e o randomizer ativos em segundo plano ao fechar a janela."'));
+      assert.ok(i18nContent.includes('"settings.autoDetectPlaylist": "Detectar playlist ativa automaticamente"'));
+      assert.ok(i18nContent.includes('"settings.autoDetectPlaylistDesc": "Sincroniza o Runner do Dashboard com a playlist que você está jogando no KovaaK\'s."'));
+      assert.ok(i18nContent.includes('"settings.notifyStepAdvance": "Notificações de avanço de etapa"'));
+      assert.ok(i18nContent.includes('"settings.notifyStepAdvanceDesc": "Envia notificações do Windows ao completar ou avançar cenários da playlist."'));
+
+      // Verify en translations
+      assert.ok(i18nContent.includes('"settings.automationSection": "Background & Automation"'));
+      assert.ok(i18nContent.includes('"settings.closeToTray": "Minimize to tray on close"'));
+      assert.ok(i18nContent.includes('"settings.closeToTrayDesc": "Keeps score monitoring and randomizer active in the background when closing window."'));
+      assert.ok(i18nContent.includes('"settings.autoDetectPlaylist": "Auto-detect active playlist"'));
+      assert.ok(i18nContent.includes('"settings.autoDetectPlaylistDesc": "Synchronizes the Dashboard Runner with the playlist you are currently playing in KovaaK\'s."'));
+      assert.ok(i18nContent.includes('"settings.notifyStepAdvance": "Step advance notifications"'));
+      assert.ok(i18nContent.includes('"settings.notifyStepAdvanceDesc": "Sends Windows notifications when completing or advancing playlist scenarios."'));
+    });
+
+    it("verifies zero emojis across i18n and settings files", () => {
+      const emojiRegex = /\p{Extended_Pictographic}/u;
+
+      const i18nContent = fs.readFileSync(path.resolve("src/lib/i18n.tsx"), "utf-8");
+      const modalContent = fs.readFileSync(path.resolve("src/components/SettingsModal.tsx"), "utf-8");
+
+      assert.equal(emojiRegex.test(i18nContent), false, "i18n.tsx contains visual emojis");
+      assert.equal(emojiRegex.test(modalContent), false, "SettingsModal.tsx contains visual emojis");
+    });
+
+    it("verifies SettingsModal provides automation controls and callbacks", () => {
+      const modalContent = fs.readFileSync(
+        path.resolve("src/components/SettingsModal.tsx"),
+        "utf-8"
+      );
+
+      assert.ok(modalContent.includes("closeToTray"));
+      assert.ok(modalContent.includes("autoDetectPlaylist"));
+      assert.ok(modalContent.includes("notifyStepAdvance"));
+      assert.ok(modalContent.includes("onUpdateAppSettings"));
+      assert.ok(modalContent.includes("settings.automationSection"));
     });
   });
 });

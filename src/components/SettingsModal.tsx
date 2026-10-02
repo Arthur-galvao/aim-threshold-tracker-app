@@ -1,6 +1,6 @@
-import { useState, type FormEvent } from "react";
-import type { WatcherStatus } from "@/lib/types";
-import { pickStatsFolder } from "@/lib/tauri-bridge";
+import { useState, useEffect, type FormEvent } from "react";
+import type { AppSettings, WatcherStatus } from "@/lib/types";
+import { getSettings, pickStatsFolder, saveSettings } from "@/lib/tauri-bridge";
 import { useI18n } from "@/lib/i18n";
 
 interface SettingsModalProps {
@@ -21,6 +21,10 @@ interface SettingsModalProps {
   onImport?: (file: File) => void;
   onLoadDemo?: () => void;
   onClear?: () => void;
+  closeToTray?: boolean;
+  autoDetectPlaylist?: boolean;
+  notifyStepAdvance?: boolean;
+  onUpdateAppSettings?: (settings: Partial<AppSettings>) => Promise<void>;
 }
 
 export function SettingsModal({
@@ -41,10 +45,79 @@ export function SettingsModal({
   onImport,
   onLoadDemo,
   onClear,
+  closeToTray: propCloseToTray,
+  autoDetectPlaylist: propAutoDetectPlaylist,
+  notifyStepAdvance: propNotifyStepAdvance,
+  onUpdateAppSettings,
 }: SettingsModalProps) {
   const [manualPath, setManualPath] = useState(settingsPath ?? "");
   const [manualRawaccel, setManualRawaccel] = useState(rawaccelPath ?? "");
+  const [closeToTray, setCloseToTray] = useState(propCloseToTray ?? true);
+  const [autoDetectPlaylist, setAutoDetectPlaylist] = useState(propAutoDetectPlaylist ?? true);
+  const [notifyStepAdvance, setNotifyStepAdvance] = useState(propNotifyStepAdvance ?? true);
   const { t } = useI18n();
+
+  useEffect(() => {
+    if (!open) return;
+
+    if (propCloseToTray !== undefined) {
+      setCloseToTray(propCloseToTray);
+    }
+    if (propAutoDetectPlaylist !== undefined) {
+      setAutoDetectPlaylist(propAutoDetectPlaylist);
+    }
+    if (propNotifyStepAdvance !== undefined) {
+      setNotifyStepAdvance(propNotifyStepAdvance);
+    }
+
+    if (
+      propCloseToTray === undefined ||
+      propAutoDetectPlaylist === undefined ||
+      propNotifyStepAdvance === undefined
+    ) {
+      void getSettings().then((s) => {
+        if (propCloseToTray === undefined && s.close_to_tray !== undefined) {
+          setCloseToTray(s.close_to_tray);
+        }
+        if (propAutoDetectPlaylist === undefined && s.auto_detect_playlist !== undefined) {
+          setAutoDetectPlaylist(s.auto_detect_playlist);
+        }
+        if (propNotifyStepAdvance === undefined && s.notify_step_advance !== undefined) {
+          setNotifyStepAdvance(s.notify_step_advance);
+        }
+      });
+    }
+  }, [open, propCloseToTray, propAutoDetectPlaylist, propNotifyStepAdvance]);
+
+  const handleToggleCloseToTray = async (val: boolean) => {
+    setCloseToTray(val);
+    if (onUpdateAppSettings) {
+      await onUpdateAppSettings({ close_to_tray: val });
+    } else {
+      const current = await getSettings();
+      await saveSettings({ ...current, close_to_tray: val });
+    }
+  };
+
+  const handleToggleAutoDetectPlaylist = async (val: boolean) => {
+    setAutoDetectPlaylist(val);
+    if (onUpdateAppSettings) {
+      await onUpdateAppSettings({ auto_detect_playlist: val });
+    } else {
+      const current = await getSettings();
+      await saveSettings({ ...current, auto_detect_playlist: val });
+    }
+  };
+
+  const handleToggleNotifyStepAdvance = async (val: boolean) => {
+    setNotifyStepAdvance(val);
+    if (onUpdateAppSettings) {
+      await onUpdateAppSettings({ notify_step_advance: val });
+    } else {
+      const current = await getSettings();
+      await saveSettings({ ...current, notify_step_advance: val });
+    }
+  };
 
   if (!open) return null;
 
@@ -66,7 +139,7 @@ export function SettingsModal({
 
   return (
     <div className="fixed inset-0 modal-scrim z-50 flex items-center justify-center p-4">
-      <div className="panel p-6 max-w-lg w-full shadow-2xl rounded-2xl transition-all duration-200">
+      <div className="panel p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-2xl rounded-2xl transition-all duration-200">
         {/* Header */}
         <div className="flex justify-between items-center border-b border-edge pb-3.5">
           <div className="flex items-center gap-2">
@@ -92,7 +165,18 @@ export function SettingsModal({
             onClick={onClose}
             className="w-7 h-7 rounded-full flex items-center justify-center text-text-faint hover:text-text-main hover:bg-surface-subtle transition-colors text-xs"
           >
-            ✕
+            <svg
+              className="w-3.5 h-3.5"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
           </button>
         </div>
 
@@ -264,6 +348,116 @@ export function SettingsModal({
               >
                 {t("randomizer.testWriter")}
               </button>
+            </div>
+          </div>
+
+          {/* Background & Automation Section */}
+          <div className="space-y-3 pt-3 border-t border-edge">
+            <div>
+              <h4 className="text-xs font-bold uppercase tracking-wider text-text-main">
+                {t("settings.automationSection")}
+              </h4>
+            </div>
+
+            <div className="space-y-2">
+              {/* Close to Tray Toggle */}
+              <div
+                onClick={() => void handleToggleCloseToTray(!closeToTray)}
+                className="flex items-center justify-between gap-3 p-3 rounded-xl border border-edge bg-surface-subtle/40 hover:bg-surface-subtle/80 transition-colors cursor-pointer select-none"
+              >
+                <div className="flex-1 min-w-0 pr-2">
+                  <span className="block text-xs font-semibold text-text-main">
+                    {t("settings.closeToTray")}
+                  </span>
+                  <p className="text-[11px] text-text-faint leading-snug mt-0.5">
+                    {t("settings.closeToTrayDesc")}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={closeToTray}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void handleToggleCloseToTray(!closeToTray);
+                  }}
+                  className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                    closeToTray ? "bg-accent" : "bg-edge-strong"
+                  }`}
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                      closeToTray ? "translate-x-4" : "translate-x-0"
+                    }`}
+                  />
+                </button>
+              </div>
+
+              {/* Auto Detect Playlist Toggle */}
+              <div
+                onClick={() => void handleToggleAutoDetectPlaylist(!autoDetectPlaylist)}
+                className="flex items-center justify-between gap-3 p-3 rounded-xl border border-edge bg-surface-subtle/40 hover:bg-surface-subtle/80 transition-colors cursor-pointer select-none"
+              >
+                <div className="flex-1 min-w-0 pr-2">
+                  <span className="block text-xs font-semibold text-text-main">
+                    {t("settings.autoDetectPlaylist")}
+                  </span>
+                  <p className="text-[11px] text-text-faint leading-snug mt-0.5">
+                    {t("settings.autoDetectPlaylistDesc")}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={autoDetectPlaylist}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void handleToggleAutoDetectPlaylist(!autoDetectPlaylist);
+                  }}
+                  className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                    autoDetectPlaylist ? "bg-accent" : "bg-edge-strong"
+                  }`}
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                      autoDetectPlaylist ? "translate-x-4" : "translate-x-0"
+                    }`}
+                  />
+                </button>
+              </div>
+
+              {/* Notify Step Advance Toggle */}
+              <div
+                onClick={() => void handleToggleNotifyStepAdvance(!notifyStepAdvance)}
+                className="flex items-center justify-between gap-3 p-3 rounded-xl border border-edge bg-surface-subtle/40 hover:bg-surface-subtle/80 transition-colors cursor-pointer select-none"
+              >
+                <div className="flex-1 min-w-0 pr-2">
+                  <span className="block text-xs font-semibold text-text-main">
+                    {t("settings.notifyStepAdvance")}
+                  </span>
+                  <p className="text-[11px] text-text-faint leading-snug mt-0.5">
+                    {t("settings.notifyStepAdvanceDesc")}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={notifyStepAdvance}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void handleToggleNotifyStepAdvance(!notifyStepAdvance);
+                  }}
+                  className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                    notifyStepAdvance ? "bg-accent" : "bg-edge-strong"
+                  }`}
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                      notifyStepAdvance ? "translate-x-4" : "translate-x-0"
+                    }`}
+                  />
+                </button>
+              </div>
             </div>
           </div>
 

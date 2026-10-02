@@ -16,7 +16,8 @@ import { DashboardPlaylistRunner } from "@/components/playlist/DashboardPlaylist
 import { NewTaskModal } from "@/components/NewTaskModal";
 import { SettingsModal } from "@/components/SettingsModal";
 import { Toast } from "@/components/Toast";
-import type { Playlist } from "@/lib/types";
+import type { AppSettings, Playlist } from "@/lib/types";
+import { getSettings, saveSettings } from "@/lib/tauri-bridge";
 
 function Dashboard() {
   const {
@@ -113,6 +114,14 @@ function Dashboard() {
       showToast(t("toast.noData"), "error");
     }
   }, [activeTask, showToast, t]);
+
+  const handleUpdateAppSettings = useCallback(
+    async (partial: Partial<AppSettings>) => {
+      const current = await getSettings();
+      await saveSettings({ ...current, ...partial });
+    },
+    []
+  );
 
   return (
     <div className="relative min-h-screen bg-base text-text-main flex flex-col selection:bg-blue-500/25 selection:text-blue-200">
@@ -230,6 +239,7 @@ function Dashboard() {
         onImport={importData}
         onLoadDemo={loadDemoData}
         onClear={clearAllData}
+        onUpdateAppSettings={handleUpdateAppSettings}
       />
 
       <PlaylistManagerModal

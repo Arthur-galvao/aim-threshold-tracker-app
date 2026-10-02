@@ -11,7 +11,7 @@ export type Lang = "pt" | "en";
 
 const STORAGE_KEY = "att-lang";
 
-const dict = {
+export const dict = {
   pt: {
     "app.footer": "Aim Threshold Tracker · com base em Viscose & Escalate por uno neon",
     "app.footerFov": "FOV 103 Standardized",
@@ -122,6 +122,13 @@ const dict = {
     "settings.demoBtn": "Carregar Exemplo",
     "settings.clearBtn": "Limpar Dados",
     "settings.clearConfirm": "Tem certeza que deseja apagar todos os cenários e registros locais?",
+    "settings.automationSection": "Segundo Plano & Automação",
+    "settings.closeToTray": "Minimizar para a bandeja ao fechar",
+    "settings.closeToTrayDesc": "Mantém o monitoramento de scores e o randomizer ativos em segundo plano ao fechar a janela.",
+    "settings.autoDetectPlaylist": "Detectar playlist ativa automaticamente",
+    "settings.autoDetectPlaylistDesc": "Sincroniza o Runner do Dashboard com a playlist que você está jogando no KovaaK's.",
+    "settings.notifyStepAdvance": "Notificações de avanço de etapa",
+    "settings.notifyStepAdvanceDesc": "Envia notificações do Windows ao completar ou avançar cenários da playlist.",
     "tab.dashboard": "Dashboard",
     "tab.randomizer": "Sens Randomizer",
     "tab.randomizerLocked": "Requer RawAccel",
@@ -449,6 +456,13 @@ const dict = {
     "settings.demoBtn": "Load Sample Data",
     "settings.clearBtn": "Clear Data",
     "settings.clearConfirm": "Are you sure you want to clear all scenarios and local records?",
+    "settings.automationSection": "Background & Automation",
+    "settings.closeToTray": "Minimize to tray on close",
+    "settings.closeToTrayDesc": "Keeps score monitoring and randomizer active in the background when closing window.",
+    "settings.autoDetectPlaylist": "Auto-detect active playlist",
+    "settings.autoDetectPlaylistDesc": "Synchronizes the Dashboard Runner with the playlist you are currently playing in KovaaK's.",
+    "settings.notifyStepAdvance": "Step advance notifications",
+    "settings.notifyStepAdvanceDesc": "Sends Windows notifications when completing or advancing playlist scenarios.",
     "tab.dashboard": "Dashboard",
     "tab.randomizer": "Sens Randomizer",
     "tab.randomizerLocked": "Requires RawAccel",
