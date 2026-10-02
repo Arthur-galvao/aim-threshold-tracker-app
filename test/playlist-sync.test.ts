@@ -363,4 +363,63 @@ describe("playlist-sync and detection", () => {
       assert.equal(nextState.currentStepIndex, 0);
     });
   });
+
+  describe("Notification dispatch and repetition suppression", () => {
+    it("distinguishes initial playlist detection from in-progress step advance", () => {
+      const dispatchedNotifications: Array<{ title: string; body: string }> = [];
+
+      function notifyHelper(title: string, body: string) {
+        dispatchedNotifications.push({ title, body });
+      }
+
+      function handlePlaylistEvent(
+        event: DetectedPlaylistEvent,
+        activePlaylist: Playlist | null,
+        isRunning: boolean
+      ) {
+        const isSamePlaylistRunning =
+          isRunning &&
+          activePlaylist !== null &&
+          activePlaylist.name.trim().toLowerCase() === event.playlist_name.trim().toLowerCase();
+
+        if (!isSamePlaylistRunning) {
+          notifyHelper("Aim Threshold Tracker", `Playlist detectada: ${event.playlist_name}`);
+        }
+      }
+
+      const testEvent: DetectedPlaylistEvent = {
+        playlist_name: "Daily Warmup",
+        scenario_list: [{ scenario_name: "Smoothbot", play_count: 3 }],
+      };
+
+      // 1. Initial detection: playlist not running -> notification sent
+      handlePlaylistEvent(testEvent, null, false);
+      assert.equal(dispatchedNotifications.length, 1);
+      assert.equal(dispatchedNotifications[0].body, "Playlist detectada: Daily Warmup");
+
+      // 2. Subsequent runs of the same playlist -> "Playlist detectada" must NOT be resent
+      const currentActivePlaylist: Playlist = {
+        id: "pl_1",
+        name: "Daily Warmup",
+        items: [],
+        createdAt: "2026-10-02T12:00:00Z",
+      };
+      handlePlaylistEvent(testEvent, currentActivePlaylist, true);
+      assert.equal(dispatchedNotifications.length, 1); // Still 1, not duplicated!
+
+      // 3. Step advance notification when scenario transitions
+      notifyHelper("Aim Threshold Tracker", "Etapa avançada: Air Angelic 4");
+      assert.equal(dispatchedNotifications.length, 2);
+      assert.equal(dispatchedNotifications[1].body, "Etapa avançada: Air Angelic 4");
+
+      // 4. Switching to another playlist -> new detection notification sent
+      const anotherEvent: DetectedPlaylistEvent = {
+        playlist_name: "Speed Routine",
+        scenario_list: [{ scenario_name: "Pasu", play_count: 2 }],
+      };
+      handlePlaylistEvent(anotherEvent, currentActivePlaylist, true);
+      assert.equal(dispatchedNotifications.length, 3);
+      assert.equal(dispatchedNotifications[2].body, "Playlist detectada: Speed Routine");
+    });
+  });
 });

@@ -24,7 +24,7 @@ import { useI18n } from "@/lib/i18n";
 import { useApp } from "./useAppData";
 
 export function useKovaakWatcher() {
-  const { appData, saveData, showToast, refreshData } = useApp();
+  const { appData, saveData, showToast, refreshData, playlistRunner } = useApp();
   const { t } = useI18n();
   const [watcherStatus, setWatcherStatus] = useState<WatcherStatus>({
     active: false,
@@ -34,6 +34,8 @@ export function useKovaakWatcher() {
   const [settingsPath, setSettingsPath] = useState<string | null>(null);
   const appDataRef = useRef(appData);
   appDataRef.current = appData;
+  const playlistRunnerRef = useRef(playlistRunner);
+  playlistRunnerRef.current = playlistRunner;
 
   useEffect(() => {
     let unlistenRun: (() => void) | undefined;
@@ -92,6 +94,8 @@ export function useKovaakWatcher() {
           run.source_file
         );
         await saveData(next);
+
+        playlistRunnerRef.current.syncWithDetectedScenario(run.scenario);
 
         const threshold = getTargetThresholdForTask(task);
 

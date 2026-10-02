@@ -54,25 +54,31 @@ export async function getKovaakPlaylists(): Promise<KovaakPlaylistRaw[]> {
   return invoke<KovaakPlaylistRaw[]>("get_kovaak_playlists");
 }
 
+export function normalizeDetectedPlaylistPayload(
+  raw: any
+): DetectedPlaylistEvent | null {
+  if (!raw) return null;
+  const name = raw.playlist_name || raw.playlistName || "";
+  const id = raw.playlist_id ?? raw.playlistId;
+  const listRaw = raw.scenario_list || raw.scenarioList || [];
+  const normalizedList = Array.isArray(listRaw)
+    ? listRaw.map((s: any) => ({
+        scenario_name: s.scenario_name || s.scenarioName || "",
+        play_count: Number(s.play_count ?? s.playCount ?? 1),
+      }))
+    : [];
+  return {
+    playlist_name: name,
+    playlist_id: id !== undefined && id !== null ? String(id) : undefined,
+    scenario_list: normalizedList,
+  };
+}
+
 export async function getPlaylistInProgress(): Promise<DetectedPlaylistEvent | null> {
   if (!isTauri()) return null;
   try {
     const raw = await invoke<any>("get_playlist_in_progress");
-    if (!raw) return null;
-    const name = raw.playlist_name || raw.playlistName || "";
-    const id = raw.playlist_id ?? raw.playlistId;
-    const listRaw = raw.scenario_list || raw.scenarioList || [];
-    const normalizedList = Array.isArray(listRaw)
-      ? listRaw.map((s: any) => ({
-          scenario_name: s.scenario_name || s.scenarioName || "",
-          play_count: Number(s.play_count ?? s.playCount ?? 1),
-        }))
-      : [];
-    return {
-      playlist_name: name,
-      playlist_id: id !== undefined && id !== null ? String(id) : undefined,
-      scenario_list: normalizedList,
-    };
+    return normalizeDetectedPlaylistPayload(raw);
   } catch (err) {
     console.error("Erro ao obter playlist em andamento:", err);
     return null;
@@ -170,22 +176,10 @@ export function listenKovaakPlaylistActive(
     return Promise.resolve(() => {});
   }
   return listen<any>("kovaak_playlist_active", (event) => {
-    const raw = event.payload;
-    if (!raw) return;
-    const name = raw.playlist_name || raw.playlistName || "";
-    const id = raw.playlist_id ?? raw.playlistId;
-    const listRaw = raw.scenario_list || raw.scenarioList || [];
-    const normalizedList = Array.isArray(listRaw)
-      ? listRaw.map((s: any) => ({
-          scenario_name: s.scenario_name || s.scenarioName || "",
-          play_count: Number(s.play_count ?? s.playCount ?? 1),
-        }))
-      : [];
-    handler({
-      playlist_name: name,
-      playlist_id: id !== undefined && id !== null ? String(id) : undefined,
-      scenario_list: normalizedList,
-    });
+    const normalized = normalizeDetectedPlaylistPayload(event.payload);
+    if (normalized) {
+      handler(normalized);
+    }
   });
 }
 

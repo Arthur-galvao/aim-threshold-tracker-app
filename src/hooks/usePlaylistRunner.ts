@@ -4,6 +4,7 @@ import type { Playlist, PlaylistItem, Task } from "@/lib/types";
 interface UsePlaylistRunnerProps {
   tasks: Task[];
   setActiveTaskId: (id: string) => void;
+  onStepAdvance?: (stepIndex: number, scenarioName: string, isFinished: boolean) => void;
 }
 
 export interface PlaylistRunnerState {
@@ -30,7 +31,11 @@ export interface PlaylistRunnerState {
 export function usePlaylistRunner({
   tasks,
   setActiveTaskId,
+  onStepAdvance,
 }: UsePlaylistRunnerProps): PlaylistRunnerState {
+  const onStepAdvanceRef = useRef(onStepAdvance);
+  onStepAdvanceRef.current = onStepAdvance;
+
   const [activePlaylist, setActivePlaylist] = useState<Playlist | null>(null);
   const [currentStepIndex, setCurrentStepIndex] = useState<number>(0);
   const [sessionCountAtStart, setSessionCountAtStart] = useState<number>(0);
@@ -107,6 +112,7 @@ export function usePlaylistRunner({
   const finish = useCallback(() => {
     setIsFinished(true);
     setIsRunning(false);
+    onStepAdvanceRef.current?.(stateRef.current.currentStepIndex, "", true);
   }, []);
 
   const next = useCallback(() => {
@@ -120,11 +126,15 @@ export function usePlaylistRunner({
     });
 
     if (idx + 1 < pl.items.length) {
+      const nextItem = pl.items[idx + 1];
+      const nextTask = taskMap.get(nextItem.taskId);
+      const nextScenarioName = nextTask ? nextTask.name : "";
       goToStep(idx + 1, pl);
+      onStepAdvanceRef.current?.(idx + 1, nextScenarioName, false);
     } else {
       finish();
     }
-  }, [goToStep, finish]);
+  }, [goToStep, finish, taskMap]);
 
   const previous = useCallback(() => {
     const { activePlaylist: pl, currentStepIndex: idx } = stateRef.current;
@@ -213,7 +223,11 @@ export function usePlaylistRunner({
           }
           return nextSet;
         });
+        const targetItem = pl.items[targetStepIndex];
+        const targetTask = taskMap.get(targetItem.taskId);
+        const scenarioName = targetTask ? targetTask.name : "";
         goToStep(targetStepIndex, pl);
+        onStepAdvanceRef.current?.(targetStepIndex, scenarioName, false);
       } else if (finished || !completed.has(targetStepIndex)) {
         goToStep(targetStepIndex, pl);
       }

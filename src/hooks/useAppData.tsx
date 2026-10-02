@@ -228,9 +228,38 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [updateAppData]
   );
 
+  const sendNotificationHelper = useCallback(async (title: string, body: string) => {
+    try {
+      let granted = await isPermissionGranted();
+      if (!granted) {
+        const perm = await requestPermission();
+        granted = perm === "granted";
+      }
+      if (granted) {
+        sendNotification({ title, body });
+      }
+    } catch (err) {
+      console.error("Erro ao enviar notificacao:", err);
+    }
+  }, []);
+
   const playlistRunner = usePlaylistRunner({
     tasks: appData.tasks,
     setActiveTaskId,
+    onStepAdvance: async (_stepIndex, scenarioName, isFinished) => {
+      try {
+        const settings = await getSettings();
+        if (settings.notify_step_advance !== false) {
+          if (isFinished) {
+            await sendNotificationHelper("Aim Threshold Tracker", "Playlist concluída!");
+          } else if (scenarioName) {
+            await sendNotificationHelper("Aim Threshold Tracker", `Etapa avançada: ${scenarioName}`);
+          }
+        }
+      } catch (err) {
+        console.error("Erro ao enviar notificacao de avanco de etapa:", err);
+      }
+    },
   });
 
   const appDataRef = useRef(appData);
@@ -325,44 +354,34 @@ export function AppProvider({ children }: { children: ReactNode }) {
           runner.activePlaylist &&
           runner.activePlaylist.name.trim().toLowerCase() === targetPlaylist.name.trim().toLowerCase();
 
-        if (isSamePlaylistRunning) {
+        if (!isSamePlaylistRunning) {
+          runner.start(targetPlaylist);
+          if (settings.notify_step_advance !== false) {
+            await sendNotificationHelper(
+              "Aim Threshold Tracker",
+              `Playlist detectada: ${targetPlaylist.name}`
+            );
+          }
+        } else {
           const currentItem = runner.currentItem;
           const currentTaskName = currentItem
             ? appDataRef.current.tasks.find((t) => t.id === currentItem.taskId)?.name
             : undefined;
           const detectedScenarioName =
+            (event as any).scenario_name ||
+            (event as any).scenarioName ||
             currentTaskName ||
             (event.scenario_list[0] ? event.scenario_list[0].scenario_name : "");
 
           if (detectedScenarioName) {
             runner.syncWithDetectedScenario(detectedScenarioName, targetPlaylist.name);
           }
-        } else {
-          runner.start(targetPlaylist);
-        }
-
-        if (settings.notify_step_advance !== false) {
-          try {
-            let granted = await isPermissionGranted();
-            if (!granted) {
-              const perm = await requestPermission();
-              granted = perm === "granted";
-            }
-            if (granted) {
-              sendNotification({
-                title: "Aim Threshold Tracker",
-                body: `Playlist detectada: ${targetPlaylist.name}`,
-              });
-            }
-          } catch (notifErr) {
-            console.error("Erro ao enviar notificacao:", notifErr);
-          }
         }
       } catch (err) {
         console.error("Erro ao sincronizar playlist ativa do KovaaK:", err);
       }
     },
-    [updateAppData]
+    [updateAppData, sendNotificationHelper]
   );
 
   useEffect(() => {
