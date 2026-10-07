@@ -1,4 +1,15 @@
 import { useState, useMemo } from "react";
+import {
+  MagnifyingGlass,
+  X,
+  Checks,
+  Plus,
+  ArrowsClockwise,
+  CaretDown,
+  Play,
+  Stop,
+  Trash,
+} from "@phosphor-icons/react";
 import type { Playlist, Task } from "@/lib/types";
 import { VISCOSE_CATEGORIES, getDisplaySens } from "@/lib/viscose";
 import { valorantToCm360, type RunDataPoint } from "@/lib/sens-analytics";
@@ -215,7 +226,7 @@ export function ScenarioList({
   };
 
   return (
-    <section className="panel p-5 rounded-2xl transition-all duration-200 flex flex-col">
+    <section className="panel p-5 rounded-2xl border border-edge transition-all duration-200 flex flex-col">
       {/* Segmented Tab Switcher Header */}
       <div className="grid grid-cols-2 p-1 rounded-xl bg-surface-subtle border border-edge mb-3">
         <button
@@ -262,35 +273,17 @@ export function ScenarioList({
             }
             className="minimal-input text-xs py-2 pl-8 pr-8 w-full"
           />
-          <svg
-            className="w-3.5 h-3.5 text-text-faint absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <circle cx="11" cy="11" r="8" />
-            <line x1="21" y1="21" x2="16.65" y2="16.65" />
-          </svg>
+          <MagnifyingGlass
+            size={14}
+            weight="bold"
+            className="text-text-muted absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none"
+          />
           {search && (
             <button
               onClick={() => setSearch("")}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-text-faint hover:text-text-main p-0.5 rounded-full"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-main p-0.5 rounded-full"
             >
-              <svg
-                className="w-3.5 h-3.5"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <line x1="18" y1="6" x2="6" y2="18" />
-                <line x1="6" y1="6" x2="18" y2="18" />
-              </svg>
+              <X size={13} weight="bold" />
             </button>
           )}
         </div>
@@ -313,21 +306,16 @@ export function ScenarioList({
                       : "minimal-btn-secondary text-text-secondary hover:text-text-main border-edge"
                   }`}
                 >
-                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <polyline points="9 11 12 14 22 4" />
-                    <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
-                  </svg>
+                  <Checks size={14} weight="bold" />
                 </button>
               )}
 
               <button
                 type="button"
                 onClick={onNewTask}
-                className="minimal-btn-secondary px-3 py-2 text-xs font-medium gap-1.5 text-text-secondary hover:text-text-main border-edge rounded-xl shrink-0"
+                className="minimal-btn-secondary px-3 py-2 text-xs font-medium gap-1.5 text-text-secondary hover:text-text-main border-edge rounded-xl shrink-0 inline-flex items-center"
               >
-                <span className="w-3.5 h-3.5 rounded-full bg-surface-hover text-text-secondary flex items-center justify-center text-xs font-bold leading-none">
-                  +
-                </span>
+                <Plus size={13} weight="bold" />
                 <span>{t("task.new").replace("+ ", "")}</span>
               </button>
             </>
@@ -339,30 +327,18 @@ export function ScenarioList({
                   onClick={handleSyncKovaak}
                   disabled={isSyncing}
                   title={t("playlist.syncKovaak")}
-                  className="minimal-btn-secondary p-2 rounded-xl text-text-secondary hover:text-text-main border-edge disabled:opacity-50 shrink-0"
+                  className="minimal-btn-secondary p-2 rounded-xl text-text-secondary hover:text-text-main border-edge disabled:opacity-50 shrink-0 inline-flex items-center"
                 >
-                  <svg
-                    className={`w-3.5 h-3.5 ${isSyncing ? "animate-spin" : ""}`}
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67" />
-                  </svg>
+                  <ArrowsClockwise size={14} weight="bold" className={isSyncing ? "animate-spin" : ""} />
                 </button>
               )}
               {onOpenPlaylistManager && (
                 <button
                   type="button"
                   onClick={onOpenPlaylistManager}
-                  className="minimal-btn-secondary px-3 py-2 text-xs font-medium gap-1.5 text-text-secondary hover:text-text-main border-edge rounded-xl shrink-0"
+                  className="minimal-btn-secondary px-3 py-2 text-xs font-medium gap-1.5 text-text-secondary hover:text-text-main border-edge rounded-xl shrink-0 inline-flex items-center"
                 >
-                  <span className="w-3.5 h-3.5 rounded-full bg-surface-hover text-text-secondary flex items-center justify-center text-xs font-bold leading-none">
-                    +
-                  </span>
+                  <Plus size={13} weight="bold" />
                   <span>Playlist</span>
                 </button>
               )}
@@ -412,19 +388,13 @@ export function ScenarioList({
                     className="w-full px-3 py-2 flex items-center justify-between text-left hover:bg-surface-hover/50 transition-colors"
                   >
                     <div className="flex items-center gap-2 min-w-0">
-                      <svg
-                        className={`w-3 h-3 text-text-faint transition-transform duration-150 ${
+                      <CaretDown
+                        size={12}
+                        weight="bold"
+                        className={`text-text-muted transition-transform duration-150 ${
                           isCollapsed ? "-rotate-90" : "rotate-0"
                         }`}
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      >
-                        <polyline points="6 9 12 15 18 9" />
-                      </svg>
+                      />
                       <span className="text-xs font-semibold text-text-main truncate">
                         {category}
                       </span>
@@ -466,7 +436,7 @@ export function ScenarioList({
                                       ? "bg-blue-500/10 border-blue-500/40 text-text-main font-medium shadow-sm"
                                       : isSelected && selectMode
                                       ? "bg-blue-500/15 border-blue-500 text-text-main"
-                                      : "bg-surface border-edge hover:border-white/20 text-text-secondary hover:text-text-main"
+                                      : "bg-surface border-edge hover:border-edge-strong text-text-secondary hover:text-text-main"
                                   }`}
                                 >
                                   <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -579,23 +549,17 @@ export function ScenarioList({
                     className="w-full px-3 py-2 flex items-center justify-between gap-2 hover:bg-surface-hover/50 transition-colors cursor-pointer select-none"
                   >
                     <div className="flex items-center gap-2 min-w-0 flex-1">
-                      <svg
-                        className={`w-3 h-3 text-text-faint transition-transform duration-150 shrink-0 ${
+                      <CaretDown
+                        size={12}
+                        weight="bold"
+                        className={`text-text-muted transition-transform duration-150 shrink-0 ${
                           isExpanded ? "rotate-0" : "-rotate-90"
                         }`}
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      >
-                        <polyline points="6 9 12 15 18 9" />
-                      </svg>
+                      />
                       <span className="text-xs font-semibold text-text-main truncate" title={pl.name}>
                         {pl.name}
                       </span>
-                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-surface border border-edge text-text-faint font-medium shrink-0">
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-surface border border-edge text-text-muted font-medium shrink-0">
                         {pl.items.length}
                       </span>
                     </div>
@@ -621,16 +585,12 @@ export function ScenarioList({
                       >
                         {isRunningThis ? (
                           <>
-                            <svg className="w-3 h-3 fill-current" viewBox="0 0 24 24">
-                              <rect x="6" y="6" width="12" height="12" rx="1" />
-                            </svg>
+                            <Stop size={12} weight="bold" />
                             <span>Parar</span>
                           </>
                         ) : (
                           <>
-                            <svg className="w-3 h-3 fill-current" viewBox="0 0 24 24">
-                              <polygon points="5 3 19 12 5 21 5 3" />
-                            </svg>
+                            <Play size={12} weight="bold" />
                             <span>Play</span>
                           </>
                         )}
@@ -673,7 +633,7 @@ export function ScenarioList({
                               className={`group p-2 rounded-lg border text-xs cursor-pointer transition-all flex items-center justify-between gap-2 ${
                                 isActive || isStepActive
                                   ? "bg-blue-500/10 border-blue-500/40 text-text-main font-medium shadow-sm"
-                                  : "bg-surface border-edge hover:border-white/20 text-text-secondary hover:text-text-main"
+                                  : "bg-surface border-edge hover:border-edge-strong text-text-secondary hover:text-text-main"
                               }`}
                             >
                               <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -735,18 +695,7 @@ export function ScenarioList({
             onClick={handleAddSelected}
             className="w-full minimal-btn bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-3 rounded-xl text-xs flex items-center justify-center gap-2 shadow-sm transition-all"
           >
-            <svg
-              className="w-3.5 h-3.5"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <line x1="12" y1="5" x2="12" y2="19" />
-              <line x1="5" y1="12" x2="19" y2="12" />
-            </svg>
+            <Plus size={14} weight="bold" />
             <span>
               {t("scenarioList.addSelectedToPlaylist", {
                 n: selectedIds.size,
@@ -767,20 +716,9 @@ export function ScenarioList({
         {sidebarTab === "scenarios" && activeTask && !selectMode && (
           <button
             onClick={onDeleteTask}
-            className="text-text-faint hover:text-red transition-colors text-xs flex items-center gap-1.5 px-2 py-1 rounded-full hover:bg-red-500/10"
+            className="text-text-muted hover:text-red transition-colors text-xs flex items-center gap-1.5 px-2 py-1 rounded-full hover:bg-red-500/10"
           >
-            <svg
-              className="w-3 h-3"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <polyline points="3 6 5 6 21 6" />
-              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-            </svg>
+            <Trash size={13} weight="regular" />
             <span>{t("task.delete")}</span>
           </button>
         )}

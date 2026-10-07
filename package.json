@@ -8,12 +8,13 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "test": "node --test test/sens-analytics.test.ts test/playlist-sync.test.ts",
+    "test": "node --test test/sens-analytics.test.ts test/playlist-sync.test.ts test/metric-deltas.test.ts",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build"
   },
   "dependencies": {
+    "@phosphor-icons/react": "^2.1.10",
     "@tauri-apps/api": "^2.2.0",
     "@tauri-apps/plugin-dialog": "^2.2.0",
     "@tauri-apps/plugin-notification": "^2.2.0",
@@ -23,6 +24,8 @@
     "react-dom": "^19.0.0"
   },
   "devDependencies": {
+    "@fontsource-variable/geist": "^5.3.0",
+    "@fontsource-variable/geist-mono": "^5.3.0",
     "@tauri-apps/cli": "^2.2.7",
     "@types/react": "^19.0.10",
     "@types/react-dom": "^19.0.4",

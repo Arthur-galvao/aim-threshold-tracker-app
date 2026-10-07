@@ -12,6 +12,7 @@ import {
 interface CategorySensCardProps {
   tasks: Task[];
   onApplySens?: (sensCm: number) => Promise<void>;
+  onViewInChart?: (categoryKey: string) => void;
 }
 
 interface CategoryGroupItem {
@@ -25,7 +26,11 @@ interface CategoryGroupItem {
   confidence: "high" | "medium" | "low" | "insufficient";
 }
 
-export function CategorySensCard({ tasks, onApplySens }: CategorySensCardProps) {
+export function CategorySensCard({
+  tasks,
+  onApplySens,
+  onViewInChart,
+}: CategorySensCardProps) {
   const { t } = useI18n();
 
   const categoryGroups = useMemo<CategoryGroupItem[]>(() => {
@@ -149,7 +154,7 @@ export function CategorySensCard({ tasks, onApplySens }: CategorySensCardProps) 
   };
 
   return (
-    <div className="panel p-6 rounded-2xl border-edge-strong bg-surface/80 relative overflow-hidden space-y-4">
+    <div className="panel p-6 rounded-2xl border-edge-strong relative overflow-hidden space-y-4">
       <div className="border-b border-edge pb-4">
         <h3 className="text-base font-bold text-text-main">
           {t("categorySens.title")}
@@ -165,7 +170,7 @@ export function CategorySensCard({ tasks, onApplySens }: CategorySensCardProps) 
         </div>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
+          <table className="w-full text-left text-xs border-collapse">
             <thead>
               <tr className="border-b border-edge text-[11px] font-semibold text-text-faint uppercase tracking-wider">
                 <th className="py-2.5 px-3">{t("categorySens.colCategory")}</th>
@@ -173,16 +178,20 @@ export function CategorySensCard({ tasks, onApplySens }: CategorySensCardProps) 
                 <th className="py-2.5 px-3">{t("categorySens.colViscose")}</th>
                 <th className="py-2.5 px-3">{t("categorySens.colStats")}</th>
                 <th className="py-2.5 px-3">{t("categorySens.colConfidence")}</th>
-                {onApplySens && <th className="py-2.5 px-3 text-right" />}
+                {(onViewInChart || onApplySens) && (
+                  <th className="py-2.5 px-3 text-right">
+                    {t("playlistSens.colActions")}
+                  </th>
+                )}
               </tr>
             </thead>
-            <tbody className="divide-y divide-edge/60">
+            <tbody className="divide-y divide-edge">
               {categoryGroups.map((item) => {
                 const isPredicted = item.displaySens.source === "predicted";
                 return (
                   <tr
                     key={item.key}
-                    className="hover:bg-surface-subtle/50 transition-colors"
+                    className="hover:bg-surface-hover transition-colors"
                   >
                     <td className="py-3 px-3">
                       <div className="font-semibold text-text-main">
@@ -227,15 +236,28 @@ export function CategorySensCard({ tasks, onApplySens }: CategorySensCardProps) 
                       {renderConfidenceBadge(item.confidence)}
                     </td>
 
-                    {onApplySens && (
+                    {(onViewInChart || onApplySens) && (
                       <td className="py-3 px-3 text-right">
-                        <button
-                          type="button"
-                          onClick={() => void onApplySens(item.displaySens.value)}
-                          className="px-2.5 py-1 text-[11px] font-semibold rounded-lg bg-surface-subtle hover:bg-surface-hover border border-edge text-text-main transition-colors"
-                        >
-                          {t("categorySens.applySens")}
-                        </button>
+                        <div className="flex items-center justify-end gap-1.5">
+                          {onViewInChart && (
+                            <button
+                              type="button"
+                              onClick={() => onViewInChart(item.key)}
+                              className="px-2.5 py-1 text-[11px] font-semibold rounded-lg bg-surface-subtle hover:bg-surface-hover border border-edge text-text-main transition-colors whitespace-nowrap"
+                            >
+                              {t("categorySens.viewInChart")}
+                            </button>
+                          )}
+                          {onApplySens && (
+                            <button
+                              type="button"
+                              onClick={() => void onApplySens(item.displaySens.value)}
+                              className="px-2.5 py-1 text-[11px] font-semibold rounded-lg bg-surface-subtle hover:bg-surface-hover border border-edge text-text-main transition-colors whitespace-nowrap"
+                            >
+                              {t("categorySens.applySens")}
+                            </button>
+                          )}
+                        </div>
                       </td>
                     )}
                   </tr>

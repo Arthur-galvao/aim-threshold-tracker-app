@@ -10,9 +10,11 @@ import {
   Filler,
 } from "chart.js";
 import { Line } from "react-chartjs-2";
+import { ChartLineUp, TrendUp } from "@phosphor-icons/react";
 import type { Task } from "@/lib/types";
 import { useTheme } from "@/lib/theme";
 import { useI18n } from "@/lib/i18n";
+import { Segmented } from "@/components/ui/Segmented";
 
 ChartJS.register(
   CategoryScale,
@@ -25,7 +27,7 @@ ChartJS.register(
 );
 
 ChartJS.defaults.font.family =
-  '"Segoe UI Variable Text", "Segoe UI", -apple-system, BlinkMacSystemFont, "Inter", sans-serif';
+  '"Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
 
 interface ProgressChartProps {
   activeTask: Task | null;
@@ -34,11 +36,11 @@ interface ProgressChartProps {
 const COLORS = {
   dark: {
     line: "#38bdf8",
-    lineFill: "rgba(56, 189, 248, 0.04)",
+    lineFill: "rgba(56, 189, 248, 0.05)",
     threshold: "#f59e0b",
     thresholdFill: "transparent",
-    avg: "#64748b",
-    grid: "rgba(255, 255, 255, 0.03)",
+    avg: "#94a3b8",
+    grid: "rgba(255, 255, 255, 0.04)",
     tick: "#64748b",
     legend: "#94a3b8",
     tooltipBg: "#12131a",
@@ -48,10 +50,10 @@ const COLORS = {
   },
   light: {
     line: "#0284c7",
-    lineFill: "rgba(2, 132, 199, 0.03)",
+    lineFill: "rgba(2, 132, 199, 0.04)",
     threshold: "#d97706",
     thresholdFill: "transparent",
-    avg: "#a1a1aa",
+    avg: "#71717a",
     grid: "rgba(0, 0, 0, 0.04)",
     tick: "#71717a",
     legend: "#52525b",
@@ -75,10 +77,22 @@ export function ProgressChart({ activeTask }: ProgressChartProps) {
       a.date.localeCompare(b.date)
     );
 
+    const dateCounts: Record<string, number> = {};
+    for (const s of sorted) {
+      dateCounts[s.date] = (dateCounts[s.date] || 0) + 1;
+    }
+
+    const dateSeen: Record<string, number> = {};
     const labels = sorted.map((s) => {
       const [, m, d] = s.date.split("-");
-      return `${d}/${m}`;
+      const base = `${d}/${m}`;
+      if (dateCounts[s.date] > 1) {
+        dateSeen[s.date] = (dateSeen[s.date] || 0) + 1;
+        return `${base} #${dateSeen[s.date]}`;
+      }
+      return base;
     });
+
     const pbData = sorted.map((s) => s.pb);
     const threshData = sorted.map((s) => s.threshold);
 
@@ -147,60 +161,41 @@ export function ProgressChart({ activeTask }: ProgressChartProps) {
 
   if (!chartData) {
     return (
-      <div className="panel p-6 rounded-2xl h-72 flex flex-col items-center justify-center text-text-faint text-xs transition-all">
-        <svg
-          className="w-8 h-8 mb-2 opacity-40 text-text-faint"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <line x1="18" y1="20" x2="18" y2="10" />
-          <line x1="12" y1="20" x2="12" y2="4" />
-          <line x1="6" y1="20" x2="6" y2="14" />
-        </svg>
-        <span>{t("chart.empty")}</span>
+      <div className="panel p-8 rounded-2xl h-72 flex flex-col items-center justify-center text-text-muted text-xs border border-edge transition-all">
+        <span className="p-3 rounded-2xl bg-surface-subtle border border-edge text-text-muted mb-3 opacity-60">
+          <ChartLineUp size={28} weight="duotone" />
+        </span>
+        <span className="font-medium">{t("chart.empty")}</span>
       </div>
     );
   }
 
   return (
-    <section className="panel p-5 rounded-2xl transition-all duration-200">
+    <section className="panel p-5 rounded-2xl border border-edge transition-all duration-200">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-        <div className="flex items-center gap-2">
-          <div className="w-6 h-6 rounded-full bg-surface-subtle text-text-secondary border border-edge flex items-center justify-center">
-            <svg
-              className="w-3.5 h-3.5"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
-            </svg>
+        <div className="flex items-center gap-2.5">
+          <div className="w-7 h-7 rounded-lg bg-surface-subtle text-text-secondary border border-edge flex items-center justify-center">
+            <TrendUp size={15} weight="bold" />
           </div>
           <div>
-            <h2 className="text-xs font-bold uppercase tracking-wider text-text-main">
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-text-main">
               {t("chart.title")}
             </h2>
-            <p className="text-[11px] text-text-faint">
+            <p className="text-[11px] text-text-muted">
               {t("chart.subtitle")}
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-1.5">
-          <select
+
+        <div>
+          <Segmented
             value={avgType}
-            onChange={(e) => setAvgType(e.target.value as "moving" | "overall")}
-            className="minimal-input text-xs py-1 px-2.5 font-medium cursor-pointer rounded-full"
-          >
-            <option value="moving">{t("chart.moving")}</option>
-            <option value="overall">{t("chart.overall")}</option>
-          </select>
+            onChange={(val) => setAvgType(val as "moving" | "overall")}
+            options={[
+              { value: "moving", label: t("chart.moving") },
+              { value: "overall", label: t("chart.overall") },
+            ]}
+          />
         </div>
       </div>
 
@@ -210,6 +205,17 @@ export function ProgressChart({ activeTask }: ProgressChartProps) {
           options={{
             responsive: true,
             maintainAspectRatio: false,
+            animation: {
+              duration: 250,
+            },
+            layout: {
+              padding: {
+                right: 14,
+                left: 4,
+                top: 4,
+                bottom: 4,
+              },
+            },
             interaction: {
               mode: "index",
               intersect: false,
@@ -220,7 +226,11 @@ export function ProgressChart({ activeTask }: ProgressChartProps) {
                 align: "end",
                 labels: {
                   color: c.legend,
-                  font: { family: '"Segoe UI Variable Text", "Segoe UI", -apple-system, sans-serif', size: 11, weight: 600 },
+                  font: {
+                    family: '"Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+                    size: 11,
+                    weight: 600,
+                  },
                   boxWidth: 8,
                   boxHeight: 8,
                   usePointStyle: true,
@@ -234,11 +244,18 @@ export function ProgressChart({ activeTask }: ProgressChartProps) {
                 bodyColor: c.tooltipBody,
                 borderColor: c.tooltipBorder,
                 borderWidth: 1,
-                cornerRadius: 12,
+                cornerRadius: 10,
                 padding: 12,
                 boxPadding: 6,
-                titleFont: { family: '"Segoe UI Variable Text", "Segoe UI", -apple-system, sans-serif', weight: 700, size: 12 },
-                bodyFont: { family: '"Segoe UI Variable Text", "Segoe UI", -apple-system, sans-serif', size: 11 },
+                titleFont: {
+                  family: '"Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+                  weight: 600,
+                  size: 12,
+                },
+                bodyFont: {
+                  family: '"Geist Mono", monospace',
+                  size: 11,
+                },
               },
             },
             scales: {
@@ -246,7 +263,10 @@ export function ProgressChart({ activeTask }: ProgressChartProps) {
                 grid: { color: c.grid },
                 ticks: {
                   color: c.tick,
-                  font: { family: '"Segoe UI Variable Text", "Segoe UI", -apple-system, sans-serif', size: 11 },
+                  font: {
+                    family: '"Geist Mono", monospace',
+                    size: 11,
+                  },
                   maxTicksLimit: 7,
                   autoSkip: true,
                   maxRotation: 0,
@@ -256,7 +276,10 @@ export function ProgressChart({ activeTask }: ProgressChartProps) {
                 grid: { color: c.grid },
                 ticks: {
                   color: c.tick,
-                  font: { family: '"Segoe UI Variable Text", "Segoe UI", -apple-system, sans-serif', size: 11 },
+                  font: {
+                    family: '"Geist Mono", monospace',
+                    size: 11,
+                  },
                   maxTicksLimit: 6,
                 },
               },

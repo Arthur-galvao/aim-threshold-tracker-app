@@ -474,4 +474,49 @@ describe("playlist-sync and detection", () => {
       assert.ok(modalContent.includes("settings.automationSection"));
     });
   });
+
+  describe("UI styling and CSS variable validity", () => {
+    it("ensures CategorySensCard does not use invalid divide-edge opacity modifier", () => {
+      const cardContent = fs.readFileSync(
+        path.resolve("src/components/CategorySensCard.tsx"),
+        "utf-8"
+      );
+
+      assert.equal(
+        cardContent.includes("divide-edge/"),
+        false,
+        "CategorySensCard contains invalid divide-edge opacity modifier"
+      );
+      assert.ok(
+        cardContent.includes("divide-edge"),
+        "CategorySensCard should use divide-edge"
+      );
+      assert.ok(
+        cardContent.includes("border-collapse"),
+        "CategorySensCard table should use border-collapse"
+      );
+    });
+
+    it("ensures no components use invalid opacity modifiers on edge variables", () => {
+      const componentsDir = path.resolve("src/components");
+      const checkDir = (dir: string) => {
+        const entries = fs.readdirSync(dir, { withFileTypes: true });
+        for (const entry of entries) {
+          const fullPath = path.join(dir, entry.name);
+          if (entry.isDirectory()) {
+            checkDir(fullPath);
+          } else if (entry.name.endsWith(".tsx")) {
+            const content = fs.readFileSync(fullPath, "utf-8");
+            assert.equal(
+              /(divide|border)-edge\/\d+/.test(content),
+              false,
+              `${entry.name} contains invalid edge opacity modifier which causes white fallback lines`
+            );
+          }
+        }
+      };
+      checkDir(componentsDir);
+    });
+  });
 });
+

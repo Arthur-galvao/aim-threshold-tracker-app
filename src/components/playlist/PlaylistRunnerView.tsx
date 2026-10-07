@@ -1,7 +1,12 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { Playlist, Task } from "@/lib/types";
 import { useI18n } from "@/lib/i18n";
 import { getRecommendedSens } from "@/lib/viscose";
+import {
+  computePlaylistSensStats,
+  formatSensitivity,
+  type PlaylistSensStats,
+} from "@/lib/sens-analytics";
 import type { PlaylistRunnerState } from "@/hooks/usePlaylistRunner";
 
 interface PlaylistRunnerViewProps {
@@ -10,6 +15,7 @@ interface PlaylistRunnerViewProps {
   tasks: Task[];
   onOpenManager: () => void;
   onSyncKovaak?: () => Promise<void>;
+  onApplySens?: (sensCm: number) => Promise<void>;
 }
 
 function formatDuration(totalSeconds: number): string {
@@ -24,9 +30,28 @@ export function PlaylistRunnerView({
   tasks,
   onOpenManager,
   onSyncKovaak,
+  onApplySens,
 }: PlaylistRunnerViewProps) {
   const { t } = useI18n();
   const [isSyncing, setIsSyncing] = useState(false);
+
+  const taskMap = useMemo(() => new Map(tasks.map((t) => [t.id, t])), [tasks]);
+
+  const playlistStatsMap = useMemo(() => {
+    const map = new Map<string, PlaylistSensStats>();
+    for (const pl of playlists) {
+      map.set(pl.id, computePlaylistSensStats(pl, tasks));
+    }
+    return map;
+  }, [playlists, tasks]);
+
+  const activePlaylistStats = useMemo(() => {
+    if (!runner.activePlaylist) return null;
+    return (
+      playlistStatsMap.get(runner.activePlaylist.id) ??
+      computePlaylistSensStats(runner.activePlaylist, tasks)
+    );
+  }, [runner.activePlaylist, playlistStatsMap, tasks]);
 
   const handleSync = async () => {
     if (!onSyncKovaak || isSyncing) return;
@@ -38,10 +63,45 @@ export function PlaylistRunnerView({
     }
   };
 
-  const taskMap = new Map(tasks.map((t) => [t.id, t]));
+  // Currently running a playlist
+  const { activePlaylist, currentStepIndex, currentItem, currentTask } = runner;
+  const isLastStep = activePlaylist
+    ? currentStepIndex === activePlaylist.items.length - 1
+    : false;
+  const recSens = currentTask
+    ? getRecommendedSens(currentTask.category, currentTask.subcategory)
+    : null;
+  const isPlaylistPredicted = activePlaylistStats?.displaySens.source === "predicted";
+
+  // Calculation for progress
+  let progressPercentage = 0;
+  let progressLabel = "";
+
+  if (currentItem) {
+    if (currentItem.targetMode === "reps") {
+      const currentSessions = currentTask ? currentTask.sessions.length : 0;
+      const completedReps = Math.max(0, currentSessions - runner.sessionCountAtStart);
+      const targetReps = currentItem.targetValue;
+      progressPercentage = Math.min(100, (completedReps / targetReps) * 100);
+      progressLabel = t("runner.goalReps", {
+        current: completedReps,
+        target: targetReps,
+      });
+    } else {
+      const elapsed = runner.elapsedSeconds;
+      const target = currentItem.targetValue;
+      progressPercentage = Math.min(100, (elapsed / target) * 100);
+      const remaining = Math.max(0, target - elapsed);
+      progressLabel = t("runner.goalTime", {
+        remaining: formatDuration(remaining),
+        current: elapsed,
+        target,
+      });
+    }
+  }
 
   // If no playlist is running and not finished, show available playlists to start
-  if (!runner.activePlaylist) {
+  if (!activePlaylist) {
     return (
       <div className="space-y-6">
         <div className="panel p-6 sm:p-8 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -77,6 +137,7 @@ export function PlaylistRunnerView({
               </button>
             )}
             <button
+              type="button"
               onClick={onOpenManager}
               className="minimal-btn bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-xl text-xs flex items-center justify-center gap-2 shadow-sm transition-all"
             >
@@ -135,57 +196,94 @@ export function PlaylistRunnerView({
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {playlists.map((playlist) => (
-              <div
-                key={playlist.id}
-                className="panel p-5 rounded-2xl hover:border-white/20 transition-all flex flex-col justify-between gap-4"
-              >
-                <div>
-                  <div className="flex items-start justify-between gap-2">
-                    <h3 className="text-sm font-bold text-text-main truncate">
-                      {playlist.name}
-                    </h3>
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-surface-subtle border border-edge text-text-faint font-medium">
-                      {t("playlist.itemsCount", { n: playlist.items.length })}
-                    </span>
-                  </div>
+            {playlists.map((playlist) => {
+              const stats = playlistStatsMap.get(playlist.id) ?? computePlaylistSensStats(playlist, tasks);
+              const isPredicted = stats.displaySens.source === "predicted";
 
-                  <div className="mt-3 flex flex-wrap gap-1">
-                    {playlist.items.slice(0, 4).map((item, idx) => {
-                      const task = taskMap.get(item.taskId);
-                      return (
-                        <span
-                          key={item.id}
-                          className="px-2 py-0.5 rounded bg-surface-subtle border border-edge text-[10px] text-text-secondary truncate max-w-[120px]"
-                        >
-                          {idx + 1}. {task ? task.name : `#${item.taskId}`}
-                        </span>
-                      );
-                    })}
-                    {playlist.items.length > 4 && (
-                      <span className="px-1.5 py-0.5 rounded bg-surface-subtle border border-edge text-[10px] text-text-faint">
-                        +{playlist.items.length - 4}
+              return (
+                <div
+                  key={playlist.id}
+                  className="panel p-5 rounded-2xl hover:border-white/20 transition-all flex flex-col justify-between gap-4"
+                >
+                  <div>
+                    <div className="flex items-start justify-between gap-2">
+                      <h3 className="text-sm font-bold text-text-main truncate">
+                        {playlist.name}
+                      </h3>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-surface-subtle border border-edge text-text-faint font-medium">
+                        {t("playlist.itemsCount", { n: playlist.items.length })}
                       </span>
-                    )}
+                    </div>
+
+                    <div className="mt-3 flex flex-wrap gap-1">
+                      {playlist.items.slice(0, 4).map((item, idx) => {
+                        const task = taskMap.get(item.taskId);
+                        return (
+                          <span
+                            key={item.id}
+                            className="px-2 py-0.5 rounded bg-surface-subtle border border-edge text-[10px] text-text-secondary truncate max-w-[120px]"
+                          >
+                            {idx + 1}. {task ? task.name : `#${item.taskId}`}
+                          </span>
+                        );
+                      })}
+                      {playlist.items.length > 4 && (
+                        <span className="px-1.5 py-0.5 rounded bg-surface-subtle border border-edge text-[10px] text-text-faint">
+                          +{playlist.items.length - 4}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Recommended Sens Badge & Quick Apply */}
+                    <div className="mt-3 flex items-center justify-between gap-2 p-2 rounded-xl bg-surface-subtle border border-edge text-xs">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-[11px] text-text-secondary">
+                          {t("playlist.recommendedSens")}:
+                        </span>
+                        <span className="font-mono font-bold text-text-main">
+                          {formatSensitivity(stats.displaySens.value)}
+                        </span>
+                        {isPredicted ? (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                            {t("playlistSens.sourcePredicted")}
+                          </span>
+                        ) : (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold bg-purple-500/10 text-purple-300 border border-purple-500/20">
+                            {t("playlistSens.sourceViscose")}
+                          </span>
+                        )}
+                      </div>
+                      {onApplySens && (
+                        <button
+                          type="button"
+                          onClick={() => void onApplySens(stats.displaySens.value)}
+                          className="px-2 py-0.5 text-[11px] font-semibold rounded-lg bg-surface border border-edge hover:bg-surface-hover text-text-main transition-colors shrink-0"
+                          title={t("playlist.applySens")}
+                        >
+                          {t("playlist.applySens")}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-3 border-t border-edge">
+                    <span className="text-[11px] text-text-faint">
+                      {new Date(playlist.createdAt).toLocaleDateString()}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => runner.start(playlist)}
+                      className="minimal-btn bg-blue-500 hover:bg-blue-600 text-white font-semibold py-1.5 px-3 rounded-lg text-xs flex items-center gap-1.5 shadow-sm transition-all"
+                    >
+                      <svg className="w-3 h-3 fill-current" viewBox="0 0 24 24">
+                        <polygon points="5 3 19 12 5 21 5 3" />
+                      </svg>
+                      <span>{t("playlist.start")}</span>
+                    </button>
                   </div>
                 </div>
-
-                <div className="flex items-center justify-between pt-3 border-t border-edge">
-                  <span className="text-[11px] text-text-faint">
-                    {new Date(playlist.createdAt).toLocaleDateString()}
-                  </span>
-                  <button
-                    onClick={() => runner.start(playlist)}
-                    className="minimal-btn bg-blue-500 hover:bg-blue-600 text-white font-semibold py-1.5 px-3 rounded-lg text-xs flex items-center gap-1.5 shadow-sm transition-all"
-                  >
-                    <svg className="w-3 h-3 fill-current" viewBox="0 0 24 24">
-                      <polygon points="5 3 19 12 5 21 5 3" />
-                    </svg>
-                    <span>{t("playlist.start")}</span>
-                  </button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
@@ -221,12 +319,14 @@ export function PlaylistRunnerView({
 
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
           <button
+            type="button"
             onClick={runner.restart}
             className="w-full sm:w-auto minimal-btn bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-5 rounded-xl text-xs shadow-sm transition-all"
           >
             {t("runner.restart")}
           </button>
           <button
+            type="button"
             onClick={runner.stop}
             className="w-full sm:w-auto minimal-btn-secondary py-2 px-5 rounded-xl text-xs font-semibold text-text-secondary hover:text-text-main border-edge"
           >
@@ -235,40 +335,6 @@ export function PlaylistRunnerView({
         </div>
       </div>
     );
-  }
-
-  // Currently running a playlist
-  const { activePlaylist, currentStepIndex, currentItem, currentTask } = runner;
-  const isLastStep = currentStepIndex === activePlaylist.items.length - 1;
-  const recSens = currentTask
-    ? getRecommendedSens(currentTask.category, currentTask.subcategory)
-    : null;
-
-  // Calculation for progress
-  let progressPercentage = 0;
-  let progressLabel = "";
-
-  if (currentItem) {
-    if (currentItem.targetMode === "reps") {
-      const currentSessions = currentTask ? currentTask.sessions.length : 0;
-      const completedReps = Math.max(0, currentSessions - runner.sessionCountAtStart);
-      const targetReps = currentItem.targetValue;
-      progressPercentage = Math.min(100, (completedReps / targetReps) * 100);
-      progressLabel = t("runner.goalReps", {
-        current: completedReps,
-        target: targetReps,
-      });
-    } else {
-      const elapsed = runner.elapsedSeconds;
-      const target = currentItem.targetValue;
-      progressPercentage = Math.min(100, (elapsed / target) * 100);
-      const remaining = Math.max(0, target - elapsed);
-      progressLabel = t("runner.goalTime", {
-        remaining: formatDuration(remaining),
-        current: elapsed,
-        target,
-      });
-    }
   }
 
   return (
@@ -304,12 +370,14 @@ export function PlaylistRunnerView({
 
         <div className="flex items-center gap-2 shrink-0">
           <button
+            type="button"
             onClick={onOpenManager}
             className="minimal-btn-secondary px-3 py-1.5 rounded-lg text-xs font-medium text-text-secondary hover:text-text-main border-edge hidden sm:inline-block"
           >
             {t("playlist.edit")}
           </button>
           <button
+            type="button"
             onClick={runner.stop}
             className="minimal-btn-secondary px-3 py-1.5 rounded-lg text-xs font-semibold text-text-faint hover:text-red hover:bg-red-500/10 border-edge transition-colors"
           >
@@ -346,7 +414,21 @@ export function PlaylistRunnerView({
                       : "bg-surface-subtle text-text-faint"
                   }`}
                 >
-                  {isCompleted ? "✓" : index + 1}
+                  {isCompleted ? (
+                    <svg
+                      className="w-2.5 h-2.5"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="3"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                  ) : (
+                    index + 1
+                  )}
                 </span>
                 <span className="truncate max-w-[110px]">
                   {task ? task.name : `#${item.taskId}`}
@@ -376,12 +458,57 @@ export function PlaylistRunnerView({
                 <span className="px-2 py-0.5 rounded-full bg-surface-subtle border border-edge text-text-secondary font-medium">
                   {currentTask.subcategory}
                 </span>
+
                 {recSens && (
                   <>
                     <span>·</span>
-                    <span className="px-2.5 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20 font-semibold font-mono">
-                      {recSens} cm/360
-                    </span>
+                    <div className="inline-flex items-center gap-1.5 pl-1.5 border-l border-edge">
+                      <span className="text-text-secondary text-[11px]">{t("runner.scenarioSens")}:</span>
+                      <span className="px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20 font-semibold font-mono">
+                        {recSens} cm
+                      </span>
+                      {onApplySens && (
+                        <button
+                          type="button"
+                          onClick={() => void onApplySens(recSens)}
+                          className="px-2 py-0.5 rounded text-[10px] font-semibold bg-surface-subtle hover:bg-surface-hover border border-edge text-text-main transition-colors"
+                          title={t("runner.applySens")}
+                        >
+                          {t("runner.applySens")}
+                        </button>
+                      )}
+                    </div>
+                  </>
+                )}
+
+                {activePlaylistStats && (
+                  <>
+                    <span>·</span>
+                    <div className="inline-flex items-center gap-1.5 pl-1.5 border-l border-edge">
+                      <span className="text-text-secondary text-[11px]">{t("runner.playlistSens")}:</span>
+                      <span className="px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-300 border border-purple-500/20 font-semibold font-mono">
+                        {formatSensitivity(activePlaylistStats.displaySens.value)}
+                      </span>
+                      {isPlaylistPredicted ? (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                          {t("playlistSens.sourcePredicted")}
+                        </span>
+                      ) : (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold bg-purple-500/10 text-purple-300 border border-purple-500/20">
+                          {t("playlistSens.sourceViscose")}
+                        </span>
+                      )}
+                      {onApplySens && (
+                        <button
+                          type="button"
+                          onClick={() => void onApplySens(activePlaylistStats.displaySens.value)}
+                          className="px-2 py-0.5 rounded text-[10px] font-semibold bg-surface-subtle hover:bg-surface-hover border border-edge text-text-main transition-colors"
+                          title={t("runner.applySens")}
+                        >
+                          {t("runner.applySens")}
+                        </button>
+                      )}
+                    </div>
                   </>
                 )}
               </div>

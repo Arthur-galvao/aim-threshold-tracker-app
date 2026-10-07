@@ -3,6 +3,19 @@ import { useTheme } from "@/lib/theme";
 import { useI18n } from "@/lib/i18n";
 import { openExternalUrl } from "@/lib/tauri-bridge";
 import { GUIDE_URL } from "@/lib/links";
+import { Segmented, type SegmentedOption } from "@/components/ui/Segmented";
+import { IconButton } from "@/components/ui/IconButton";
+import { Button } from "@/components/ui/Button";
+import {
+  Crosshair,
+  Gear,
+  BookOpen,
+  ArrowSquareOut,
+  Sun,
+  Moon,
+  CircleHalf,
+  LockSimple,
+} from "@phosphor-icons/react";
 
 interface HeaderProps {
   activeTab: "dashboard" | "randomizer" | "playlist";
@@ -22,116 +35,71 @@ export function Header({
   const { theme, cycleTheme } = useTheme();
   const { lang, setLang, t } = useI18n();
 
+  const tabOptions: SegmentedOption<"dashboard" | "randomizer" | "playlist">[] = [
+    {
+      value: "dashboard",
+      label: t("tab.dashboard"),
+    },
+    {
+      value: "randomizer",
+      label: t("tab.randomizer"),
+      disabled: !rawaccelAvailable,
+      tooltip: !rawaccelAvailable ? t("tab.lockedTooltip") : undefined,
+      icon: !rawaccelAvailable ? (
+        <span className="text-amber flex items-center">
+          <LockSimple size={13} weight="bold" />
+        </span>
+      ) : undefined,
+      badge: !rawaccelAvailable ? (
+        <span className="hidden xl:inline-block text-[10px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-soft text-amber border border-amber-edge">
+          {t("tab.lockedBadge")}
+        </span>
+      ) : undefined,
+    },
+    {
+      value: "playlist",
+      label: t("tab.playlist"),
+    },
+  ];
+
   return (
-    <header className="sticky top-0 z-40 chrome border-b border-white/[0.06] transition-all duration-200">
-      <div className="max-w-7xl mx-auto px-5 sm:px-8 py-4 min-h-[68px] flex items-center justify-between gap-4">
+    <header className="sticky top-0 z-40 chrome transition-colors duration-150">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 min-h-[64px] flex items-center justify-between gap-3">
         {/* Brand / Logo + Tabs */}
-        <div className="flex items-center gap-4 sm:gap-6 min-w-0">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="h-8 w-8 rounded-full bg-surface-subtle border border-edge flex items-center justify-center shrink-0 text-text-main">
-              <svg
-                className="w-4 h-4"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <circle cx="12" cy="12" r="8" />
-                <line x1="12" y1="2" x2="12" y2="6" />
-                <line x1="12" y1="18" x2="12" y2="22" />
-                <line x1="2" y1="12" x2="6" y2="12" />
-                <line x1="18" y1="12" x2="22" y2="12" />
-              </svg>
+        <div className="flex items-center gap-3 sm:gap-5 min-w-0">
+          <div className="flex items-center gap-2.5 min-w-0 shrink-0">
+            <div className="h-8 w-8 rounded-lg bg-surface-subtle border border-edge flex items-center justify-center shrink-0 text-accent shadow-sm">
+              <Crosshair size={18} weight="bold" />
             </div>
-            <div className="hidden sm:flex items-center gap-2.5 min-w-0">
-              <h1 className="text-xs font-bold tracking-wider uppercase text-text-main truncate">
+            <div className="hidden md:flex flex-col min-w-0">
+              <span className="text-xs font-bold tracking-tight text-text-main truncate uppercase">
                 Aim Threshold Tracker
-              </h1>
+              </span>
+              <span className="text-[10px] font-mono text-text-faint -mt-0.5 tracking-wider">
+                v1.4.0
+              </span>
             </div>
           </div>
 
           {/* Navigation Tabs with Safety Lock */}
-          <nav className="flex items-center gap-1 bg-surface-subtle p-1 rounded-xl border border-edge">
-            <button
-              type="button"
-              onClick={() => onTabChange("dashboard")}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-150 ${
-                activeTab === "dashboard"
-                  ? "bg-blue-500 text-white shadow-sm"
-                  : "text-text-secondary hover:text-text-main"
-              }`}
-            >
-              {t("tab.dashboard")}
-            </button>
-            <button
-              type="button"
-              disabled={!rawaccelAvailable}
-              onClick={() => {
-                if (rawaccelAvailable) {
-                  onTabChange("randomizer");
-                }
-              }}
-              title={
-                !rawaccelAvailable
-                  ? t("tab.lockedTooltip")
-                  : t("tab.randomizer")
-              }
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all duration-150 ${
-                !rawaccelAvailable
-                  ? "opacity-50 cursor-not-allowed text-text-faint hover:bg-transparent"
-                  : activeTab === "randomizer"
-                  ? "bg-blue-500 text-white shadow-sm"
-                  : "text-text-secondary hover:text-text-main"
-              }`}
-            >
-              {!rawaccelAvailable && (
-                <svg
-                  className="w-3 h-3 text-amber-400 shrink-0"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                  <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                </svg>
-              )}
-              <span>{t("tab.randomizer")}</span>
-              {!rawaccelAvailable && (
-                <span className="hidden md:inline-block text-[10px] uppercase tracking-wider px-1.5 py-0.2 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 font-mono">
-                  {t("tab.lockedBadge")}
-                </span>
-              )}
-            </button>
-            <button
-              type="button"
-              onClick={() => onTabChange("playlist")}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-150 ${
-                activeTab === "playlist"
-                  ? "bg-blue-500 text-white shadow-sm"
-                  : "text-text-secondary hover:text-text-main"
-              }`}
-            >
-              {t("tab.playlist")}
-            </button>
-          </nav>
+          <Segmented
+            options={tabOptions}
+            value={activeTab}
+            onChange={onTabChange}
+          />
         </div>
 
-        {/* Navigation & Controls */}
-        <div className="flex items-center gap-2.5 sm:gap-3">
-          {/* Watcher Status Pill */}
+        {/* Status & Utility Actions */}
+        <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
+          {/* Watcher Status Indicator */}
           <div
-            className={`hidden sm:flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium border transition-all duration-200 ${
+            className={`flex items-center gap-2 px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors ${
               watcherStatus.active
                 ? "bg-emerald-soft text-emerald border-emerald-edge"
                 : "bg-surface-subtle text-text-faint border-edge"
             }`}
           >
-            <span className="relative flex h-2 w-2">
+            <span className="relative flex h-2 w-2 shrink-0">
               {watcherStatus.active && (
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald opacity-75" />
               )}
@@ -141,85 +109,68 @@ export function Header({
                 }`}
               />
             </span>
-            <span>
+            <span className="hidden sm:inline text-[11px] font-mono tracking-tight">
               {watcherStatus.active
                 ? t("header.watcherActive")
                 : t("header.watcherInactive")}
             </span>
           </div>
 
-          {/* Prominent GUIA Button */}
-          <button
-            type="button"
+          {/* Guia Button */}
+          <Button
+            size="sm"
+            variant="secondary"
             onClick={() => void openExternalUrl(GUIDE_URL)}
-            className="guide-btn px-3.5 h-8 text-xs font-semibold gap-1.5 shrink-0 rounded-full cursor-pointer"
             title={t("header.guideTitle")}
+            className="hidden sm:inline-flex"
+            icon={
+              <span className="text-text-secondary flex items-center">
+                <BookOpen size={14} weight="bold" />
+              </span>
+            }
           >
-            <svg
-              className="w-3.5 h-3.5 text-text-secondary"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
-              <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
-            </svg>
             <span>{t("header.guide")}</span>
-            <svg
-              className="w-3 h-3 text-text-faint"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-              <polyline points="15 3 21 3 21 9" />
-              <line x1="10" y1="14" x2="21" y2="3" />
-            </svg>
-          </button>
+            <span className="text-text-faint flex items-center">
+              <ArrowSquareOut size={12} weight="bold" />
+            </span>
+          </Button>
 
           {/* Language Selector */}
-          <button
+          <IconButton
+            size="sm"
+            variant="secondary"
+            aria-label={t("header.language")}
             onClick={() => setLang(lang === "pt" ? "en" : "pt")}
-            className="w-8 h-8 rounded-full minimal-btn-secondary text-xs font-bold"
-            title={t("header.language")}
+            className="font-mono text-xs font-bold"
           >
             {lang.toUpperCase()}
-          </button>
+          </IconButton>
 
           {/* Theme Selector */}
-          <button
+          <IconButton
+            size="sm"
+            variant="secondary"
+            aria-label={t("header.theme")}
             onClick={cycleTheme}
-            className="w-8 h-8 rounded-full minimal-btn-secondary text-xs"
-            title={t("header.theme")}
           >
-            {theme === "dark" ? "●" : theme === "light" ? "○" : "◐"}
-          </button>
+            {theme === "dark" ? (
+              <Moon size={15} weight="bold" />
+            ) : theme === "light" ? (
+              <Sun size={15} weight="bold" />
+            ) : (
+              <CircleHalf size={15} weight="bold" />
+            )}
+          </IconButton>
 
           {/* Settings */}
-          <button
+          <IconButton
+            size="sm"
+            variant="secondary"
+            aria-label={t("header.settings")}
             onClick={onOpenSettings}
-            className="w-8 h-8 rounded-full minimal-btn-secondary text-xs flex items-center justify-center text-text-secondary hover:text-text-main"
-            title={t("header.settings")}
           >
-            <svg
-              className="w-4 h-4"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <circle cx="12" cy="12" r="3" />
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
-            </svg>
-          </button>
+            <Gear size={15} weight="bold" />
+          </IconButton>
         </div>
       </div>
     </header>

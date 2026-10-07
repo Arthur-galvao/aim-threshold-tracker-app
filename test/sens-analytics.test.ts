@@ -1,5 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
 import {
   valorantToCm360,
   formatSensitivity,
@@ -11,9 +13,13 @@ import {
   poolCategoryRuns,
   predictOptimalSensitivity,
   PREDICTOR_PROFILES,
+  computePlaylistSensStats,
   type CategoryRunPoint,
   type RunDataPoint,
+  type PlaylistCategorySlice,
+  type PlaylistSensStats,
 } from "../src/lib/sens-analytics.ts";
+import type { Playlist, Task } from "../src/lib/types.ts";
 import { getDisplaySens, getRecommendedSens } from "../src/lib/viscose.ts";
 
 describe("sens-analytics", () => {
@@ -510,4 +516,368 @@ describe("sens-analytics", () => {
       assert.ok(Math.abs(result.value - 60.0) <= 2.5);
     });
   });
+
+  describe("computePlaylistSensStats", () => {
+    it("handles empty playlist or playlist without matching tasks", () => {
+      const emptyPlaylist: Playlist = {
+        id: "pl-empty",
+        name: "Empty Playlist",
+        items: [],
+        createdAt: "2026-10-01T00:00:00.000Z",
+      };
+
+      const stats = computePlaylistSensStats(emptyPlaylist, []);
+      assert.equal(stats.playlistId, "pl-empty");
+      assert.equal(stats.playlistName, "Empty Playlist");
+      assert.equal(stats.scenariosCount, 0);
+      assert.equal(stats.totalRuns, 0);
+      assert.deepEqual(stats.categorySlices, []);
+      assert.deepEqual(stats.normalizedRuns, []);
+      assert.equal(stats.overallConfidence, "insufficient");
+      assert.equal(stats.displaySens.source, "viscose");
+      assert.equal(stats.displaySens.value, 45);
+
+      const playlistWithMissingTasks: Playlist = {
+        id: "pl-missing",
+        name: "Missing Tasks Playlist",
+        items: [
+          { id: "item-1", taskId: "non-existent-1", targetMode: "reps", targetValue: 3 },
+          { id: "item-2", taskId: "non-existent-2", targetMode: "time", targetValue: 60 },
+        ],
+        createdAt: "2026-10-01T00:00:00.000Z",
+      };
+
+      const statsMissing = computePlaylistSensStats(playlistWithMissingTasks, []);
+      assert.equal(statsMissing.scenariosCount, 0);
+      assert.equal(statsMissing.totalRuns, 0);
+      assert.deepEqual(statsMissing.categorySlices, []);
+      assert.equal(statsMissing.displaySens.source, "viscose");
+    });
+
+    it("predicts optimal sensitivity when playlist has sufficient normalized runs across sensitivities", () => {
+      const task1: Task = {
+        id: "t1",
+        name: "1w4t precision",
+        category: "Click Timing",
+        subcategory: "Precision",
+        sessions: [
+          { id: "s1-1", date: "2026-09-01", sens: 40, pb: 70, threshold: 0 },
+          { id: "s1-2", date: "2026-09-02", sens: 45, pb: 85, threshold: 0 },
+          { id: "s1-3", date: "2026-09-03", sens: 50, pb: 95, threshold: 0 },
+          { id: "s1-4", date: "2026-09-04", sens: 55, pb: 100, threshold: 0 }, // PB = 100
+          { id: "s1-5", date: "2026-09-05", sens: 60, pb: 98, threshold: 0 },
+          { id: "s1-6", date: "2026-09-06", sens: 65, pb: 85, threshold: 0 },
+          { id: "s1-7", date: "2026-09-07", sens: 70, pb: 70, threshold: 0 },
+        ],
+      };
+
+      const task2: Task = {
+        id: "t2",
+        name: "pasu stability",
+        category: "Click Timing",
+        subcategory: "Stability",
+        sessions: [
+          { id: "s2-1", date: "2026-09-01", sens: 40, pb: 700, threshold: 0 },
+          { id: "s2-2", date: "2026-09-02", sens: 45, pb: 850, threshold: 0 },
+          { id: "s2-3", date: "2026-09-03", sens: 50, pb: 950, threshold: 0 },
+          { id: "s2-4", date: "2026-09-04", sens: 55, pb: 1000, threshold: 0 }, // PB = 1000
+          { id: "s2-5", date: "2026-09-05", sens: 60, pb: 990, threshold: 0 },
+          { id: "s2-6", date: "2026-09-06", sens: 65, pb: 860, threshold: 0 },
+          { id: "s2-7", date: "2026-09-07", sens: 70, pb: 710, threshold: 0 },
+        ],
+      };
+
+      const playlist: Playlist = {
+        id: "pl-sufficient",
+        name: "Click Timing Routine",
+        items: [
+          { id: "i1", taskId: "t1", targetMode: "reps", targetValue: 5 },
+          { id: "i2", taskId: "t2", targetMode: "reps", targetValue: 5 },
+        ],
+        createdAt: "2026-09-01T00:00:00.000Z",
+      };
+
+      const stats = computePlaylistSensStats(playlist, [task1, task2]);
+      assert.equal(stats.scenariosCount, 2);
+      assert.equal(stats.totalRuns, 14);
+      assert.equal(stats.normalizedRuns.length, 14);
+
+      // Verify normalization: normalized scores should be in 0..100 range and max at 100
+      const maxScoreT1 = Math.max(...stats.normalizedRuns.filter((r) => r.scenario === "1w4t precision").map((r) => r.score));
+      assert.equal(maxScoreT1, 100);
+      const maxScoreT2 = Math.max(...stats.normalizedRuns.filter((r) => r.scenario === "pasu stability").map((r) => r.score));
+      assert.equal(maxScoreT2, 100);
+
+      // Slices should exist
+      assert.equal(stats.categorySlices.length, 2);
+
+      // Overall prediction should be calculated from data points
+      assert.equal(stats.displaySens.source, "predicted");
+      assert.ok(stats.overallConfidence === "medium" || stats.overallConfidence === "high");
+      assert.ok(
+        Math.abs(stats.displaySens.value - 55.0) <= 5.0,
+        `Expected predicted sens near 55 cm, got ${stats.displaySens.value}`
+      );
+    });
+
+    it("falls back to weighted Viscose recommendations when runs are insufficient", () => {
+      const task1: Task = {
+        id: "t1",
+        name: "1w6t",
+        category: "Click Timing",
+        subcategory: "Precision", // Viscose recommendation: 60 cm
+        sessions: [
+          { id: "s1", date: "2026-09-10", sens: 50, pb: 100, threshold: 0 },
+          { id: "s2", date: "2026-09-11", sens: 55, pb: 105, threshold: 0 },
+        ],
+      };
+
+      const task2: Task = {
+        id: "t2",
+        name: "speed flick",
+        category: "Flick Tech",
+        subcategory: "Speed", // Viscose recommendation: 45 cm
+        sessions: [
+          { id: "s3", date: "2026-09-10", sens: 45, pb: 80, threshold: 0 },
+        ],
+      };
+
+      const playlist: Playlist = {
+        id: "pl-insufficient",
+        name: "Mixed Warmup",
+        items: [
+          { id: "i1", taskId: "t1", targetMode: "reps", targetValue: 3 },
+          { id: "i2", taskId: "t2", targetMode: "reps", targetValue: 3 },
+        ],
+        createdAt: "2026-09-10T00:00:00.000Z",
+      };
+
+      const stats = computePlaylistSensStats(playlist, [task1, task2]);
+      assert.equal(stats.scenariosCount, 2);
+      assert.equal(stats.totalRuns, 3);
+      assert.equal(stats.displaySens.source, "viscose");
+      assert.equal(stats.overallConfidence, "insufficient");
+
+      // Weighted average: (60 * 2 runs + 45 * 1 run) / 3 runs = 165 / 3 = 55 cm
+      assert.equal(stats.displaySens.value, 55);
+    });
+
+    it("correctly builds, groups, and sorts category slices", () => {
+      const taskA: Task = {
+        id: "ta",
+        name: "Microshot",
+        category: "Flick Tech",
+        subcategory: "Micro", // Viscose = 65
+        sessions: [
+          { id: "sa1", date: "2026-09-01", sens: 65, pb: 100, threshold: 0 },
+          { id: "sa2", date: "2026-09-02", sens: 65, pb: 105, threshold: 0 },
+        ],
+      };
+
+      const taskB: Task = {
+        id: "tb",
+        name: "Air Wrist",
+        category: "Control Tracking",
+        subcategory: "Wrist", // Viscose = 44
+        sessions: Array.from({ length: 10 }, (_, i) => ({
+          id: `sb${i}`,
+          date: `2026-09-${i + 1}`,
+          sens: 40 + (i % 5),
+          pb: 500 + i * 10,
+          threshold: 0,
+        })),
+      };
+
+      const taskC: Task = {
+        id: "tc",
+        name: "Flick Speed",
+        category: "Flick Tech",
+        subcategory: "Speed", // Viscose = 45
+        sessions: [
+          { id: "sc1", date: "2026-09-01", sens: 45, pb: 80, threshold: 0 },
+        ],
+      };
+
+      const playlist: Playlist = {
+        id: "pl-sort",
+        name: "Benchmark Routine",
+        items: [
+          { id: "i1", taskId: "ta", targetMode: "reps", targetValue: 3 },
+          { id: "i2", taskId: "tb", targetMode: "reps", targetValue: 3 },
+          { id: "i3", taskId: "tc", targetMode: "reps", targetValue: 3 },
+        ],
+        createdAt: "2026-09-01T00:00:00.000Z",
+      };
+
+      const stats = computePlaylistSensStats(playlist, [taskA, taskB, taskC]);
+      assert.equal(stats.categorySlices.length, 3);
+
+      // Sorted by totalRuns descending:
+      // Slice 0: Control Tracking / Wrist (10 runs)
+      // Slice 1: Flick Tech / Micro (2 runs)
+      // Slice 2: Flick Tech / Speed (1 run)
+      assert.equal(stats.categorySlices[0].category, "Control Tracking");
+      assert.equal(stats.categorySlices[0].subcategory, "Wrist");
+      assert.equal(stats.categorySlices[0].totalRuns, 10);
+      assert.equal(stats.categorySlices[0].scenariosCount, 1);
+
+      assert.equal(stats.categorySlices[1].category, "Flick Tech");
+      assert.equal(stats.categorySlices[1].subcategory, "Micro");
+      assert.equal(stats.categorySlices[1].totalRuns, 2);
+      assert.equal(stats.categorySlices[1].scenariosCount, 1);
+
+      assert.equal(stats.categorySlices[2].category, "Flick Tech");
+      assert.equal(stats.categorySlices[2].subcategory, "Speed");
+      assert.equal(stats.categorySlices[2].totalRuns, 1);
+      assert.equal(stats.categorySlices[2].scenariosCount, 1);
+    });
+  });
+
+  describe("Tasks 2 & 3: Multi-scope Sensitivity & Playlist Analytics Components", () => {
+    it("verifies i18n keys and parity for playlist and category sensitivity", () => {
+      const i18nContent = fs.readFileSync(path.resolve("src/lib/i18n.tsx"), "utf-8");
+
+      const expectedKeys = [
+        "randomizer.scopePlaylist",
+        "randomizer.scopeCategory",
+        "randomizer.selectPlaylist",
+        "randomizer.selectCategory",
+        "randomizer.noPlaylistsAvailable",
+        "randomizer.noCategoriesAvailable",
+        "categorySens.viewInChart",
+        "playlistSens.title",
+        "playlistSens.subtitle",
+        "playlistSens.colPlaylist",
+        "playlistSens.colRecommended",
+        "playlistSens.colComposition",
+        "playlistSens.colStats",
+        "playlistSens.colConfidence",
+        "playlistSens.colActions",
+        "playlistSens.viewInChart",
+        "playlistSens.applySens",
+        "playlistSens.empty",
+        "playlistSens.sourcePredicted",
+        "playlistSens.sourceViscose",
+        "playlistSens.scenariosRuns",
+      ];
+
+      for (const key of expectedKeys) {
+        const occurrences = (i18nContent.match(new RegExp(`"${key.replace(".", "\\.")}":`, "g")) || []).length;
+        assert.equal(
+          occurrences,
+          2,
+          `Expected key ${key} to appear exactly twice (in pt and en dicts), found ${occurrences}`
+        );
+      }
+    });
+
+    it("verifies zero emojis across newly modified/created component files", () => {
+      const emojiRegex = /\p{Extended_Pictographic}/u;
+
+      const filesToCheck = [
+        "src/lib/i18n.tsx",
+        "src/lib/sens-analytics.ts",
+        "src/components/playlist/PlaylistSensCard.tsx",
+        "src/components/randomizer/SensRandomizerChart.tsx",
+        "src/components/SensRandomizerView.tsx",
+        "src/components/CategorySensCard.tsx",
+        "src/App.tsx",
+      ];
+
+      for (const relPath of filesToCheck) {
+        const content = fs.readFileSync(path.resolve(relPath), "utf-8");
+        assert.equal(
+          emojiRegex.test(content),
+          false,
+          `File ${relPath} contains visual emojis, which is strictly prohibited`
+        );
+      }
+    });
+
+    it("verifies SensRandomizerChart and PlaylistSensCard component source integrity", () => {
+      const chartCode = fs.readFileSync(path.resolve("src/components/randomizer/SensRandomizerChart.tsx"), "utf-8");
+      const cardCode = fs.readFileSync(path.resolve("src/components/playlist/PlaylistSensCard.tsx"), "utf-8");
+      const viewCode = fs.readFileSync(path.resolve("src/components/SensRandomizerView.tsx"), "utf-8");
+
+      // Verify scope modes in chart
+      assert.ok(chartCode.includes('"current"'));
+      assert.ok(chartCode.includes('"playlist"'));
+      assert.ok(chartCode.includes('"category"'));
+      assert.ok(chartCode.includes('"all"'));
+
+      // Verify PlaylistSensCard computes stats and contains action buttons
+      assert.ok(cardCode.includes("computePlaylistSensStats"));
+      assert.ok(cardCode.includes("onViewInChart"));
+      assert.ok(cardCode.includes("onApplySens"));
+
+      // Verify SensRandomizerView integrates PlaylistSensCard and passes callbacks
+      assert.ok(viewCode.includes("<PlaylistSensCard"));
+      assert.ok(viewCode.includes("handleViewPlaylistInChart"));
+      assert.ok(viewCode.includes("handleViewCategoryInChart"));
+    });
+  });
+
+  describe("Tasks 4 & 5: Playlist Runner Sensitivity Integration and Quick Apply", () => {
+    it("verifies i18n keys for playlist and runner sensitivity in pt and en", () => {
+      const i18nContent = fs.readFileSync(path.resolve("src/lib/i18n.tsx"), "utf-8");
+
+      const expectedKeys = [
+        "playlist.recommendedSens",
+        "playlist.applySens",
+        "playlist.appliedSuccess",
+        "runner.scenarioSens",
+        "runner.playlistSens",
+        "runner.applySens",
+      ];
+
+      for (const key of expectedKeys) {
+        const occurrences = (i18nContent.match(new RegExp(`"${key.replace(".", "\\.")}":`, "g")) || []).length;
+        assert.equal(
+          occurrences,
+          2,
+          `Expected key ${key} to appear exactly twice (in pt and en dicts), found ${occurrences}`
+        );
+      }
+    });
+
+    it("verifies zero emojis across playlist runner components and App.tsx", () => {
+      const emojiRegex = /\p{Extended_Pictographic}/u;
+
+      const filesToCheck = [
+        "src/components/playlist/PlaylistRunnerView.tsx",
+        "src/components/playlist/DashboardPlaylistRunner.tsx",
+        "src/App.tsx",
+      ];
+
+      for (const relPath of filesToCheck) {
+        const content = fs.readFileSync(path.resolve(relPath), "utf-8");
+        assert.equal(
+          emojiRegex.test(content),
+          false,
+          `File ${relPath} contains visual emojis, which is strictly prohibited`
+        );
+      }
+    });
+
+    it("verifies PlaylistRunnerView and DashboardPlaylistRunner source integration", () => {
+      const runnerCode = fs.readFileSync(path.resolve("src/components/playlist/PlaylistRunnerView.tsx"), "utf-8");
+      const dashCode = fs.readFileSync(path.resolve("src/components/playlist/DashboardPlaylistRunner.tsx"), "utf-8");
+      const appCode = fs.readFileSync(path.resolve("src/App.tsx"), "utf-8");
+
+      // Verify PlaylistRunnerView computes playlist sens stats and accepts onApplySens
+      assert.ok(runnerCode.includes("computePlaylistSensStats"));
+      assert.ok(runnerCode.includes("onApplySens"));
+      assert.ok(runnerCode.includes("playlist.recommendedSens"));
+      assert.ok(runnerCode.includes("runner.scenarioSens"));
+      assert.ok(runnerCode.includes("runner.playlistSens"));
+
+      // Verify DashboardPlaylistRunner displays recommended sens
+      assert.ok(dashCode.includes("getRecommendedSens"));
+
+      // Verify App.tsx defines handleApplySens and passes to PlaylistRunnerView
+      assert.ok(appCode.includes("handleApplySens"));
+      assert.ok(appCode.includes("onApplySens={handleApplySens}"));
+    });
+  });
 });
+

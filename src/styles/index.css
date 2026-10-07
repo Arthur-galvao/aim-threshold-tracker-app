@@ -1,3 +1,6 @@
+@import "@fontsource-variable/geist";
+@import "@fontsource-variable/geist-mono";
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -5,26 +8,29 @@
 @layer base {
   :root {
     color-scheme: light;
-    --base: #fafafa;
+    --base: #f8fafc;
     --surface: #ffffff;
-    --surface-subtle: #f4f4f5;
-    --surface-hover: #ebebeb;
-    --edge: #e4e4e7;
-    --edge-strong: #d4d4d8;
-    --text-main: #09090b;
-    --text-secondary: #52525b;
-    --text-faint: #a1a1aa;
+    --surface-subtle: #f1f5f9;
+    --surface-hover: #e2e8f0;
+    --edge: rgba(15, 23, 42, 0.08);
+    --edge-strong: rgba(15, 23, 42, 0.16);
+    --text-main: #090d16;
+    --text-secondary: #475569;
+    --text-faint: #94a3b8;
     
-    --primary: #09090b;
+    --primary: #090d16;
     --primary-foreground: #ffffff;
     
-    --accent: #2563eb;
-    --accent-soft: rgba(37, 99, 235, 0.08);
-    --accent-edge: rgba(37, 99, 235, 0.2);
+    --accent: #0284c7;
+    --accent-soft: rgba(2, 132, 199, 0.08);
+    --accent-edge: rgba(2, 132, 199, 0.2);
 
-    --amber: #d97706;
-    --amber-soft: rgba(217, 119, 6, 0.08);
-    --amber-edge: rgba(217, 119, 6, 0.2);
+    --score: #0284c7;
+    --score-soft: rgba(2, 132, 199, 0.08);
+
+    --amber: #b45309;
+    --amber-soft: rgba(180, 83, 9, 0.08);
+    --amber-edge: rgba(180, 83, 9, 0.2);
 
     --emerald: #059669;
     --emerald-soft: rgba(5, 150, 105, 0.08);
@@ -34,81 +40,94 @@
     --red-soft: rgba(225, 29, 72, 0.08);
     --red-edge: rgba(225, 29, 72, 0.2);
 
-    --scrim: rgba(0, 0, 0, 0.4);
+    --ring: rgba(2, 132, 199, 0.35);
+    --grid-dot: rgba(15, 23, 42, 0.06);
+    --scrim: rgba(15, 23, 42, 0.45);
   }
 
   .dark {
     color-scheme: dark;
-    --base: #090a0f;
-    --surface: #12131a;
-    --surface-subtle: #0a0b10;
+    --base: #0a0c10;
+    --surface: #11141c;
+    --surface-subtle: #161a24;
     --surface-hover: rgba(255, 255, 255, 0.04);
-    --edge: rgba(255, 255, 255, 0.07);
-    --edge-strong: rgba(255, 255, 255, 0.14);
-    --text-main: #f8fafc;
+    --edge: rgba(255, 255, 255, 0.08);
+    --edge-strong: rgba(255, 255, 255, 0.16);
+    --text-main: #f1f5f9;
     --text-secondary: #94a3b8;
     --text-faint: #64748b;
 
-    --primary: #f8fafc;
-    --primary-foreground: #090a0f;
+    --primary: #f1f5f9;
+    --primary-foreground: #0a0c10;
 
-    --accent: #3b82f6;
-    --accent-soft: rgba(59, 130, 246, 0.1);
-    --accent-edge: rgba(59, 130, 246, 0.2);
+    --accent: #38bdf8;
+    --accent-soft: rgba(56, 189, 248, 0.1);
+    --accent-edge: rgba(56, 189, 248, 0.25);
+
+    --score: #38bdf8;
+    --score-soft: rgba(56, 189, 248, 0.1);
 
     --amber: #f59e0b;
     --amber-soft: rgba(245, 158, 11, 0.1);
-    --amber-edge: rgba(245, 158, 11, 0.2);
+    --amber-edge: rgba(245, 158, 11, 0.25);
 
     --emerald: #10b981;
     --emerald-soft: rgba(16, 185, 129, 0.1);
-    --emerald-edge: rgba(16, 185, 129, 0.2);
+    --emerald-edge: rgba(16, 185, 129, 0.25);
 
     --red: #f43f5e;
     --red-soft: rgba(244, 63, 94, 0.1);
-    --red-edge: rgba(244, 63, 94, 0.2);
+    --red-edge: rgba(244, 63, 94, 0.25);
 
-    --scrim: rgba(0, 0, 0, 0.7);
+    --ring: rgba(56, 189, 248, 0.4);
+    --grid-dot: rgba(255, 255, 255, 0.05);
+    --scrim: rgba(0, 0, 0, 0.75);
   }
 }
 
 body {
   background-color: var(--base);
   color: var(--text-main);
-  letter-spacing: -0.012em;
+  letter-spacing: -0.011em;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overflow-x: hidden;
 }
 
-/* Subtle dot background */
+/* Texture dot background */
 .dot-bg {
   position: fixed;
   inset: 0;
   pointer-events: none;
   z-index: 0;
-  background-image: radial-gradient(rgba(255, 255, 255, 0.06) 1px, transparent 1px);
+  background-image: radial-gradient(var(--grid-dot) 1px, transparent 1px);
   background-size: 20px 20px;
-  mask-image: radial-gradient(ellipse at 50% 30%, black 50%, transparent 90%);
-  -webkit-mask-image: radial-gradient(ellipse at 50% 30%, black 50%, transparent 90%);
+  mask-image: radial-gradient(ellipse at 50% 25%, black 60%, transparent 95%);
+  -webkit-mask-image: radial-gradient(ellipse at 50% 25%, black 60%, transparent 95%);
+}
+
+/* Global focus indicator */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 @layer components {
-  /* Minimalist Matte Cards */
+  /* Minimalist Precision Panel */
   .panel {
     background-color: var(--surface);
     border: 1px solid var(--edge);
-    border-radius: 16px;
+    border-radius: 14px;
     position: relative;
     z-index: 1;
   }
 
   .dark .panel {
-    box-shadow: 0 4px 20px -4px rgba(0, 0, 0, 0.4);
+    box-shadow: 0 4px 20px -4px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.04);
   }
 
   :not(.dark) .panel {
-    box-shadow: 0 2px 10px -2px rgba(0, 0, 0, 0.05);
+    box-shadow: 0 2px 10px -2px rgba(15, 23, 42, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.8);
   }
 
   /* Recessed Inputs */
@@ -117,19 +136,19 @@ body {
     width: 100%;
     background-color: var(--surface-subtle);
     border: 1px solid var(--edge);
-    border-radius: 12px;
-    padding: 0.625rem 0.875rem;
+    border-radius: 10px;
+    padding: 0.55rem 0.8rem;
     font-size: 0.875rem;
     color: var(--text-main);
-    transition: all 0.15s ease;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
     font-family: inherit;
   }
 
   .minimal-input:focus,
   .input:focus {
     outline: none;
-    border-color: var(--edge-strong);
-    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.08);
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--ring);
   }
 
   .minimal-input::placeholder,
@@ -137,7 +156,7 @@ body {
     color: var(--text-faint);
   }
 
-  /* Clean number inputs without bulky browser spinners */
+  /* Clean number inputs */
   input[type="number"]::-webkit-outer-spin-button,
   input[type="number"]::-webkit-inner-spin-button {
     -webkit-appearance: none;
@@ -161,15 +180,15 @@ body {
     padding-right: 2.25rem;
   }
 
-  /* Clean Minimalist Primary Button */
+  /* Clean Primary Button */
   .minimal-btn {
-    background-color: var(--text-main);
-    color: var(--base);
+    background-color: var(--primary);
+    color: var(--primary-foreground);
     font-weight: 600;
-    border-radius: 9999px;
+    border-radius: 9px;
     border: 1px solid transparent;
-    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.25);
-    transition: all 0.15s ease;
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.2);
+    transition: opacity 0.15s ease, transform 0.15s ease;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -184,13 +203,13 @@ body {
     transform: translateY(0) scale(0.985);
   }
 
-  /* Clean Minimalist Secondary Button */
+  /* Clean Secondary Button */
   .minimal-btn-secondary {
     background-color: var(--surface-subtle);
     color: var(--text-secondary);
     border: 1px solid var(--edge);
-    border-radius: 9999px;
-    transition: all 0.15s ease;
+    border-radius: 9px;
+    transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.15s ease;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -207,13 +226,13 @@ body {
     transform: translateY(0) scale(0.985);
   }
 
-  /* Clean Minimalist Guide Button */
+  /* Clean Guide Button */
   .guide-btn {
     background-color: var(--surface-subtle);
     border: 1px solid var(--edge);
     color: var(--text-main);
-    border-radius: 9999px;
-    transition: all 0.15s ease;
+    border-radius: 8px;
+    transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -226,16 +245,17 @@ body {
     transform: translateY(-1px);
   }
 
-
   .guide-btn:active {
     transform: translateY(0) scale(0.985);
   }
 
   .modal-scrim {
     background-color: var(--scrim);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
   }
 
-  /* Minimal Scrollbar */
+  /* Custom Scrollbar */
   .custom-scrollbar::-webkit-scrollbar {
     width: 5px;
     height: 5px;
@@ -245,7 +265,7 @@ body {
   }
   .custom-scrollbar::-webkit-scrollbar-thumb {
     background: var(--edge-strong);
-    border-radius: 6px;
+    border-radius: 4px;
   }
   .custom-scrollbar::-webkit-scrollbar-thumb:hover {
     background: var(--text-faint);
@@ -253,13 +273,8 @@ body {
 }
 
 select option {
-  background-color: #0b0f19;
-  color: #f8fafc;
-}
-
-:not(.dark) select option {
-  background-color: #ffffff;
-  color: #0f172a;
+  background-color: var(--surface);
+  color: var(--text-main);
 }
 
 .chrome {
@@ -267,3 +282,14 @@ select option {
   border-bottom: 1px solid var(--edge);
 }
 
+/* Guardrail: Prefers-reduced-motion non-negotiable */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

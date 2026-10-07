@@ -1,3 +1,6 @@
+import type { Playlist, Task } from "./types.ts";
+import { getRecommendedSens } from "./viscose.ts";
+
 export interface BucketStat {
   sens: number;
   label: string;
@@ -564,4 +567,209 @@ export function predictOptimalSensitivity(
   }
 
   return localPred;
+}
+
+export interface PlaylistCategorySlice {
+  category: string;
+  subcategory: string;
+  scenariosCount: number;
+  totalRuns: number;
+  displaySens: { value: number; source: "predicted" | "viscose" };
+  confidence: "high" | "medium" | "low" | "insufficient";
+}
+
+export interface PlaylistSensStats {
+  playlistId: string;
+  playlistName: string;
+  scenariosCount: number;
+  totalRuns: number;
+  displaySens: { value: number; source: "predicted" | "viscose" };
+  overallConfidence: "high" | "medium" | "low" | "insufficient";
+  categorySlices: PlaylistCategorySlice[];
+  normalizedRuns: RunDataPoint[];
+}
+
+export function computePlaylistSensStats(
+  playlist: Playlist,
+  tasks: Task[],
+  profile: PredictorProfile = "equilibrado"
+): PlaylistSensStats {
+  const taskMap = new Map<string, Task>();
+  for (const t of tasks) {
+    taskMap.set(t.id, t);
+  }
+
+  const matchedTasks: Task[] = [];
+  const seenTaskIds = new Set<string>();
+
+  for (const item of playlist.items || []) {
+    const task = taskMap.get(item.taskId);
+    if (task && !seenTaskIds.has(task.id)) {
+      seenTaskIds.add(task.id);
+      matchedTasks.push(task);
+    }
+  }
+
+  interface SliceBucket {
+    category: string;
+    subcategory: string;
+    scenariosCount: number;
+    runs: RunDataPoint[];
+  }
+
+  const sliceMap = new Map<string, SliceBucket>();
+  const normalizedRuns: RunDataPoint[] = [];
+
+  for (const task of matchedTasks) {
+    const cat = task.category || "Click Timing";
+    const subcat = task.subcategory || "Precision";
+    const key = `${cat}__${subcat}`;
+
+    let bucket = sliceMap.get(key);
+    if (!bucket) {
+      bucket = {
+        category: cat,
+        subcategory: subcat,
+        scenariosCount: 0,
+        runs: [],
+      };
+      sliceMap.set(key, bucket);
+    }
+    bucket.scenariosCount += 1;
+
+    let taskPb = 0;
+    for (const sess of task.sessions || []) {
+      const cmSens = valorantToCm360(sess.sens);
+      if (cmSens >= 5 && sess.pb > 0 && sess.pb > taskPb) {
+        taskPb = sess.pb;
+      }
+    }
+
+    for (const sess of task.sessions || []) {
+      const cmSens = valorantToCm360(sess.sens);
+      if (cmSens >= 5 && sess.pb > 0) {
+        const normScore = taskPb > 0 ? (sess.pb / taskPb) * 100 : 100;
+        const runPoint: RunDataPoint = {
+          sens: Number(cmSens.toFixed(1)),
+          score: normScore,
+          rawScore: sess.pb,
+          normScore: normScore,
+          scenario: task.name,
+          date: sess.date,
+          threshold: sess.threshold,
+        };
+
+        bucket.runs.push(runPoint);
+        normalizedRuns.push(runPoint);
+      }
+    }
+  }
+
+  const categorySlices: PlaylistCategorySlice[] = [];
+
+  for (const bucket of sliceMap.values()) {
+    const sliceRuns = bucket.runs;
+    const totalRuns = sliceRuns.length;
+
+    let displaySens: { value: number; source: "predicted" | "viscose" };
+    let confidence: "high" | "medium" | "low" | "insufficient" = "insufficient";
+
+    if (totalRuns >= 8) {
+      const slicePred = predictOptimalSensitivity([], profile, { groupRuns: sliceRuns });
+      if (slicePred && slicePred.confidence !== "insufficient") {
+        displaySens = { value: slicePred.predictedSens, source: "predicted" };
+        confidence = slicePred.confidence;
+      } else {
+        const fallback = getRecommendedSens(bucket.category, bucket.subcategory) ?? 45;
+        displaySens = { value: fallback, source: "viscose" };
+        confidence = slicePred?.confidence ?? "insufficient";
+      }
+    } else {
+      const fallback = getRecommendedSens(bucket.category, bucket.subcategory) ?? 45;
+      displaySens = { value: fallback, source: "viscose" };
+      if (totalRuns >= 5) {
+        confidence = "low";
+      } else {
+        confidence = "insufficient";
+      }
+    }
+
+    categorySlices.push({
+      category: bucket.category,
+      subcategory: bucket.subcategory,
+      scenariosCount: bucket.scenariosCount,
+      totalRuns,
+      displaySens,
+      confidence,
+    });
+  }
+
+  categorySlices.sort((a, b) => {
+    if (b.totalRuns !== a.totalRuns) return b.totalRuns - a.totalRuns;
+    if (b.scenariosCount !== a.scenariosCount) return b.scenariosCount - a.scenariosCount;
+    const catCmp = a.category.localeCompare(b.category);
+    if (catCmp !== 0) return catCmp;
+    return a.subcategory.localeCompare(b.subcategory);
+  });
+
+  let overallDisplaySens: { value: number; source: "predicted" | "viscose" } | null = null;
+  let overallConfidence: "high" | "medium" | "low" | "insufficient" = "insufficient";
+
+  const totalRuns = normalizedRuns.length;
+  if (totalRuns >= 8) {
+    const distinctSens = new Set(
+      normalizedRuns.map((r) => Number(valorantToCm360(r.sens).toFixed(1)))
+    );
+
+    if (distinctSens.size >= 4) {
+      const overallPred = predictOptimalSensitivity([], profile, { groupRuns: normalizedRuns });
+      if (overallPred && overallPred.confidence !== "insufficient") {
+        overallDisplaySens = { value: overallPred.predictedSens, source: "predicted" };
+        overallConfidence = overallPred.confidence;
+      }
+    }
+  }
+
+  if (!overallDisplaySens) {
+    let fallbackValue = 45;
+
+    if (categorySlices.length > 0) {
+      const totalRunsSum = categorySlices.reduce((sum, s) => sum + s.totalRuns, 0);
+      if (totalRunsSum > 0) {
+        const weightedSum = categorySlices.reduce(
+          (sum, s) => sum + s.displaySens.value * s.totalRuns,
+          0
+        );
+        fallbackValue = Number((weightedSum / totalRunsSum).toFixed(1));
+      } else {
+        const totalScenariosSum = categorySlices.reduce(
+          (sum, s) => sum + s.scenariosCount,
+          0
+        );
+        if (totalScenariosSum > 0) {
+          const weightedSum = categorySlices.reduce(
+            (sum, s) => sum + s.displaySens.value * s.scenariosCount,
+            0
+          );
+          fallbackValue = Number((weightedSum / totalScenariosSum).toFixed(1));
+        } else {
+          fallbackValue = categorySlices[0].displaySens.value;
+        }
+      }
+    }
+
+    overallDisplaySens = { value: fallbackValue, source: "viscose" };
+    overallConfidence = "insufficient";
+  }
+
+  return {
+    playlistId: playlist.id,
+    playlistName: playlist.name,
+    scenariosCount: matchedTasks.length,
+    totalRuns,
+    displaySens: overallDisplaySens,
+    overallConfidence,
+    categorySlices,
+    normalizedRuns,
+  };
 }

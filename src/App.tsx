@@ -123,6 +123,19 @@ function Dashboard() {
     []
   );
 
+  const handleApplySens = useCallback(
+    async (sensCm: number) => {
+      const rounded = Number(sensCm.toFixed(1));
+      await saveRandomizerSettings({
+        ...randomizerSettings,
+        rangeMode: "cm360",
+        baseSensCm: rounded,
+      });
+      showToast(t("playlist.appliedSuccess", { sens: rounded }), "success");
+    },
+    [randomizerSettings, saveRandomizerSettings, showToast, t]
+  );
+
   return (
     <div className="relative min-h-screen bg-base text-text-main flex flex-col selection:bg-blue-500/25 selection:text-blue-200">
       <div className="dot-bg" aria-hidden="true" />
@@ -187,7 +200,11 @@ function Dashboard() {
             </div>
           </>
         ) : activeTab === "randomizer" ? (
-          <SensRandomizerView activeTask={activeTask} allTasks={appData.tasks} />
+          <SensRandomizerView
+            activeTask={activeTask}
+            allTasks={appData.tasks}
+            playlists={appData.playlists ?? []}
+          />
         ) : (
           <PlaylistRunnerView
             runner={playlistRunner}
@@ -200,6 +217,7 @@ function Dashboard() {
             onSyncKovaak={async () => {
               await syncKovaakPlaylists(true);
             }}
+            onApplySens={handleApplySens}
           />
         )}
       </main>

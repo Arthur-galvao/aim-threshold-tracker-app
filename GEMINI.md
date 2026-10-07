@@ -26,19 +26,37 @@ O assistente atua prioritariamente como **Planner / Lead Engineer**:
    - Aplica-se expressamente a comandos de remocao de arquivos e diretorios (`rm`, `Remove-Item`, `del`, `rmdir`), descarte ou sobrescrita de historico Git (`git reset --hard`, `git clean`, `git restore .`), exclusao de branches, remocao em massa de dados, drop/truncate em bancos e encerramento de processos.
    - Apresente sempre com clareza o comando a ser executado, os alvos impactados e as potenciais consequencias, aguardando a autorizacao formal do usuario antes da execucao.
 
-## Uso Obrigatorio da Skill Superpowers para Tarefas
+## Workflow Obrigatorio: Planner, Inquisicao, Paralelismo e Auditoria
 
-Sempre que o usuario solicitar a execucao de uma tarefa, criacao de projeto/funcionalidade, refatoracao, alteracao de arquivos ou resolucao de bugs:
-1. **Invocacao Obrigatoria Previa:** O assistente DEVE obrigatoriamente acionar a skill `using-superpowers` e a respectiva skill especializada do ciclo Superpowers antes de executar acoes, explorar arquivos ou gerar codigo.
-2. **Anuncio Formal:** Declarar explicitamente o acionamento no formato: `Using [skill] to [purpose]`.
-3. **Fluxo Rigoroso de Engenharia:**
-   - **Brainstorming (`brainstorming`):** Obrigatorio antes de formular planos ou escrever codigo, refinando intencao e requisitos.
-   - **Planejamento (`writing-plans`):** Estruturar o plano em passos pequenos, incrementais e verificaveis, mantendo checklist de tarefas.
-   - **Execucao (`executing-plans` / `subagent-driven-development`):** Implementar o plano passo a passo com rastreamento ativo.
-   - **Desenvolvimento Orientado a Testes (`test-driven-development`):** Seguir o ciclo Red-Green-Refactor sempre que houver testes ou comportamento testavel.
-   - **Depuracao Sistematica (`systematic-debugging`):** Diante de erros ou bugs, executar as 4 fases de investigacao da causa raiz antes de qualquer tentativa de correcao.
-   - **Verificacao de Conclusao (`verification-before-completion`):** Realizar verificacao rigorosa contra os requisitos antes de considerar a tarefa finalizada.
-4. **Proibicao de Racionalizacoes:** E proibido ignorar a skill sob justificativas como "e uma mudanca rapida", "vou olhar o codigo primeiro" ou "e apenas uma pergunta simples". Havendo acao a ser feita, acione a skill correspondente.
+Todo o fluxo de desenvolvimento no workspace DEVE seguir impreterivelmente as 5 etapas abaixo:
+
+1. **Fase 1: Entrada do Usuario e Inquisicao Profunda (Planner / Lead)**
+   - O assistente atua como **Planner / Lead Engineer**.
+   - Antes de iniciar qualquer acao: realiza consulta obrigatoria a `conversas/Índice.md` e as notas historicas correspondentes.
+   - Refinamento de intencao ativo via `brainstorming`, `/grill-me` (entrevista investigativa para resolucao de ambiguidades, premissas e design) e consulta a documentacoes tecnicas (`docs-lookup` / `context7`).
+   - Elaboracao do plano de implementacao granular (`writing-plans`), definindo fases, tarefas atomicas, dependencias e suites de teste.
+   - **GATE 1:** O plano e submetido ao usuario para aprovacao formal antes de tocar em qualquer codigo.
+
+2. **Fase 2: Avaliacao de Complexidade e Delegacao Obrigatoria**
+   - O assistente avalia a complexidade e o impacto de contexto antes da execucao:
+     - **Execucao Direta pelo Planner (Excecao Estrita):** O proprio planner so executa alteracoes de codigo diretamente em situacoes de simplicidade e baixa complexidade (ajustes pontuais, pequenas correcoes cirurgicas ou alteracoes simples em 1 arquivo) onde **nao haja risco de estourar ou poluir a janela de contexto**.
+     - **Tarefa Isolada ou com Especialidade Definida:** Despacha **um unico subagente especialista** (exemplo: `tdd-guide`, `code-explorer`, `build-error-resolver`).
+     - **Tarefas Independentes ou Complexas:** Despacha **subagentes trabalhando em PARALELO** (`dispatching-parallel-agents` via `invoke_subagent` com multiplos subagentes simultaneos).
+
+3. **Fase 3: Execucao Especializada e TDD**
+   - Implementacao rigorosa pelo ciclo Red-Green-Refactor (`test-driven-development` / `tdd`) com meta de cobertura minima de 80%.
+   - Erros de compilacao, lint ou tipagem sao tratados diretamente por subagentes resolvedores (`build-error-resolver`, `react-build-resolver`, `rust-build-resolver`, etc.).
+
+4. **Fase 4: Auditoria Rigorosa de Codigo e Seguranca**
+   - Antes de qualquer conclusao, os diffs devem passar pela revisao formal de subagentes auditores:
+     - `code-reviewer` geral ou especialista da linguagem (`typescript-reviewer`, `rust-reviewer`, `react-reviewer`, etc.).
+     - `security-reviewer` obrigatorio sempre que houver autenticacao, APIs, sanitizacao de dados ou credenciais.
+   - Validacao empírica de execucao dos testes via `verification-before-completion`.
+
+5. **Fase 5: Commit, Entrega e Memoria Duradoura**
+   - **GATE 2:** Apresentacao do relatorio final ao usuario e solicitacao formal para commits e acoes remotas no Git.
+   - Commits semanticos convencionais (`feat:`, `fix:`, etc.) rigorosamente livres de emojis.
+   - Registro automatico da sessao no vault do Obsidian em `conversas/YYYY-MM-DD - <Titulo>.md` e no `conversas/Índice.md` via `obsidian-conversation-logger`.
 
 ## Memoria Ativa do Vault e Consulta Pre-Planejamento
 

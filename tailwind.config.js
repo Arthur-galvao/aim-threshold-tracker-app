@@ -21,6 +21,10 @@ export default {
           soft: "var(--accent-soft)",
           edge: "var(--accent-edge)",
         },
+        score: {
+          DEFAULT: "var(--score)",
+          soft: "var(--score-soft)",
+        },
         amber: {
           DEFAULT: "var(--amber)",
           soft: "var(--amber-soft)",
@@ -39,6 +43,7 @@ export default {
       },
       fontFamily: {
         sans: [
+          '"Geist Variable"',
           '"Segoe UI Variable Text"',
           '"Segoe UI"',
           "-apple-system",
@@ -48,6 +53,7 @@ export default {
           "sans-serif",
         ],
         mono: [
+          '"Geist Mono Variable"',
           '"Cascadia Code"',
           '"Cascadia Mono"',
           '"Segoe UI Mono"',
@@ -57,11 +63,23 @@ export default {
         ],
       },
       boxShadow: {
-        glass: "0 8px 32px 0 rgba(0, 0, 0, 0.37), inset 0 1px 0 0 rgba(255, 255, 255, 0.08)",
-        "glass-sm": "0 4px 16px 0 rgba(0, 0, 0, 0.25), inset 0 1px 0 0 rgba(255, 255, 255, 0.06)",
-        "glass-hover": "0 12px 40px 0 rgba(0, 0, 0, 0.45), inset 0 1px 0 0 rgba(255, 255, 255, 0.15)",
-        "glow-cyan": "0 0 25px -5px rgba(56, 189, 248, 0.35)",
-        "glow-amber": "0 0 25px -5px rgba(251, 191, 36, 0.35)",
+        panel: "0 2px 10px -2px rgba(15, 23, 42, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.8)",
+        "panel-dark": "0 4px 20px -4px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.04)",
+        overlay: "0 20px 50px -12px rgba(0, 0, 0, 0.5)",
+      },
+      keyframes: {
+        fadeIn: {
+          "0%": { opacity: "0", transform: "translateY(4px)" },
+          "100%": { opacity: "1", transform: "translateY(0)" },
+        },
+        popIn: {
+          "0%": { opacity: "0", transform: "scale(0.97)" },
+          "100%": { opacity: "1", transform: "scale(1)" },
+        },
+      },
+      animation: {
+        "fade-in": "fadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1)",
+        "pop-in": "popIn 0.2s cubic-bezier(0.16, 1, 0.3, 1)",
       },
     },
   },
