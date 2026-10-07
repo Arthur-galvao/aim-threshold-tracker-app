@@ -182,7 +182,7 @@ export function SettingsModal({
             </span>
           </div>
 
-          <div className="bg-surface-subtle border border-edge rounded-xl px-3.5 py-2.5 text-xs font-mono text-text-secondary break-all">
+          <div className="bg-surface-subtle border border-edge rounded-md px-3.5 py-2.5 text-[10px] font-mono tracking-widest uppercase font-mono text-text-secondary break-all">
             {settingsPath ?? t("settings.none")}
           </div>
 
@@ -204,7 +204,7 @@ export function SettingsModal({
               value={manualPath}
               onChange={(e) => setManualPath(e.target.value)}
               placeholder="C:\Steam\steamapps\common\FPSAimTrainer\FPSAimTrainer\stats"
-              className="flex-1 minimal-input font-mono text-xs"
+              className="flex-1 minimal-input font-mono text-[10px] font-mono tracking-widest uppercase"
             />
             <Button
               type="submit"
@@ -289,7 +289,7 @@ export function SettingsModal({
             </span>
           </div>
 
-          <div className="bg-surface-subtle border border-edge rounded-xl px-3.5 py-2 text-xs font-mono text-text-secondary break-all">
+          <div className="bg-surface-subtle border border-edge rounded-md px-3.5 py-2 text-[10px] font-mono tracking-widest uppercase font-mono text-text-secondary break-all">
             {rawaccelPath ?? t("settings.rawaccelNone")}
           </div>
 
@@ -299,7 +299,7 @@ export function SettingsModal({
               value={manualRawaccel}
               onChange={(e) => setManualRawaccel(e.target.value)}
               placeholder={t("settings.rawaccelPh")}
-              className="flex-1 minimal-input font-mono text-xs"
+              className="flex-1 minimal-input font-mono text-[10px] font-mono tracking-widest uppercase"
             />
             <Button
               type="button"
@@ -350,7 +350,7 @@ export function SettingsModal({
         {/* Background & Automation Section */}
         <div className="space-y-3 pt-3 border-t border-edge">
           <div>
-            <h4 className="text-xs font-bold uppercase tracking-wider text-text-main">
+            <h4 className="text-[10px] font-mono tracking-widest uppercase font-bold uppercase tracking-wider text-text-main">
               {t("settings.automationSection")}
             </h4>
           </div>
@@ -359,10 +359,10 @@ export function SettingsModal({
             {/* Close to Tray Toggle */}
             <div
               onClick={() => void handleToggleCloseToTray(!closeToTray)}
-              className="flex items-center justify-between gap-3 p-3 rounded-xl border border-edge bg-surface-subtle/40 hover:bg-surface-subtle/80 transition-colors cursor-pointer select-none"
+              className="flex items-center justify-between gap-3 p-3 rounded-md border border-edge bg-surface-subtle/40 hover:bg-surface-subtle/80 transition-colors cursor-pointer select-none"
             >
               <div className="flex-1 min-w-0 pr-2">
-                <span className="block text-xs font-semibold text-text-main">
+                <span className="block text-[10px] font-mono tracking-widest uppercase font-semibold text-text-main">
                   {t("settings.closeToTray")}
                 </span>
                 <p className="text-[11px] text-text-muted leading-snug mt-0.5">
@@ -392,10 +392,10 @@ export function SettingsModal({
             {/* Auto Detect Playlist Toggle */}
             <div
               onClick={() => void handleToggleAutoDetectPlaylist(!autoDetectPlaylist)}
-              className="flex items-center justify-between gap-3 p-3 rounded-xl border border-edge bg-surface-subtle/40 hover:bg-surface-subtle/80 transition-colors cursor-pointer select-none"
+              className="flex items-center justify-between gap-3 p-3 rounded-md border border-edge bg-surface-subtle/40 hover:bg-surface-subtle/80 transition-colors cursor-pointer select-none"
             >
               <div className="flex-1 min-w-0 pr-2">
-                <span className="block text-xs font-semibold text-text-main">
+                <span className="block text-[10px] font-mono tracking-widest uppercase font-semibold text-text-main">
                   {t("settings.autoDetectPlaylist")}
                 </span>
                 <p className="text-[11px] text-text-muted leading-snug mt-0.5">
@@ -425,10 +425,10 @@ export function SettingsModal({
             {/* Notify Step Advance Toggle */}
             <div
               onClick={() => void handleToggleNotifyStepAdvance(!notifyStepAdvance)}
-              className="flex items-center justify-between gap-3 p-3 rounded-xl border border-edge bg-surface-subtle/40 hover:bg-surface-subtle/80 transition-colors cursor-pointer select-none"
+              className="flex items-center justify-between gap-3 p-3 rounded-md border border-edge bg-surface-subtle/40 hover:bg-surface-subtle/80 transition-colors cursor-pointer select-none"
             >
               <div className="flex-1 min-w-0 pr-2">
-                <span className="block text-xs font-semibold text-text-main">
+                <span className="block text-[10px] font-mono tracking-widest uppercase font-semibold text-text-main">
                   {t("settings.notifyStepAdvance")}
                 </span>
                 <p className="text-[11px] text-text-muted leading-snug mt-0.5">
@@ -460,7 +460,7 @@ export function SettingsModal({
         {/* Data Management Section */}
         <div className="space-y-3 pt-3 border-t border-edge">
           <div>
-            <h4 className="text-xs font-bold uppercase tracking-wider text-text-main">
+            <h4 className="text-[10px] font-mono tracking-widest uppercase font-bold uppercase tracking-wider text-text-main">
               {t("settings.dataTitle")}
             </h4>
             <p className="text-[11px] text-text-muted mt-0.5">
@@ -481,7 +481,7 @@ export function SettingsModal({
             )}
 
             {onImport && (
-              <label className="inline-flex items-center justify-center font-sans tracking-tight cursor-pointer select-none h-8 px-3 text-xs gap-2 rounded-lg font-medium bg-surface-subtle text-text-main border border-edge hover:bg-surface-hover hover:border-edge-strong active:scale-[0.985] transition-all duration-150">
+              <label className="inline-flex items-center justify-center font-sans tracking-tight cursor-pointer select-none h-8 px-3 text-[10px] font-mono tracking-widest uppercase gap-2 rounded-lg font-medium bg-surface-subtle text-text-main border border-edge hover:bg-surface-hover hover:border-edge-strong active:scale-[0.985] transition-all duration-150">
                 <UploadSimple size={14} weight="bold" />
                 <span>{t("settings.importBtn")}</span>
                 <input

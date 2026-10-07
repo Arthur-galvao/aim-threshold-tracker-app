@@ -226,34 +226,34 @@ export function ScenarioList({
   };
 
   return (
-    <section className="panel p-5 rounded-2xl border border-edge transition-all duration-200 flex flex-col">
+    <section className="panel p-5 rounded-[10px] border border-edge transition-all duration-200 flex flex-col">
       {/* Segmented Tab Switcher Header */}
-      <div className="grid grid-cols-2 p-1 rounded-xl bg-surface-subtle border border-edge mb-3">
+      <div className="grid grid-cols-2 p-1 rounded-lg bg-surface-subtle border border-edge mb-3">
         <button
           type="button"
           onClick={() => setSidebarTab("scenarios")}
-          className={`flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+          className={`flex items-center justify-center gap-1.5 py-1.5 rounded-md text-[10px] uppercase tracking-widest font-mono font-semibold transition-all ${
             sidebarTab === "scenarios"
               ? "bg-surface text-text-main shadow-xs border border-edge"
               : "text-text-faint hover:text-text-secondary"
           }`}
         >
           <span>{t("scenarioList.title")}</span>
-          <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-surface-hover text-text-secondary font-mono">
+          <span className="text-[9px] px-1.5 rounded-sm bg-surface-hover text-text-secondary font-mono">
             {tasks.length}
           </span>
         </button>
         <button
           type="button"
           onClick={() => setSidebarTab("playlists")}
-          className={`flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+          className={`flex items-center justify-center gap-1.5 py-1.5 rounded-md text-[10px] uppercase tracking-widest font-mono font-semibold transition-all ${
             sidebarTab === "playlists"
               ? "bg-surface text-text-main shadow-xs border border-edge"
               : "text-text-faint hover:text-text-secondary"
           }`}
         >
           <span>{t("tab.playlist")}</span>
-          <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-surface-hover text-text-secondary font-mono">
+          <span className="text-[9px] px-1.5 rounded-sm bg-surface-hover text-text-secondary font-mono">
             {playlists.length}
           </span>
         </button>
@@ -271,7 +271,7 @@ export function ScenarioList({
                 ? t("playlist.searchPlaceholder")
                 : t("scenarioList.search")
             }
-            className="minimal-input text-xs py-2 pl-8 pr-8 w-full"
+            className="minimal-input text-[11px] font-mono py-2 pl-8 pr-8 w-full uppercase placeholder:text-text-faint"
           />
           <MagnifyingGlass
             size={14}
@@ -300,10 +300,10 @@ export function ScenarioList({
                     if (selectMode) setSelectedIds(new Set());
                   }}
                   title={selectMode ? t("scenarioList.cancelSelect") : t("scenarioList.selectMode")}
-                  className={`p-2 text-xs font-medium rounded-xl border transition-all shrink-0 ${
+                  className={`p-2 text-[10px] font-mono font-bold rounded-lg border transition-all shrink-0 ${
                     selectMode
-                      ? "bg-blue-500 text-white border-blue-500 shadow-sm"
-                      : "minimal-btn-secondary text-text-secondary hover:text-text-main border-edge"
+                      ? "bg-score text-white border-score shadow-sm"
+                      : "bg-surface text-text-secondary hover:text-text-main border-edge"
                   }`}
                 >
                   <Checks size={14} weight="bold" />
@@ -313,7 +313,7 @@ export function ScenarioList({
               <button
                 type="button"
                 onClick={onNewTask}
-                className="minimal-btn-secondary px-3 py-2 text-xs font-medium gap-1.5 text-text-secondary hover:text-text-main border-edge rounded-xl shrink-0 inline-flex items-center"
+                className="bg-surface px-3 py-2 text-[10px] font-mono font-bold uppercase tracking-widest gap-1.5 text-text-secondary hover:text-text-main border border-edge rounded-lg shrink-0 inline-flex items-center"
               >
                 <Plus size={13} weight="bold" />
                 <span>{t("task.new").replace("+ ", "")}</span>
@@ -327,7 +327,7 @@ export function ScenarioList({
                   onClick={handleSyncKovaak}
                   disabled={isSyncing}
                   title={t("playlist.syncKovaak")}
-                  className="minimal-btn-secondary p-2 rounded-xl text-text-secondary hover:text-text-main border-edge disabled:opacity-50 shrink-0 inline-flex items-center"
+                  className="bg-surface p-2 rounded-lg text-text-secondary hover:text-text-main border border-edge disabled:opacity-50 shrink-0 inline-flex items-center"
                 >
                   <ArrowsClockwise size={14} weight="bold" className={isSyncing ? "animate-spin" : ""} />
                 </button>
@@ -336,10 +336,10 @@ export function ScenarioList({
                 <button
                   type="button"
                   onClick={onOpenPlaylistManager}
-                  className="minimal-btn-secondary px-3 py-2 text-xs font-medium gap-1.5 text-text-secondary hover:text-text-main border-edge rounded-xl shrink-0 inline-flex items-center"
+                  className="bg-surface px-3 py-2 text-[10px] font-mono font-bold uppercase tracking-widest gap-1.5 text-text-secondary hover:text-text-main border border-edge rounded-lg shrink-0 inline-flex items-center"
                 >
                   <Plus size={13} weight="bold" />
-                  <span>Playlist</span>
+                  <span>PLAYLIST</span>
                 </button>
               )}
             </>
@@ -349,11 +349,11 @@ export function ScenarioList({
 
       {/* Selection Summary (when in select mode) */}
       {selectMode && (
-        <div className="flex items-center justify-between text-xs px-3 py-1.5 mb-2 bg-blue-500/10 border border-blue-500/20 rounded-xl text-blue-400">
+        <div className="flex items-center justify-between text-[10px] font-mono font-bold px-3 py-1.5 mb-2 bg-score/10 border border-score/20 rounded-lg text-score">
           <span>{t("scenarioList.selectedCount", { n: selectedIds.size })}</span>
           <button
             onClick={() => handleSelectAll(filteredTasks)}
-            className="hover:underline text-[11px] font-medium"
+            className="hover:underline text-[9px] uppercase tracking-widest"
           >
             {filteredTasks.every((t) => selectedIds.has(t.id))
               ? t("scenarioList.collapseAll")
@@ -363,14 +363,14 @@ export function ScenarioList({
       )}
 
       {/* Scrollable Scenario or Playlist List */}
-      <div className="max-h-[420px] overflow-y-auto space-y-3 pr-1 scrollbar-thin scrollbar-thumb-surface-hover scrollbar-track-transparent">
+      <div className="max-h-[420px] overflow-y-auto space-y-2 pr-1 scrollbar-thin scrollbar-thumb-surface-hover scrollbar-track-transparent">
         {sidebarTab === "scenarios" ? (
           tasks.length === 0 ? (
-            <div className="py-8 text-center text-xs text-text-faint border border-dashed border-edge rounded-xl">
+            <div className="py-8 text-center text-[10px] font-mono uppercase tracking-widest text-text-faint border border-dashed border-edge rounded-lg">
               {t("task.none")}
             </div>
           ) : groupedTasks.length === 0 ? (
-            <div className="py-8 text-center text-xs text-text-faint border border-dashed border-edge rounded-xl">
+            <div className="py-8 text-center text-[10px] font-mono uppercase tracking-widest text-text-faint border border-dashed border-edge rounded-lg">
               {t("scenarioList.noResults")}
             </div>
           ) : (
@@ -379,13 +379,13 @@ export function ScenarioList({
               return (
                 <div
                   key={category}
-                  className="border border-edge rounded-xl bg-surface-subtle/50 overflow-hidden"
+                  className="border border-edge rounded-lg bg-surface overflow-hidden"
                 >
                   {/* Category Header */}
                   <button
                     type="button"
                     onClick={() => toggleCategory(category)}
-                    className="w-full px-3 py-2 flex items-center justify-between text-left hover:bg-surface-hover/50 transition-colors"
+                    className="w-full px-3 py-2 flex items-center justify-between text-left hover:bg-surface-hover transition-colors"
                   >
                     <div className="flex items-center gap-2 min-w-0">
                       <CaretDown
@@ -395,11 +395,11 @@ export function ScenarioList({
                           isCollapsed ? "-rotate-90" : "rotate-0"
                         }`}
                       />
-                      <span className="text-xs font-semibold text-text-main truncate">
+                      <span className="text-[11px] font-mono font-bold uppercase tracking-widest text-text-main truncate">
                         {category}
                       </span>
                     </div>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-surface border border-edge text-text-faint font-medium">
+                    <span className="text-[9px] px-1.5 py-0.5 rounded-sm bg-surface-subtle border border-edge text-text-faint font-mono font-bold">
                       {totalCount}
                     </span>
                   </button>
@@ -409,7 +409,7 @@ export function ScenarioList({
                     <div className="px-2 pb-2 space-y-2">
                       {subcategories.map(({ subcategory, tasks: subTasks }) => (
                         <div key={subcategory} className="space-y-1">
-                          <div className="px-1 pt-1 text-[10px] font-bold uppercase tracking-wider text-text-faint">
+                          <div className="px-1 pt-1 text-[9px] font-mono font-bold uppercase tracking-widest text-text-faint">
                             {subcategory}
                           </div>
                           <div className="space-y-1">
@@ -431,12 +431,12 @@ export function ScenarioList({
                                       onTaskChange(task.id);
                                     }
                                   }}
-                                  className={`group p-2 rounded-lg border text-xs cursor-pointer transition-all flex items-center justify-between gap-2 ${
+                                  className={`group px-2 py-1.5 rounded-md border text-[11px] font-mono cursor-pointer transition-all flex items-center justify-between gap-2 ${
                                     isActive && !selectMode
-                                      ? "bg-blue-500/10 border-blue-500/40 text-text-main font-medium shadow-sm"
+                                      ? "bg-score/10 border-score/40 text-text-main font-medium shadow-sm"
                                       : isSelected && selectMode
-                                      ? "bg-blue-500/15 border-blue-500 text-text-main"
-                                      : "bg-surface border-edge hover:border-edge-strong text-text-secondary hover:text-text-main"
+                                      ? "bg-score/15 border-score/60 text-text-main"
+                                      : "bg-surface-subtle border-edge hover:border-edge-strong text-text-secondary hover:text-text-main"
                                   }`}
                                 >
                                   <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -446,21 +446,21 @@ export function ScenarioList({
                                         checked={isSelected}
                                         onChange={() => toggleSelectTask(task.id)}
                                         onClick={(e) => e.stopPropagation()}
-                                        className="rounded border-edge text-blue-500 focus:ring-0 cursor-pointer"
+                                        className="rounded-sm border-edge text-score focus:ring-0 cursor-pointer"
                                       />
                                     ) : (
                                       <div
-                                        className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                                          isActive ? "bg-blue-500" : "bg-transparent group-hover:bg-text-faint"
+                                        className={`w-1.5 h-1.5 rounded-sm shrink-0 ${
+                                          isActive ? "bg-score" : "bg-transparent group-hover:bg-text-faint"
                                         }`}
                                       />
                                     )}
-                                    <span className="truncate text-xs font-medium">
+                                    <span className="truncate font-semibold">
                                       {task.name}
                                     </span>
                                   </div>
 
-                                  <div className="flex items-center gap-1.5 shrink-0 text-[11px]">
+                                  <div className="flex items-center gap-1.5 shrink-0 text-[10px]">
                                     {displaySensInfo && (
                                       <span
                                         title={
@@ -468,23 +468,20 @@ export function ScenarioList({
                                             ? t("categorySens.sourcePredicted")
                                             : t("categorySens.sourceViscose")
                                         }
-                                        className={`px-1.5 py-0.5 rounded border text-[10px] font-mono ${
+                                        className={`px-1 rounded-sm border ${
                                           displaySensInfo.source === "predicted"
-                                            ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400 font-semibold"
-                                            : "bg-surface-subtle border-edge text-text-faint"
+                                            ? "bg-emerald/10 border-emerald/20 text-emerald font-semibold"
+                                            : "bg-surface border-edge text-text-faint"
                                         }`}
                                       >
                                         {displaySensInfo.value}cm
                                       </span>
                                     )}
                                     {pb !== null && (
-                                      <span className="px-1.5 py-0.5 rounded bg-surface-subtle border border-edge text-text-secondary text-[10px] tabular-nums font-medium">
-                                        {pb} pts
+                                      <span className="px-1 rounded-sm bg-surface border border-edge text-text-secondary font-bold">
+                                        {pb}
                                       </span>
                                     )}
-                                    <span className="text-[10px] text-text-faint opacity-80 tabular-nums">
-                                      {task.sessions.length} {t("scenarioList.sessions")}
-                                    </span>
                                   </div>
                                 </div>
                               );
@@ -501,32 +498,22 @@ export function ScenarioList({
         ) : (
           /* Playlists Tab View */
           playlists.length === 0 ? (
-            <div className="py-8 text-center text-xs text-text-faint border border-dashed border-edge rounded-xl space-y-3 px-3">
+            <div className="py-8 text-center text-[10px] font-mono uppercase tracking-widest text-text-faint border border-dashed border-edge rounded-lg space-y-3 px-3">
               <p>{t("playlist.emptySidebar")}</p>
               {onSyncKovaak && (
                 <button
                   type="button"
                   onClick={handleSyncKovaak}
                   disabled={isSyncing}
-                  className="minimal-btn-secondary px-3 py-1.5 text-xs text-text-secondary hover:text-text-main border-edge rounded-lg mx-auto inline-flex items-center gap-1.5 disabled:opacity-50"
+                  className="bg-surface px-3 py-1.5 text-text-secondary hover:text-text-main border border-edge rounded-md mx-auto inline-flex items-center gap-1.5 disabled:opacity-50"
                 >
-                  <svg
-                    className={`w-3.5 h-3.5 ${isSyncing ? "animate-spin" : ""}`}
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67" />
-                  </svg>
-                  <span>{isSyncing ? t("playlist.syncing") : t("playlist.syncKovaak")}</span>
+                  <ArrowsClockwise className={isSyncing ? "animate-spin" : ""} size={14} />
+                  <span>{isSyncing ? "SYNCING..." : "SYNC KOVAAK"}</span>
                 </button>
               )}
             </div>
           ) : filteredPlaylists.length === 0 ? (
-            <div className="py-8 text-center text-xs text-text-faint border border-dashed border-edge rounded-xl">
+            <div className="py-8 text-center text-[10px] font-mono uppercase tracking-widest text-text-faint border border-dashed border-edge rounded-lg">
               {t("scenarioList.noResults")}
             </div>
           ) : (
@@ -537,16 +524,16 @@ export function ScenarioList({
               return (
                 <div
                   key={pl.id}
-                  className={`border rounded-xl transition-all overflow-hidden ${
+                  className={`border rounded-lg transition-all overflow-hidden ${
                     isRunningThis
-                      ? "border-blue-500/40 bg-blue-500/5 shadow-xs"
-                      : "border-edge bg-surface-subtle/50"
+                      ? "border-score/40 bg-score/5 shadow-xs"
+                      : "border-edge bg-surface"
                   }`}
                 >
                   {/* Playlist Header Row */}
                   <div
                     onClick={() => toggleExpandPlaylist(pl.id)}
-                    className="w-full px-3 py-2 flex items-center justify-between gap-2 hover:bg-surface-hover/50 transition-colors cursor-pointer select-none"
+                    className="w-full px-3 py-2 flex items-center justify-between gap-2 hover:bg-surface-hover transition-colors cursor-pointer select-none"
                   >
                     <div className="flex items-center gap-2 min-w-0 flex-1">
                       <CaretDown
@@ -556,10 +543,10 @@ export function ScenarioList({
                           isExpanded ? "rotate-0" : "-rotate-90"
                         }`}
                       />
-                      <span className="text-xs font-semibold text-text-main truncate" title={pl.name}>
+                      <span className="text-[11px] font-mono font-bold uppercase tracking-widest text-text-main truncate" title={pl.name}>
                         {pl.name}
                       </span>
-                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-surface border border-edge text-text-muted font-medium shrink-0">
+                      <span className="text-[9px] px-1.5 rounded-sm bg-surface-subtle border border-edge text-text-muted font-mono font-bold shrink-0">
                         {pl.items.length}
                       </span>
                     </div>
@@ -577,32 +564,32 @@ export function ScenarioList({
                           }
                         }}
                         title={isRunningThis ? t("runner.exit") : t("playlist.start")}
-                        className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all flex items-center gap-1 shrink-0 ${
+                        className={`px-2 py-0.5 rounded-sm text-[9px] uppercase tracking-widest font-mono font-bold transition-all flex items-center gap-1 shrink-0 ${
                           isRunningThis
-                            ? "bg-red-500/10 hover:bg-red-500/20 text-red border border-red-500/30"
-                            : "bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/30"
+                            ? "bg-red/10 hover:bg-red/20 text-red border border-red/30"
+                            : "bg-score/10 hover:bg-score/20 text-score border border-score/30"
                         }`}
                       >
                         {isRunningThis ? (
                           <>
-                            <Stop size={12} weight="bold" />
-                            <span>Parar</span>
+                            <Stop size={10} weight="bold" />
+                            <span>STOP</span>
                           </>
                         ) : (
                           <>
-                            <Play size={12} weight="bold" />
-                            <span>Play</span>
+                            <Play size={10} weight="bold" />
+                            <span>PLAY</span>
                           </>
                         )}
                       </button>
                     )}
                   </div>
 
-                  {/* Expanded Scenario Items - No divider line, matches Category layout */}
+                  {/* Expanded Scenario Items */}
                   {isExpanded && (
                     <div className="px-2 pb-2 space-y-1">
                       {pl.items.length === 0 ? (
-                        <div className="text-[11px] text-text-faint text-center py-2">
+                        <div className="text-[10px] font-mono uppercase tracking-widest text-text-faint text-center py-2">
                           {t("playlist.emptyList")}
                         </div>
                       ) : (
@@ -630,26 +617,26 @@ export function ScenarioList({
                                   onTaskChange(task.id);
                                 }
                               }}
-                              className={`group p-2 rounded-lg border text-xs cursor-pointer transition-all flex items-center justify-between gap-2 ${
+                              className={`group px-2 py-1.5 rounded-md border text-[10px] font-mono cursor-pointer transition-all flex items-center justify-between gap-2 ${
                                 isActive || isStepActive
-                                  ? "bg-blue-500/10 border-blue-500/40 text-text-main font-medium shadow-sm"
-                                  : "bg-surface border-edge hover:border-edge-strong text-text-secondary hover:text-text-main"
+                                  ? "bg-score/10 border-score/40 text-text-main font-bold shadow-sm"
+                                  : "bg-surface-subtle border-edge hover:border-edge-strong text-text-secondary hover:text-text-main font-semibold"
                               }`}
                             >
                               <div className="flex items-center gap-2 min-w-0 flex-1">
                                 <div
-                                  className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                                  className={`w-1.5 h-1.5 rounded-sm shrink-0 ${
                                     isActive || isStepActive
-                                      ? "bg-blue-500"
+                                      ? "bg-score"
                                       : "bg-transparent group-hover:bg-text-faint"
                                   }`}
                                 />
-                                <span className="truncate text-xs font-medium">
+                                <span className="truncate">
                                   {task ? task.name : `Cenário (${item.taskId.slice(0, 6)})`}
                                 </span>
                               </div>
 
-                              <div className="flex items-center gap-1.5 shrink-0 text-[11px]">
+                              <div className="flex items-center gap-1.5 shrink-0">
                                 {displaySensInfo && (
                                   <span
                                     title={
@@ -657,21 +644,21 @@ export function ScenarioList({
                                         ? t("categorySens.sourcePredicted")
                                         : t("categorySens.sourceViscose")
                                     }
-                                    className={`px-1.5 py-0.5 rounded border text-[10px] font-mono ${
+                                    className={`px-1 rounded-sm border ${
                                       displaySensInfo.source === "predicted"
-                                        ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400 font-semibold"
-                                        : "bg-surface-subtle border-edge text-text-faint"
+                                        ? "bg-emerald/10 border-emerald/20 text-emerald"
+                                        : "bg-surface border-edge text-text-faint"
                                     }`}
                                   >
                                     {displaySensInfo.value}cm
                                   </span>
                                 )}
                                 {pb !== null && (
-                                  <span className="px-1.5 py-0.5 rounded bg-surface-subtle border border-edge text-text-secondary text-[10px] tabular-nums font-medium">
-                                    {pb} pts
+                                  <span className="px-1 rounded-sm bg-surface border border-edge text-text-secondary">
+                                    {pb}
                                   </span>
                                 )}
-                                <span className="text-[10px] text-text-faint opacity-80 tabular-nums">
+                                <span className="text-text-faint opacity-80">
                                   {targetLabel}
                                 </span>
                               </div>
@@ -693,9 +680,9 @@ export function ScenarioList({
         <div className="mt-3 pt-3 border-t border-edge">
           <button
             onClick={handleAddSelected}
-            className="w-full minimal-btn bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-3 rounded-xl text-xs flex items-center justify-center gap-2 shadow-sm transition-all"
+            className="w-full bg-score hover:bg-score/90 text-surface font-mono font-bold uppercase tracking-widest py-2 px-3 rounded-lg text-[10px] flex items-center justify-center gap-2 shadow-sm transition-all"
           >
-            <Plus size={14} weight="bold" />
+            <Plus size={12} weight="bold" />
             <span>
               {t("scenarioList.addSelectedToPlaylist", {
                 n: selectedIds.size,
@@ -706,20 +693,20 @@ export function ScenarioList({
       )}
 
       {/* Footer */}
-      <div className="mt-3.5 pt-2.5 border-t border-edge flex justify-between items-center text-xs text-text-faint">
-        <span className="text-[11px] opacity-80">
+      <div className="mt-3.5 pt-2.5 border-t border-edge flex justify-between items-center text-[10px] font-mono font-bold uppercase tracking-widest text-text-faint">
+        <span className="opacity-80">
           {sidebarTab === "scenarios"
             ? t("task.count", { n: tasks.length })
-            : `${filteredPlaylists.length} playlist(s)`}
+            : `${filteredPlaylists.length} PLAYLISTS`}
         </span>
 
         {sidebarTab === "scenarios" && activeTask && !selectMode && (
           <button
             onClick={onDeleteTask}
-            className="text-text-muted hover:text-red transition-colors text-xs flex items-center gap-1.5 px-2 py-1 rounded-full hover:bg-red-500/10"
+            className="text-text-muted hover:text-red transition-colors flex items-center gap-1 px-2 py-1 rounded-md hover:bg-red/10"
           >
-            <Trash size={13} weight="regular" />
-            <span>{t("task.delete")}</span>
+            <Trash size={12} weight="bold" />
+            <span>DELETE</span>
           </button>
         )}
 
@@ -727,9 +714,9 @@ export function ScenarioList({
           <button
             type="button"
             onClick={onOpenPlaylistManager}
-            className="text-text-faint hover:text-text-main transition-colors text-xs flex items-center gap-1.5 px-2 py-1 rounded-full hover:bg-surface-hover"
+            className="text-text-faint hover:text-text-main transition-colors flex items-center gap-1 px-2 py-1 rounded-md hover:bg-surface-hover"
           >
-            <span>{t("playlist.manage")}</span>
+            <span>MANAGE</span>
           </button>
         )}
       </div>

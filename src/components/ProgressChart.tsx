@@ -13,7 +13,6 @@ import { Line } from "react-chartjs-2";
 import { ChartLineUp, TrendUp } from "@phosphor-icons/react";
 import type { Task } from "@/lib/types";
 import { useTheme } from "@/lib/theme";
-import { useI18n } from "@/lib/i18n";
 import { Segmented } from "@/components/ui/Segmented";
 
 ChartJS.register(
@@ -64,10 +63,32 @@ const COLORS = {
   },
 };
 
+const crosshairPlugin = {
+  id: "crosshair",
+  afterDraw: (chart: any) => {
+    if (chart.tooltip?._active && chart.tooltip._active.length) {
+      const activePoint = chart.tooltip._active[0];
+      const ctx = chart.ctx;
+      const x = activePoint.element.x;
+      const topY = chart.scales.y.top;
+      const bottomY = chart.scales.y.bottom;
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(x, topY);
+      ctx.lineTo(x, bottomY);
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = "var(--text-faint)";
+      ctx.setLineDash([4, 4]);
+      ctx.stroke();
+      ctx.restore();
+    }
+  },
+};
+
 export function ProgressChart({ activeTask }: ProgressChartProps) {
   const [avgType, setAvgType] = useState<"moving" | "overall">("moving");
   const { resolvedTheme } = useTheme();
-  const { t } = useI18n();
   const c = COLORS[resolvedTheme];
 
   const chartData = useMemo(() => {
@@ -114,76 +135,72 @@ export function ProgressChart({ activeTask }: ProgressChartProps) {
       labels,
       datasets: [
         {
-          label: t("chart.score"),
+          label: "SCORE",
           data: pbData,
           borderColor: c.line,
           backgroundColor: c.lineFill,
-          borderWidth: 2.5,
-          tension: 0.25,
+          borderWidth: 2,
+          tension: 0, // Sharp lines for instrument feel
           pointBackgroundColor: c.line,
           pointBorderColor: resolvedTheme === "dark" ? "#12131a" : "#ffffff",
-          pointBorderWidth: 1.5,
-          pointRadius: 3.5,
-          pointHoverRadius: 6,
+          pointBorderWidth: 1,
+          pointRadius: 2,
+          pointHoverRadius: 5,
           pointHoverBackgroundColor: c.line,
           pointHoverBorderColor: "#ffffff",
           pointHoverBorderWidth: 2,
           fill: true,
         },
         {
-          label: t("chart.threshold"),
+          label: "THRESHOLD",
           data: threshData,
-          borderColor: c.threshold,
-          backgroundColor: c.thresholdFill,
-          borderWidth: 2,
-          tension: 0.25,
-          pointBackgroundColor: c.threshold,
+          borderColor: "var(--emerald)",
+          backgroundColor: "transparent",
+          borderWidth: 1.5,
+          tension: 0,
+          pointBackgroundColor: "var(--emerald)",
           pointBorderColor: resolvedTheme === "dark" ? "#12131a" : "#ffffff",
-          pointBorderWidth: 1.5,
-          pointRadius: 3.5,
-          pointHoverRadius: 5.5,
+          pointBorderWidth: 1,
+          pointRadius: 2,
+          pointHoverRadius: 4,
           fill: false,
         },
         {
-          label:
-            avgType === "moving" ? t("chart.avgMoving") : t("chart.avgOverall"),
+          label: avgType === "moving" ? "AVG (MOVING)" : "AVG (OVERALL)",
           data: avgData,
           borderColor: c.avg,
-          borderWidth: 1.5,
-          borderDash: [5, 5],
-          tension: 0.25,
+          borderWidth: 1,
+          borderDash: [3, 3],
+          tension: 0,
           pointRadius: 0,
           fill: false,
         },
       ],
     };
-  }, [activeTask, avgType, c, resolvedTheme, t]);
+  }, [activeTask, avgType, c, resolvedTheme]);
 
   if (!chartData) {
     return (
-      <div className="panel p-8 rounded-2xl h-72 flex flex-col items-center justify-center text-text-muted text-xs border border-edge transition-all">
-        <span className="p-3 rounded-2xl bg-surface-subtle border border-edge text-text-muted mb-3 opacity-60">
+      <div className="panel p-8 rounded-[10px] h-72 flex flex-col items-center justify-center text-text-faint text-xs border border-edge">
+        <span className="p-3 rounded-md bg-surface-subtle border border-edge mb-3 opacity-60">
           <ChartLineUp size={28} weight="duotone" />
         </span>
-        <span className="font-medium">{t("chart.empty")}</span>
+        <span className="font-mono uppercase tracking-widest text-[10px]">NO DATA</span>
       </div>
     );
   }
 
   return (
-    <section className="panel p-5 rounded-2xl border border-edge transition-all duration-200">
+    <section className="panel p-5 rounded-[10px] border border-edge">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
         <div className="flex items-center gap-2.5">
-          <div className="w-7 h-7 rounded-lg bg-surface-subtle text-text-secondary border border-edge flex items-center justify-center">
+          <div className="w-7 h-7 rounded-md bg-surface-subtle text-text-secondary border border-edge flex items-center justify-center">
             <TrendUp size={15} weight="bold" />
           </div>
           <div>
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-text-main">
-              {t("chart.title")}
+            <h2 className="text-[10px] font-mono font-semibold uppercase tracking-widest text-text-main">
+              SCORE-OVER-TIME
             </h2>
-            <p className="text-[11px] text-text-muted">
-              {t("chart.subtitle")}
-            </p>
           </div>
         </div>
 
@@ -192,8 +209,8 @@ export function ProgressChart({ activeTask }: ProgressChartProps) {
             value={avgType}
             onChange={(val) => setAvgType(val as "moving" | "overall")}
             options={[
-              { value: "moving", label: t("chart.moving") },
-              { value: "overall", label: t("chart.overall") },
+              { value: "moving", label: "MOVING AVG" },
+              { value: "overall", label: "OVERALL AVG" },
             ]}
           />
         </div>
@@ -202,11 +219,12 @@ export function ProgressChart({ activeTask }: ProgressChartProps) {
       <div className="relative h-72 sm:h-80 w-full">
         <Line
           data={chartData}
+          plugins={[crosshairPlugin]}
           options={{
             responsive: true,
             maintainAspectRatio: false,
             animation: {
-              duration: 250,
+              duration: 0, // Instant rendering for instrument feel
             },
             layout: {
               padding: {
@@ -227,14 +245,14 @@ export function ProgressChart({ activeTask }: ProgressChartProps) {
                 labels: {
                   color: c.legend,
                   font: {
-                    family: '"Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-                    size: 11,
+                    family: '"Geist Mono", monospace',
+                    size: 10,
                     weight: 600,
                   },
                   boxWidth: 8,
                   boxHeight: 8,
                   usePointStyle: true,
-                  pointStyle: "circle",
+                  pointStyle: "rect",
                   padding: 14,
                 },
               },
@@ -244,28 +262,28 @@ export function ProgressChart({ activeTask }: ProgressChartProps) {
                 bodyColor: c.tooltipBody,
                 borderColor: c.tooltipBorder,
                 borderWidth: 1,
-                cornerRadius: 10,
-                padding: 12,
-                boxPadding: 6,
+                cornerRadius: 4, // Sharper corners
+                padding: 10,
+                boxPadding: 4,
                 titleFont: {
-                  family: '"Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+                  family: '"Geist Mono", monospace',
                   weight: 600,
-                  size: 12,
+                  size: 10,
                 },
                 bodyFont: {
                   family: '"Geist Mono", monospace',
-                  size: 11,
+                  size: 10,
                 },
               },
             },
             scales: {
               x: {
-                grid: { color: c.grid },
+                grid: { color: c.grid, drawTicks: false },
                 ticks: {
                   color: c.tick,
                   font: {
                     family: '"Geist Mono", monospace',
-                    size: 11,
+                    size: 10,
                   },
                   maxTicksLimit: 7,
                   autoSkip: true,
@@ -273,12 +291,12 @@ export function ProgressChart({ activeTask }: ProgressChartProps) {
                 },
               },
               y: {
-                grid: { color: c.grid },
+                grid: { color: c.grid, drawTicks: false },
                 ticks: {
                   color: c.tick,
                   font: {
                     family: '"Geist Mono", monospace',
-                    size: 11,
+                    size: 10,
                   },
                   maxTicksLimit: 6,
                 },
