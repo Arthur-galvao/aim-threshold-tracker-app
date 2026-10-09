@@ -8,6 +8,28 @@
 @layer base {
   :root {
     color-scheme: light;
+    --background: 210 40% 98%;
+    --foreground: 222 47% 11%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+    --primary: 222 47% 11%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 222 47% 11%;
+    --muted: 210 40% 96%;
+    --muted-foreground: 215 16% 47%;
+    --accent: 210 40% 96%;
+    --accent-foreground: 222 47% 11%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 222 47% 11%;
+    --radius: 0.5rem;
+
+    /* Semantic Aliases */
     --base: #f8fafc;
     --surface: #ffffff;
     --surface-subtle: #f1f5f9;
@@ -17,71 +39,66 @@
     --text-main: #090d16;
     --text-secondary: #475569;
     --text-faint: #94a3b8;
-    
-    --primary: #090d16;
-    --primary-foreground: #ffffff;
-    
-    --accent: #0284c7;
-    --accent-soft: rgba(2, 132, 199, 0.08);
-    --accent-edge: rgba(2, 132, 199, 0.2);
-
     --score: #0284c7;
     --score-soft: rgba(2, 132, 199, 0.08);
-
     --amber: #b45309;
     --amber-soft: rgba(180, 83, 9, 0.08);
     --amber-edge: rgba(180, 83, 9, 0.2);
-
     --emerald: #059669;
     --emerald-soft: rgba(5, 150, 105, 0.08);
     --emerald-edge: rgba(5, 150, 105, 0.2);
-
     --red: #e11d48;
     --red-soft: rgba(225, 29, 72, 0.08);
     --red-edge: rgba(225, 29, 72, 0.2);
-
-    --ring: rgba(2, 132, 199, 0.35);
-    --grid-dot: rgba(15, 23, 42, 0.06);
+    --grid-dot: rgba(15, 23, 42, 0.05);
     --scrim: rgba(15, 23, 42, 0.45);
   }
 
   .dark {
     color-scheme: dark;
-    --base: #0a0c10;
-    --surface: #11141c;
-    --surface-subtle: #161a24;
+    --background: 224 71% 4%;
+    --foreground: 213 31% 91%;
+    --card: 224 71% 4%;
+    --card-foreground: 213 31% 91%;
+    --popover: 224 71% 4%;
+    --popover-foreground: 213 31% 91%;
+    --primary: 210 40% 98%;
+    --primary-foreground: 222 47% 11%;
+    --secondary: 222 47% 11%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 223 47% 11%;
+    --muted-foreground: 215 20% 65%;
+    --accent: 216 34% 17%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 63% 31%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 216 34% 17%;
+    --input: 216 34% 17%;
+    --ring: 216 34% 17%;
+
+    /* Precision Dark Surface Stepping */
+    --base: #090a0f;
+    --surface: #0f1118;
+    --surface-subtle: #141722;
     --surface-hover: rgba(255, 255, 255, 0.04);
-    --edge: rgba(255, 255, 255, 0.08);
-    --edge-strong: rgba(255, 255, 255, 0.16);
-    --text-main: #f1f5f9;
+    --edge: rgba(255, 255, 255, 0.03);
+    --edge-strong: rgba(255, 255, 255, 0.08);
+    --text-main: #f8fafc;
     --text-secondary: #94a3b8;
     --text-faint: #64748b;
-
-    --primary: #f1f5f9;
-    --primary-foreground: #0a0c10;
-
-    --accent: #38bdf8;
-    --accent-soft: rgba(56, 189, 248, 0.1);
-    --accent-edge: rgba(56, 189, 248, 0.25);
-
     --score: #38bdf8;
-    --score-soft: rgba(56, 189, 248, 0.1);
-
+    --score-soft: rgba(56, 189, 248, 0.08);
     --amber: #f59e0b;
     --amber-soft: rgba(245, 158, 11, 0.1);
-    --amber-edge: rgba(245, 158, 11, 0.25);
-
-    --emerald: #a3e635;
-    --emerald-soft: rgba(163, 230, 53, 0.1);
-    --emerald-edge: rgba(163, 230, 53, 0.25);
-
+    --amber-edge: rgba(245, 158, 11, 0.2);
+    --emerald: #10b981;
+    --emerald-soft: rgba(16, 185, 129, 0.1);
+    --emerald-edge: rgba(16, 185, 129, 0.2);
     --red: #f43f5e;
     --red-soft: rgba(244, 63, 94, 0.1);
-    --red-edge: rgba(244, 63, 94, 0.25);
-
-    --ring: rgba(56, 189, 248, 0.4);
-    --grid-dot: rgba(255, 255, 255, 0.05);
-    --scrim: rgba(0, 0, 0, 0.75);
+    --red-edge: rgba(244, 63, 94, 0.2);
+    --grid-dot: rgba(255, 255, 255, 0.03);
+    --scrim: rgba(0, 0, 0, 0.85);
   }
 }
 
@@ -94,40 +111,27 @@ body {
   overflow-x: hidden;
 }
 
-/* Texture dot background */
+/* Subtle background texture */
 .dot-bg {
   position: fixed;
   inset: 0;
   pointer-events: none;
   z-index: 0;
   background-image: radial-gradient(var(--grid-dot) 1px, transparent 1px);
-  background-size: 20px 20px;
-  mask-image: radial-gradient(ellipse at 50% 25%, black 60%, transparent 95%);
-  -webkit-mask-image: radial-gradient(ellipse at 50% 25%, black 60%, transparent 95%);
-}
-
-/* Global focus indicator */
-:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
+  background-size: 24px 24px;
+  mask-image: radial-gradient(ellipse at 50% 20%, black 50%, transparent 90%);
+  -webkit-mask-image: radial-gradient(ellipse at 50% 20%, black 50%, transparent 90%);
 }
 
 @layer components {
-  /* Minimalist Precision Panel */
+  /* shadcn Card Precision Panel */
   .panel {
     background-color: var(--surface);
     border: 1px solid var(--edge);
-    border-radius: 14px;
+    border-radius: 8px;
     position: relative;
     z-index: 1;
-  }
-
-  .dark .panel {
-    box-shadow: 0 4px 20px -4px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.04);
-  }
-
-  :not(.dark) .panel {
-    box-shadow: 0 2px 10px -2px rgba(15, 23, 42, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.03);
   }
 
   /* Recessed Inputs */
@@ -136,9 +140,9 @@ body {
     width: 100%;
     background-color: var(--surface-subtle);
     border: 1px solid var(--edge);
-    border-radius: 10px;
-    padding: 0.55rem 0.8rem;
-    font-size: 0.875rem;
+    border-radius: 6px;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.8125rem;
     color: var(--text-main);
     transition: border-color 0.15s ease, box-shadow 0.15s ease;
     font-family: inherit;
@@ -147,8 +151,8 @@ body {
   .minimal-input:focus,
   .input:focus {
     outline: none;
-    border-color: var(--accent);
-    box-shadow: 0 0 0 2px var(--ring);
+    border-color: rgba(56, 189, 248, 0.5);
+    box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.3);
   }
 
   .minimal-input::placeholder,
@@ -180,40 +184,43 @@ body {
     padding-right: 2.25rem;
   }
 
-  /* Clean Primary Button */
+  /* Buttons */
   .minimal-btn {
     background-color: var(--primary);
     color: var(--primary-foreground);
     font-weight: 600;
-    border-radius: 9px;
+    font-size: 0.75rem;
+    border-radius: 6px;
     border: 1px solid transparent;
-    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.2);
+    padding: 0.45rem 0.85rem;
     transition: opacity 0.15s ease, transform 0.15s ease;
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    cursor: pointer;
   }
 
   .minimal-btn:hover {
-    opacity: 0.92;
-    transform: translateY(-1px);
+    opacity: 0.9;
   }
 
   .minimal-btn:active {
-    transform: translateY(0) scale(0.985);
+    transform: scale(0.98);
   }
 
-  /* Clean Secondary Button */
   .minimal-btn-secondary {
     background-color: var(--surface-subtle);
     color: var(--text-secondary);
     border: 1px solid var(--edge);
-    border-radius: 9px;
-    transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.15s ease;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    padding: 0.45rem 0.85rem;
+    transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     font-weight: 500;
+    cursor: pointer;
   }
 
   .minimal-btn-secondary:hover {
@@ -222,59 +229,29 @@ body {
     color: var(--text-main);
   }
 
-  .minimal-btn-secondary:active {
-    transform: translateY(0) scale(0.985);
+  /* Invisible / Slim Custom Scrollbar (eliminates native gray Windows scrollbar) */
+  .custom-scrollbar::-webkit-scrollbar,
+  .no-scrollbar::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
   }
-
-  /* Clean Guide Button */
-  .guide-btn {
-    background-color: var(--surface-subtle);
-    border: 1px solid var(--edge);
-    color: var(--text-main);
-    border-radius: 8px;
-    transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: 600;
-  }
-
-  .guide-btn:hover {
-    background-color: var(--surface-hover);
-    border-color: var(--edge-strong);
-    transform: translateY(-1px);
-  }
-
-  .guide-btn:active {
-    transform: translateY(0) scale(0.985);
-  }
-
-  .modal-scrim {
-    background-color: var(--scrim);
-    backdrop-filter: blur(4px);
-    -webkit-backdrop-filter: blur(4px);
-  }
-
-  /* Custom Scrollbar */
-  .custom-scrollbar::-webkit-scrollbar {
-    width: 5px;
-    height: 5px;
-  }
-  .custom-scrollbar::-webkit-scrollbar-track {
+  .custom-scrollbar::-webkit-scrollbar-track,
+  .no-scrollbar::-webkit-scrollbar-track {
     background: transparent;
   }
   .custom-scrollbar::-webkit-scrollbar-thumb {
-    background: var(--edge-strong);
+    background: rgba(255, 255, 255, 0.1);
     border-radius: 4px;
   }
   .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-    background: var(--text-faint);
+    background: rgba(255, 255, 255, 0.2);
   }
-}
-
-select option {
-  background-color: var(--surface);
-  color: var(--text-main);
+  .no-scrollbar::-webkit-scrollbar-thumb {
+    background: transparent;
+  }
+  .no-scrollbar:hover::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+  }
 }
 
 .chrome {
@@ -282,7 +259,6 @@ select option {
   border-bottom: 1px solid var(--edge);
 }
 
-/* Guardrail: Prefers-reduced-motion non-negotiable */
 @media (prefers-reduced-motion: reduce) {
   *,
   ::before,

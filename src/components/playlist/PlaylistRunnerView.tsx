@@ -194,7 +194,7 @@ export function PlaylistRunnerView({
                     <div className="mt-4 flex items-center justify-between gap-2">
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <span className="text-[9px] font-mono font-bold uppercase tracking-widest text-text-secondary">
-                          REC. SENS:
+                          {t("playlist.recommendedSens")}:
                         </span>
                         <span className="font-mono font-bold text-[11px] text-text-main">
                           {formatSensitivity(stats.displaySens.value)}
@@ -416,7 +416,7 @@ export function PlaylistRunnerView({
                   <>
                     <span>/</span>
                     <div className="inline-flex items-center gap-1.5 pl-1.5 border-l border-edge">
-                      <span className="text-text-secondary">SCEN. SENS:</span>
+                      <span className="text-text-secondary">{t("runner.scenarioSens")}:</span>
                       <span className="px-1.5 rounded-sm bg-score/10 text-score border border-score/20 font-bold">
                         {recSens} cm
                       </span>
@@ -438,7 +438,7 @@ export function PlaylistRunnerView({
                   <>
                     <span>/</span>
                     <div className="inline-flex items-center gap-1.5 pl-1.5 border-l border-edge">
-                      <span className="text-text-secondary">PLAYLIST SENS:</span>
+                      <span className="text-text-secondary">{t("runner.playlistSens")}:</span>
                       <span className="px-1.5 rounded-sm bg-purple-500/10 text-purple-300 border border-purple-500/20 font-bold">
                         {formatSensitivity(activePlaylistStats.displaySens.value)}
                       </span>

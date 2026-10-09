@@ -317,13 +317,13 @@ pub fn migrate_existing_sensitivities(data: &mut AppData, stats_dir: Option<&str
     updated
 }
 
-fn has_source_file(tasks: &[Task], source_file: &str) -> bool {
+pub fn has_source_file(tasks: &[Task], source_file: &str) -> bool {
     tasks
         .iter()
         .any(|t| t.sessions.iter().any(|s| s.source_file.as_deref() == Some(source_file)))
 }
 
-fn add_session_to_data(state: &State<AppState>, run: &KovaakRun) {
+pub fn add_session_to_data(state: &State<AppState>, run: &KovaakRun) {
     let date = run.datetime.get(..10).unwrap_or("").to_string();
     let session = Session {
         id: format!("sess_{}", timestamp_id()),

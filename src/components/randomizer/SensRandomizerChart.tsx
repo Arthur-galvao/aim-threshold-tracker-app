@@ -196,28 +196,28 @@ export function SensRandomizerChart({
   }, [isLight, isNormalized, t]);
 
   return (
-    <div className="panel p-6 rounded-2xl space-y-4">
-      <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 border-b border-edge pb-4">
-        <div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <h3 className="text-sm font-bold uppercase tracking-wider text-text-main">
+    <div className="p-6 rounded-xl bg-[#12141e]/60 space-y-4">
+      <div className="flex flex-col xl:flex-row items-start xl:items-center justify-between gap-4 border-b border-edge pb-4">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 flex-wrap mb-1">
+            <h3 className="text-[13px] font-mono font-semibold tracking-wider text-text-main uppercase">
               {t("randomizer.chartTitle")}
             </h3>
-            {scopeTitle && (
-              <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-md bg-blue-500/10 text-blue-400 border border-blue-500/20">
+            {scopeTitle && currentFilter.mode === "current" && (
+              <span className="text-[10px] font-mono font-medium px-2 py-0.5 rounded bg-surface-subtle border border-edge text-text-secondary truncate max-w-[200px]">
                 {scopeTitle}
               </span>
             )}
           </div>
-          <p className="text-xs text-text-secondary mt-0.5">
+          <p className="text-[11px] text-text-secondary leading-relaxed">
             {isNormalized ? t("randomizer.normExplanation") : t("randomizer.chartSubtitle")}
           </p>
         </div>
 
         {/* Scope Selector Controls */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 self-stretch lg:self-auto">
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
           {/* Mode Tabs */}
-          <div className="flex items-center gap-1 p-1 bg-surface-subtle rounded-xl border border-edge overflow-x-auto">
+          <div className="flex items-center gap-1 p-1 bg-surface-subtle rounded-lg border border-edge">
             <button
               type="button"
               onClick={() => handleModeChange("current")}

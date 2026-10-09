@@ -3,18 +3,20 @@ import { AppProvider, useApp } from "@/hooks/useAppData";
 import { useKovaakWatcher } from "@/hooks/useKovaakWatcher";
 import { useSensRandomizer } from "@/hooks/useSensRandomizer";
 import { I18nProvider, useI18n } from "@/lib/i18n";
+
 import { Header } from "@/components/Header";
 import { ScenarioList } from "@/components/ScenarioList";
-import { SessionForm } from "@/components/SessionForm";
 import { MetricsCards } from "@/components/MetricsCards";
 import { ProgressChart } from "@/components/ProgressChart";
 import { HistoryTable, copyEscalateToClipboard } from "@/components/HistoryTable";
+import { SessionModal } from "@/components/SessionModal";
 import { SensRandomizerView } from "@/components/SensRandomizerView";
 import { PlaylistRunnerView } from "@/components/playlist/PlaylistRunnerView";
 import { PlaylistManagerModal } from "@/components/playlist/PlaylistManagerModal";
 import { DashboardPlaylistRunner } from "@/components/playlist/DashboardPlaylistRunner";
 import { NewTaskModal } from "@/components/NewTaskModal";
 import { SettingsModal } from "@/components/SettingsModal";
+import { AimLabSyncModal } from "@/components/aimlab/AimLabSyncModal";
 import { Toast } from "@/components/Toast";
 import type { AppSettings, Playlist } from "@/lib/types";
 import { getSettings, saveSettings } from "@/lib/tauri-bridge";
@@ -59,7 +61,9 @@ function Dashboard() {
 
   const [activeTab, setActiveTab] = useState<"dashboard" | "randomizer" | "playlist">("dashboard");
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [aimlabOpen, setAimlabOpen] = useState(false);
   const [newTaskOpen, setNewTaskOpen] = useState(false);
+  const [sessionModalOpen, setSessionModalOpen] = useState(false);
   const [playlistManagerOpen, setPlaylistManagerOpen] = useState(false);
   const [pendingPlaylistTaskIds, setPendingPlaylistTaskIds] = useState<string[]>([]);
 
@@ -137,99 +141,110 @@ function Dashboard() {
   );
 
   return (
-    <div className="relative min-h-screen bg-base text-text-main flex flex-col selection:bg-blue-500/25 selection:text-blue-200">
+    <div className="relative min-h-screen h-screen bg-[#090b10] text-text-main flex flex-row overflow-hidden selection:bg-blue-500/25 selection:text-blue-200">
       <div className="dot-bg" aria-hidden="true" />
 
-      <Header
-        activeTab={activeTab}
-        onTabChange={setActiveTab}
-        rawaccelAvailable={rawaccelAvailable}
-        onOpenSettings={() => setSettingsOpen(true)}
-        watcherStatus={watcherStatus}
+      {/* Pane 1: Scenario Navigation Sidebar */}
+      <ScenarioList
+        tasks={appData.tasks}
+        activeTaskId={appData.activeTaskId}
+        onTaskChange={setActiveTaskId}
+        onNewTask={() => setNewTaskOpen(true)}
+        onDeleteTask={deleteCurrentTask}
+        onAddToPlaylist={handleAddToPlaylist}
+        playlists={appData.playlists ?? []}
+        onStartPlaylist={handleStartPlaylist}
+        onStopPlaylist={playlistRunner.stop}
+        runningPlaylistId={playlistRunner.isRunning ? playlistRunner.activePlaylist?.id : null}
+        runningStepIndex={playlistRunner.currentStepIndex}
+        onJumpToStep={playlistRunner.jumpToStep}
+        onOpenPlaylistManager={() => {
+          setPendingPlaylistTaskIds([]);
+          setPlaylistManagerOpen(true);
+        }}
+        onSyncKovaak={async () => {
+          await syncKovaakPlaylists(true);
+        }}
       />
 
-      <main className="relative z-10 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 flex-1 flex flex-col gap-6">
-        {activeTab === "dashboard" ? (
-          <>
-            {/* Active Playlist Runner Banner in Dashboard */}
-            <DashboardPlaylistRunner runner={playlistRunner} />
+      {/* Pane 3: Main Workspace Stage */}
+      <div className="flex-1 min-w-0 flex flex-col h-screen overflow-y-auto custom-scrollbar z-10">
+        <Header
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+          rawaccelAvailable={rawaccelAvailable}
+          onOpenSettings={() => setSettingsOpen(true)}
+          onOpenAimlab={() => setAimlabOpen(true)}
+          watcherStatus={watcherStatus}
+          onNewSession={() => setSessionModalOpen(true)}
+        />
 
-            {/* Top Full-Width KPI Metrics Cards */}
-            <section aria-label="KPI Metrics">
-              <MetricsCards activeTask={activeTask} />
-            </section>
+        <main className="flex-1 p-4 sm:p-6 lg:p-7 space-y-5 max-w-[1550px] w-full mx-auto">
+          {activeTab === "dashboard" ? (
+            <>
+              {/* Active Playlist Runner Banner in Dashboard */}
+              <DashboardPlaylistRunner runner={playlistRunner} />
 
-            {/* 2-Column Dashboard Grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-              {/* Left Column: Scenario List & Manual Entry */}
-              <div className="lg:col-span-4 xl:col-span-4 space-y-6">
-                <ScenarioList
-                  tasks={appData.tasks}
-                  activeTaskId={appData.activeTaskId}
-                  onTaskChange={setActiveTaskId}
-                  onNewTask={() => setNewTaskOpen(true)}
-                  onDeleteTask={deleteCurrentTask}
-                  onAddToPlaylist={handleAddToPlaylist}
-                  playlists={appData.playlists ?? []}
-                  onStartPlaylist={handleStartPlaylist}
-                  onStopPlaylist={playlistRunner.stop}
-                  runningPlaylistId={playlistRunner.isRunning ? playlistRunner.activePlaylist?.id : null}
-                  runningStepIndex={playlistRunner.currentStepIndex}
-                  onJumpToStep={playlistRunner.jumpToStep}
-                  onOpenPlaylistManager={() => {
-                    setPendingPlaylistTaskIds([]);
-                    setPlaylistManagerOpen(true);
-                  }}
-                  onSyncKovaak={async () => {
-                    await syncKovaakPlaylists(true);
-                  }}
-                />
+              {/* Top Full-Width KPI Metrics Cards */}
+              <section aria-label="KPI Metrics">
+                <MetricsCards activeTask={activeTask} />
+              </section>
 
-                <SessionForm activeTask={activeTask} onSubmit={addManualSessions} />
-              </div>
-
-              {/* Right Column: Chart & History Table */}
-              <div className="lg:col-span-8 xl:col-span-8 space-y-6">
+              {/* Full-Width Telemetry Data Chart ("Data Chart" in mockup) */}
+              <section aria-label="Telemetry Chart">
                 <ProgressChart activeTask={activeTask} />
+              </section>
+
+              {/* Full-Width Scenario History Table ("Scenario Table" in mockup) */}
+              <section aria-label="Session History">
                 <HistoryTable
                   activeTask={activeTask}
                   onDeleteSession={deleteSession}
                   onCopyEscalate={handleCopyEscalate}
+                  onNewSession={() => setSessionModalOpen(true)}
                 />
-              </div>
-            </div>
-          </>
-        ) : activeTab === "randomizer" ? (
-          <SensRandomizerView
-            activeTask={activeTask}
-            allTasks={appData.tasks}
-            playlists={appData.playlists ?? []}
-          />
-        ) : (
-          <PlaylistRunnerView
-            runner={playlistRunner}
-            playlists={appData.playlists ?? []}
-            tasks={appData.tasks}
-            onOpenManager={() => {
-              setPendingPlaylistTaskIds([]);
-              setPlaylistManagerOpen(true);
-            }}
-            onSyncKovaak={async () => {
-              await syncKovaakPlaylists(true);
-            }}
-            onApplySens={handleApplySens}
-          />
-        )}
-      </main>
+              </section>
+            </>
+          ) : activeTab === "randomizer" ? (
+            <SensRandomizerView
+              activeTask={activeTask}
+              allTasks={appData.tasks}
+              playlists={appData.playlists ?? []}
+            />
+          ) : (
+            <PlaylistRunnerView
+              runner={playlistRunner}
+              playlists={appData.playlists ?? []}
+              tasks={appData.tasks}
+              onOpenManager={() => {
+                setPendingPlaylistTaskIds([]);
+                setPlaylistManagerOpen(true);
+              }}
+              onSyncKovaak={async () => {
+                await syncKovaakPlaylists(true);
+              }}
+              onApplySens={handleApplySens}
+            />
+          )}
+        </main>
 
-      <footer className="relative z-10 py-6 px-4 text-center text-xs text-text-faint">
-        <div className="max-w-7xl mx-auto border-t border-white/[0.04] pt-5 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <span className="opacity-80">{t("app.footer")}</span>
-          <span className="font-medium text-[11px] px-2.5 py-0.5 rounded-full bg-surface-subtle text-text-secondary border border-edge">
-            {t("app.footerFov")}
-          </span>
-        </div>
-      </footer>
+        <footer className="py-4 px-6 text-center text-xs text-text-faint border-t border-edge bg-[#07080c]/60">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-2 max-w-[1550px] mx-auto">
+            <span className="opacity-80">{t("app.footer")}</span>
+            <span className="font-medium text-[11px] px-2 py-0.5 rounded-full bg-surface-subtle text-text-secondary border border-edge">
+              {t("app.footerFov")}
+            </span>
+          </div>
+        </footer>
+      </div>
+
+      {/* Modals */}
+      <SessionModal
+        open={sessionModalOpen}
+        onClose={() => setSessionModalOpen(false)}
+        activeTask={activeTask}
+        onSubmit={addManualSessions}
+      />
 
       <NewTaskModal
         open={newTaskOpen}
@@ -258,6 +273,15 @@ function Dashboard() {
         onLoadDemo={loadDemoData}
         onClear={clearAllData}
         onUpdateAppSettings={handleUpdateAppSettings}
+      />
+
+      <AimLabSyncModal
+        open={aimlabOpen}
+        onClose={() => setAimlabOpen(false)}
+        onImportComplete={(stats) => {
+          // data refresh is handled by the event listener in useKovaakWatcher (onImportComplete Tauri event)
+          // we just need to optionally close or do anything else, but toast and refresh are automated!
+        }}
       />
 
       <PlaylistManagerModal

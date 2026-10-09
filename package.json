@@ -1,7 +1,7 @@
 {
   "name": "aim-threshold-tracker",
   "private": true,
-  "version": "1.4.0",
+  "version": "1.5.0",
   "description": "Desktop app to track KovaaK's aim thresholds with sensitivity randomization and sweet spot analysis",
   "type": "module",
   "scripts": {
@@ -19,9 +19,12 @@
     "@tauri-apps/plugin-dialog": "^2.2.0",
     "@tauri-apps/plugin-notification": "^2.2.0",
     "chart.js": "^4.4.8",
+    "clsx": "^2.1.1",
+    "motion": "^14.0.0",
     "react": "^19.0.0",
     "react-chartjs-2": "^5.3.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "tailwind-merge": "^3.7.0"
   },
   "devDependencies": {
     "@fontsource-variable/geist": "^5.3.0",

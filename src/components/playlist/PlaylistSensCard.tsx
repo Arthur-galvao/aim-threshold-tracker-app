@@ -135,17 +135,17 @@ export function PlaylistSensCard({
                       {stats.categorySlices.length === 0 ? (
                         <span className="text-text-faint text-[11px]">-</span>
                       ) : (
-                        <div className="flex flex-wrap gap-1.5">
-                          {stats.categorySlices.map((slice) => (
+                        <div className="text-[11px] text-text-secondary leading-relaxed">
+                          {stats.categorySlices.map((slice, idx) => (
                             <span
                               key={`${slice.category}__${slice.subcategory}`}
-                              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-surface-subtle border border-edge text-text-secondary"
-                              title={`${slice.category} - ${slice.subcategory}: ${slice.scenariosCount} cenarios, ${slice.totalRuns} runs (${formatSensitivity(slice.displaySens.value)})`}
+                              title={`${slice.category} - ${slice.subcategory}: ${slice.scenariosCount} cenarios, ${slice.totalRuns} runs`}
                             >
-                              <span className="text-text-main font-semibold">
+                              {idx > 0 && <span className="mx-1.5 text-text-faint opacity-50">•</span>}
+                              <span className="text-text-main font-medium">
                                 {slice.subcategory}
-                              </span>
-                              <span className="text-text-faint font-mono">
+                              </span>{" "}
+                              <span className="font-mono">
                                 {formatSensitivity(slice.displaySens.value)}
                               </span>
                             </span>

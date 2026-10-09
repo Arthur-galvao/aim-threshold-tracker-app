@@ -9,6 +9,7 @@ import {
 import { getRecommendedSens } from "@/lib/viscose";
 import { useI18n } from "@/lib/i18n";
 import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/card";
 
 interface SessionFormProps {
   activeTask: Task | null;
@@ -49,49 +50,51 @@ export function SessionForm({ activeTask, onSubmit }: SessionFormProps) {
   };
 
   return (
-    <section className="panel p-5 rounded-2xl border border-edge transition-all duration-200">
+    <Card className="p-4 sm:p-5 flex flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2.5">
-          <div className="w-7 h-7 rounded-lg bg-surface-subtle text-text-secondary border border-edge flex items-center justify-center">
-            <NotePencil size={15} weight="bold" />
+      <div className="flex items-center justify-between mb-3.5">
+        <div className="flex items-center gap-2">
+          <div className="w-6 h-6 rounded-md bg-surface-subtle text-text-secondary border border-edge flex items-center justify-center">
+            <NotePencil size={13} weight="bold" />
           </div>
-          <h2 className="text-xs font-semibold uppercase tracking-wider text-text-main">
+          <h2 className="text-xs font-bold uppercase tracking-wider text-text-main">
             {t("session.title")}
           </h2>
         </div>
-        <span className="text-[11px] text-text-muted font-mono font-medium px-2.5 py-0.5 rounded-full bg-surface-subtle border border-edge">
+        <span className="text-[10px] text-text-faint font-mono font-medium px-2 py-0.5 rounded-md bg-surface-subtle border border-edge">
           103 FOV
         </span>
       </div>
 
       {/* Goal Display Card */}
-      <div className="border border-edge rounded-xl p-3.5 bg-surface-subtle space-y-1">
+      <div className="border border-edge rounded-lg p-3 bg-surface-subtle/50 space-y-1">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5">
-            <Target size={13} weight="bold" className="text-amber-500 dark:text-amber-400" />
-            <span className="text-[11px] font-semibold text-text-secondary uppercase tracking-wider">
+            <Target size={13} weight="bold" className="text-amber" />
+            <span className="text-[10px] font-semibold text-text-secondary uppercase tracking-wider font-mono">
               {t("session.goal")}
             </span>
           </div>
-          <span className={`text-2xl font-bold font-mono tabular-nums ${
-            targetThreshold ? "text-amber" : "text-amber/40"
-          }`}>
+          <span
+            className={`text-xl font-bold font-mono tabular-nums ${
+              targetThreshold ? "text-amber" : "text-amber/40"
+            }`}
+          >
             {targetThreshold ?? (activeTask ? t("session.first") : "0")}
           </span>
         </div>
-        <p className="text-[11px] text-text-muted leading-relaxed">
+        <p className="text-[11px] text-text-secondary leading-relaxed">
           {targetThreshold ? t("session.goalText") : t("session.autoText")}
         </p>
       </div>
 
       {/* Form */}
-      <form onSubmit={handleSubmit} className="space-y-4 mt-4">
+      <form onSubmit={handleSubmit} className="space-y-3.5 mt-4">
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label
               htmlFor="inputDate"
-              className="block text-[11px] font-semibold uppercase tracking-wider text-text-muted mb-1.5"
+              className="block text-[11px] font-semibold uppercase tracking-wider text-text-secondary mb-1.5"
             >
               {t("session.date")}
             </label>
@@ -107,7 +110,7 @@ export function SessionForm({ activeTask, onSubmit }: SessionFormProps) {
           <div>
             <label
               htmlFor="inputSens"
-              className="block text-[11px] font-semibold uppercase tracking-wider text-text-muted mb-1.5"
+              className="block text-[11px] font-semibold uppercase tracking-wider text-text-secondary mb-1.5"
             >
               {t("session.sens")}
             </label>
@@ -127,7 +130,7 @@ export function SessionForm({ activeTask, onSubmit }: SessionFormProps) {
         <div>
           <label
             htmlFor="inputPB"
-            className="block text-[11px] font-semibold uppercase tracking-wider text-text-muted mb-1.5"
+            className="block text-[11px] font-semibold uppercase tracking-wider text-text-secondary mb-1.5"
           >
             {t("session.scores")}
           </label>
@@ -140,24 +143,26 @@ export function SessionForm({ activeTask, onSubmit }: SessionFormProps) {
             required
             className="minimal-input text-xs font-mono tabular-nums w-full"
           />
-          <p className="text-[10px] text-text-muted mt-1.5 font-medium">
+          <p className="text-[10px] text-text-faint mt-1.5 font-medium">
             {t("session.separator")}
           </p>
         </div>
 
         {/* Live Threshold Preview Card */}
-        <div className="bg-surface-subtle p-3.5 rounded-xl border border-edge flex items-center justify-between">
+        <div className="bg-surface-subtle/70 p-3 rounded-lg border border-edge flex items-center justify-between">
           <div className="min-w-0 flex-1 pr-2">
-            <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wider block">
+            <span className="text-[10px] font-semibold text-text-faint uppercase tracking-wider block font-mono">
               {t("session.newThreshold")}
             </span>
             <span className="text-[11px] text-text-secondary mt-0.5 block truncate">
               {t(preview.detailKey, preview.detailParams)}
             </span>
           </div>
-          <span className={`font-bold font-mono text-xl shrink-0 tabular-nums ${
-            preview.threshold !== null ? "text-amber" : "text-amber/40"
-          }`}>
+          <span
+            className={`font-bold font-mono text-xl shrink-0 tabular-nums ${
+              preview.threshold !== null ? "text-amber" : "text-amber/40"
+            }`}
+          >
             {preview.threshold ?? "0"}
           </span>
         </div>
@@ -172,6 +177,6 @@ export function SessionForm({ activeTask, onSubmit }: SessionFormProps) {
           {t("session.save")}
         </Button>
       </form>
-    </section>
+    </Card>
   );
 }

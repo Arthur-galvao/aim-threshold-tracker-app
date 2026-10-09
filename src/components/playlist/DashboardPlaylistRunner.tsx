@@ -1,7 +1,9 @@
 import { useMemo } from "react";
+import { Play, Check, CaretLeft, CaretRight, X, ArrowCounterClockwise } from "@phosphor-icons/react";
 import type { PlaylistRunnerState } from "@/hooks/usePlaylistRunner";
 import { useI18n } from "@/lib/i18n";
 import { getRecommendedSens } from "@/lib/viscose";
+import { Button } from "@/components/ui/Button";
 
 interface DashboardPlaylistRunnerProps {
   runner: PlaylistRunnerState;
@@ -47,20 +49,10 @@ export function DashboardPlaylistRunner({ runner }: DashboardPlaylistRunnerProps
 
   if (isFinished) {
     return (
-      <div className="panel p-4 rounded-2xl border-emerald-500/30 bg-emerald-500/5 flex flex-col sm:flex-row items-center justify-between gap-3 animate-fadeIn">
+      <div className="p-3.5 sm:p-4 rounded-xl border border-emerald-edge bg-emerald-soft/50 flex flex-col sm:flex-row items-center justify-between gap-3 animate-fadeIn">
         <div className="flex items-center gap-3 min-w-0">
-          <div className="w-8 h-8 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center shrink-0">
-            <svg
-              className="w-4 h-4"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <polyline points="20 6 9 17 4 12" />
-            </svg>
+          <div className="w-8 h-8 rounded-full bg-emerald-soft text-emerald border border-emerald-edge flex items-center justify-center shrink-0">
+            <Check size={16} weight="bold" />
           </div>
           <div className="min-w-0">
             <div className="text-xs font-bold text-text-main flex items-center gap-2">
@@ -72,20 +64,21 @@ export function DashboardPlaylistRunner({ runner }: DashboardPlaylistRunnerProps
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
-          <button
-            type="button"
+          <Button
+            size="sm"
+            variant="primary"
             onClick={runner.restart}
-            className="minimal-btn bg-blue-500 hover:bg-blue-600 text-white font-semibold py-1.5 px-3 rounded-lg text-xs transition-all shadow-sm"
+            icon={<ArrowCounterClockwise size={13} weight="bold" />}
           >
             {t("runner.restart")}
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
+            size="sm"
+            variant="secondary"
             onClick={runner.stop}
-            className="minimal-btn-secondary py-1.5 px-3 rounded-lg text-xs font-medium text-text-secondary hover:text-text-main border-edge"
           >
             {t("modal.cancel")}
-          </button>
+          </Button>
         </div>
       </div>
     );
@@ -95,14 +88,12 @@ export function DashboardPlaylistRunner({ runner }: DashboardPlaylistRunnerProps
   const isLastStep = currentStepIndex === activePlaylist.items.length - 1;
 
   return (
-    <div className="panel p-3.5 sm:p-4 rounded-2xl border-blue-500/30 bg-blue-500/5 shadow-sm space-y-2.5 animate-fadeIn">
+    <div className="p-3.5 sm:p-4 rounded-xl bg-[#12141e]/70 space-y-2.5 animate-fadeIn">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
         {/* Left: Playlist & Step Info */}
         <div className="flex items-center gap-2.5 min-w-0">
-          <div className="w-7 h-7 rounded-lg bg-blue-500/20 text-blue-400 border border-blue-500/30 flex items-center justify-center shrink-0">
-            <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
-              <polygon points="5 3 19 12 5 21 5 3" />
-            </svg>
+          <div className="w-7 h-7 rounded-md bg-score-soft text-score border border-score/30 flex items-center justify-center shrink-0">
+            <Play size={14} weight="bold" />
           </div>
 
           <div className="min-w-0">
@@ -110,7 +101,7 @@ export function DashboardPlaylistRunner({ runner }: DashboardPlaylistRunnerProps
               <span className="text-xs font-bold text-text-main truncate max-w-[200px]" title={activePlaylist.name}>
                 {activePlaylist.name}
               </span>
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/15 border border-blue-500/30 text-blue-300 font-mono">
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-score-soft border border-score/20 text-score font-mono">
                 {t("runner.progress", {
                   current: currentStepIndex + 1,
                   total: activePlaylist.items.length,
@@ -120,7 +111,7 @@ export function DashboardPlaylistRunner({ runner }: DashboardPlaylistRunnerProps
             <div className="text-[11px] text-text-secondary truncate mt-0.5 flex items-center gap-1.5 flex-wrap">
               <span>{currentTask ? currentTask.name : "Cenário"}</span>
               {recSens && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20 font-mono font-medium">
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-surface text-score border border-edge font-mono font-medium">
                   {recSens} cm
                 </span>
               )}
@@ -130,7 +121,7 @@ export function DashboardPlaylistRunner({ runner }: DashboardPlaylistRunnerProps
 
         {/* Right: Progress Metric & Controls */}
         <div className="flex items-center gap-2.5 justify-between sm:justify-end shrink-0">
-          <div className="px-2.5 py-1 rounded-lg bg-surface border border-edge text-[11px] font-mono text-text-main tabular-nums">
+          <div className="px-2.5 py-1 rounded-md bg-surface border border-edge text-[11px] font-mono text-text-main tabular-nums">
             {progressData.label}
           </div>
 
@@ -140,41 +131,38 @@ export function DashboardPlaylistRunner({ runner }: DashboardPlaylistRunnerProps
               onClick={runner.previous}
               disabled={isFirstStep}
               title={t("runner.previous")}
-              className="p-1.5 rounded-lg border border-edge text-text-secondary hover:text-text-main hover:bg-surface-hover disabled:opacity-30 disabled:pointer-events-none transition-all"
+              className="p-1.5 rounded-md border border-edge text-text-secondary hover:text-text-main hover:bg-surface-hover disabled:opacity-30 disabled:pointer-events-none transition-all cursor-pointer"
             >
-              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <polyline points="15 18 9 12 15 6" />
-              </svg>
+              <CaretLeft size={13} weight="bold" />
             </button>
 
-            <button
-              type="button"
+            <Button
+              size="sm"
+              variant="primary"
               onClick={runner.next}
               title={isLastStep ? t("runner.finish") : t("runner.next")}
-              className="px-2.5 py-1 rounded-lg bg-blue-500 hover:bg-blue-600 text-white font-medium text-xs flex items-center gap-1 shadow-sm transition-all"
+              className="h-7 px-2.5 text-xs"
             >
               <span>{isLastStep ? t("runner.finish") : t("runner.next")}</span>
-              <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <polyline points="9 18 15 12 9 6" />
-              </svg>
-            </button>
+              <CaretRight size={12} weight="bold" className="ml-1" />
+            </Button>
 
             <button
               type="button"
               onClick={runner.stop}
               title={t("runner.exit")}
-              className="px-2 py-1 rounded-lg border border-edge text-text-faint hover:text-red hover:bg-red-500/10 text-xs font-medium transition-colors"
+              className="p-1.5 rounded-md border border-edge text-text-faint hover:text-red hover:bg-red-soft transition-colors cursor-pointer"
             >
-              {t("runner.exit")}
+              <X size={13} weight="bold" />
             </button>
           </div>
         </div>
       </div>
 
       {/* Progress Bar */}
-      <div className="w-full bg-surface-subtle border border-edge rounded-full h-1.5 overflow-hidden">
+      <div className="w-full bg-surface-subtle border border-edge rounded-full h-1 overflow-hidden">
         <div
-          className="bg-blue-500 h-full rounded-full transition-all duration-300 ease-out"
+          className="bg-score h-full rounded-full transition-all duration-300 ease-out"
           style={{ width: `${progressData.percentage}%` }}
         />
       </div>

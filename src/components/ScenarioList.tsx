@@ -377,116 +377,59 @@ export function ScenarioList({
             groupedTasks.map(({ category, subcategories, totalCount }) => {
               const isCollapsed = collapsedCategories.has(category);
               return (
-                <div
-                  key={category}
-                  className="border border-edge rounded-lg bg-surface overflow-hidden"
-                >
+                <div key={category} className="space-y-1 mb-3 border-b border-edge pb-2">
                   {/* Category Header */}
                   <button
                     type="button"
                     onClick={() => toggleCategory(category)}
-                    className="w-full px-3 py-2 flex items-center justify-between text-left hover:bg-surface-hover transition-colors"
+                    className="w-full px-2 py-1 flex items-center justify-between text-left cursor-pointer select-none text-[11px] font-mono uppercase tracking-wider text-text-faint hover:text-text-main transition-colors"
                   >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <CaretDown
-                        size={12}
-                        weight="bold"
-                        className={`text-text-muted transition-transform duration-150 ${
-                          isCollapsed ? "-rotate-90" : "rotate-0"
-                        }`}
-                      />
-                      <span className="text-[11px] font-mono font-bold uppercase tracking-widest text-text-main truncate">
-                        {category}
-                      </span>
-                    </div>
-                    <span className="text-[9px] px-1.5 py-0.5 rounded-sm bg-surface-subtle border border-edge text-text-faint font-mono font-bold">
-                      {totalCount}
-                    </span>
+                    <span>{category}</span>
+                    <span className="text-[10px] text-text-muted">{totalCount}</span>
                   </button>
 
                   {/* Subcategories & Items */}
                   {!isCollapsed && (
-                    <div className="px-2 pb-2 space-y-2">
+                    <div className="px-1 space-y-1">
                       {subcategories.map(({ subcategory, tasks: subTasks }) => (
-                        <div key={subcategory} className="space-y-1">
-                          <div className="px-1 pt-1 text-[9px] font-mono font-bold uppercase tracking-widest text-text-faint">
-                            {subcategory}
-                          </div>
-                          <div className="space-y-1">
-                            {subTasks.map((task) => {
-                              const isSelected = selectedIds.has(task.id);
-                              const isActive = task.id === activeTaskId;
-                              const displaySensInfo =
-                                categorySensMap.get(`${task.category}__${task.subcategory}`) ??
-                                getDisplaySens(task.category, task.subcategory);
-                              const pb = getTaskPb(task);
+                        <div key={subcategory} className="space-y-0.5">
+                          {subTasks.map((task) => {
+                            const isSelected = selectedIds.has(task.id);
+                            const isActive = task.id === activeTaskId;
 
-                              return (
-                                <div
-                                  key={task.id}
-                                  onClick={() => {
-                                    if (selectMode) {
-                                      toggleSelectTask(task.id);
-                                    } else {
-                                      onTaskChange(task.id);
-                                    }
-                                  }}
-                                  className={`group px-2 py-1.5 rounded-md border text-[11px] font-mono cursor-pointer transition-all flex items-center justify-between gap-2 ${
-                                    isActive && !selectMode
-                                      ? "bg-score/10 border-score/40 text-text-main font-medium shadow-sm"
-                                      : isSelected && selectMode
-                                      ? "bg-score/15 border-score/60 text-text-main"
-                                      : "bg-surface-subtle border-edge hover:border-edge-strong text-text-secondary hover:text-text-main"
-                                  }`}
-                                >
-                                  <div className="flex items-center gap-2 min-w-0 flex-1">
-                                    {selectMode ? (
-                                      <input
-                                        type="checkbox"
-                                        checked={isSelected}
-                                        onChange={() => toggleSelectTask(task.id)}
-                                        onClick={(e) => e.stopPropagation()}
-                                        className="rounded-sm border-edge text-score focus:ring-0 cursor-pointer"
-                                      />
-                                    ) : (
-                                      <div
-                                        className={`w-1.5 h-1.5 rounded-sm shrink-0 ${
-                                          isActive ? "bg-score" : "bg-transparent group-hover:bg-text-faint"
-                                        }`}
-                                      />
-                                    )}
-                                    <span className="truncate font-semibold">
-                                      {task.name}
-                                    </span>
-                                  </div>
-
-                                  <div className="flex items-center gap-1.5 shrink-0 text-[10px]">
-                                    {displaySensInfo && (
-                                      <span
-                                        title={
-                                          displaySensInfo.source === "predicted"
-                                            ? t("categorySens.sourcePredicted")
-                                            : t("categorySens.sourceViscose")
-                                        }
-                                        className={`px-1 rounded-sm border ${
-                                          displaySensInfo.source === "predicted"
-                                            ? "bg-emerald/10 border-emerald/20 text-emerald font-semibold"
-                                            : "bg-surface border-edge text-text-faint"
-                                        }`}
-                                      >
-                                        {displaySensInfo.value}cm
-                                      </span>
-                                    )}
-                                    {pb !== null && (
-                                      <span className="px-1 rounded-sm bg-surface border border-edge text-text-secondary font-bold">
-                                        {pb}
-                                      </span>
-                                    )}
-                                  </div>
+                            return (
+                              <div
+                                key={task.id}
+                                onClick={() => {
+                                  if (selectMode) {
+                                    toggleSelectTask(task.id);
+                                  } else {
+                                    onTaskChange(task.id);
+                                  }
+                                }}
+                                className={`group px-2 py-1.5 rounded-md text-xs cursor-pointer transition-all flex items-center justify-between gap-2 ${
+                                  isActive && !selectMode
+                                    ? "bg-surface-subtle text-text-main font-medium shadow-xs"
+                                    : isSelected && selectMode
+                                    ? "bg-score-soft text-text-main"
+                                    : "text-text-secondary hover:text-text-main hover:bg-surface-hover/60"
+                                }`}
+                              >
+                                <div className="flex items-center gap-2 min-w-0 flex-1">
+                                  {selectMode && (
+                                    <input
+                                      type="checkbox"
+                                      checked={isSelected}
+                                      onChange={() => toggleSelectTask(task.id)}
+                                      onClick={(e) => e.stopPropagation()}
+                                      className="rounded-sm border-edge text-score focus:ring-0 cursor-pointer"
+                                    />
+                                  )}
+                                  <span className="truncate">{task.name}</span>
                                 </div>
-                              );
-                            })}
-                          </div>
+                              </div>
+                            );
+                          })}
                         </div>
                       ))}
                     </div>
@@ -494,6 +437,7 @@ export function ScenarioList({
                 </div>
               );
             })
+
           )
         ) : (
           /* Playlists Tab View */

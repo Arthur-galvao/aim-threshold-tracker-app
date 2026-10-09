@@ -165,6 +165,16 @@ export async function importExistingCsvs(): Promise<ImportStats> {
   return invoke<ImportStats>("import_existing_csvs");
 }
 
+export async function syncAimlabSqlite(): Promise<ImportStats> {
+  if (!isTauri()) return { total: 0, new: 0, skipped: 0 };
+  return invoke<ImportStats>("sync_aimlab_sqlite");
+}
+
+export async function importAimlabCsv(path: string): Promise<ImportStats> {
+  if (!isTauri()) return { total: 0, new: 0, skipped: 0 };
+  return invoke<ImportStats>("import_aimlab_csv", { path });
+}
+
 export function onNewRun(callback: (run: KovaakRun) => void): Promise<UnlistenFn> {
   if (!isTauri()) {
     return Promise.resolve(() => {});

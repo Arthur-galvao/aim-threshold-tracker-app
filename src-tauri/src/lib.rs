@@ -4,6 +4,7 @@ mod parser;
 mod randomizer;
 mod storage;
 mod watcher;
+mod aimlab;
 
 use std::collections::HashSet;
 use std::sync::Mutex;
@@ -443,6 +444,8 @@ pub fn run() {
             trigger_randomize_now,
             detect_rawaccel_path,
             test_rawaccel_writer,
+            aimlab::sync_aimlab_sqlite,
+            aimlab::import_aimlab_csv,
         ])
         .run(tauri::generate_context!())
         .expect("erro ao executar o aplicativo Tauri");
