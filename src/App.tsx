@@ -38,7 +38,7 @@ function Dashboard() {
     createPlaylist,
     updatePlaylist,
     deletePlaylist,
-    syncKovaakPlaylists,
+    syncGamePlaylists,
     playlistRunner,
   } = useApp();
 
@@ -162,8 +162,8 @@ function Dashboard() {
           setPendingPlaylistTaskIds([]);
           setPlaylistManagerOpen(true);
         }}
-        onSyncKovaak={async () => {
-          await syncKovaakPlaylists(true);
+        onSyncGames={async () => {
+          await syncGamePlaylists(true);
         }}
       />
 
@@ -220,8 +220,8 @@ function Dashboard() {
                 setPendingPlaylistTaskIds([]);
                 setPlaylistManagerOpen(true);
               }}
-              onSyncKovaak={async () => {
-                await syncKovaakPlaylists(true);
+              onSyncGames={async () => {
+                await syncGamePlaylists(true);
               }}
               onApplySens={handleApplySens}
             />
@@ -278,7 +278,7 @@ function Dashboard() {
       <AimLabSyncModal
         open={aimlabOpen}
         onClose={() => setAimlabOpen(false)}
-        onImportComplete={(stats) => {
+        onImportComplete={(_stats) => {
           // data refresh is handled by the event listener in useKovaakWatcher (onImportComplete Tauri event)
           // we just need to optionally close or do anything else, but toast and refresh are automated!
         }}
@@ -299,8 +299,8 @@ function Dashboard() {
         onUpdatePlaylist={updatePlaylist}
         onDeletePlaylist={deletePlaylist}
         onStartPlaylist={handleStartPlaylist}
-        onSyncKovaak={async () => {
-          await syncKovaakPlaylists(true);
+        onSyncGames={async () => {
+          await syncGamePlaylists(true);
         }}
       />
 
@@ -318,3 +318,4 @@ export default function App() {
     </I18nProvider>
   );
 }
+

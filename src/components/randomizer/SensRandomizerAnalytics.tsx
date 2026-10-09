@@ -121,7 +121,7 @@ export function SensRandomizerAnalytics({
               className="minimal-btn px-4 py-2 text-xs font-bold uppercase tracking-wider rounded-xl shadow-sm flex items-center gap-2 self-stretch sm:self-auto justify-center"
             >
               <span>{t("randomizer.applySensBtn")}</span>
-              <span className="font-mono text-blue-200">
+              <span className="font-mono text-primary-foreground opacity-90 underline underline-offset-2">
                 {bestBucket.label}
               </span>
             </button>
@@ -204,7 +204,7 @@ export function SensRandomizerAnalytics({
               className="minimal-btn px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider rounded-xl shadow-sm flex items-center gap-1.5 self-stretch sm:self-auto justify-center"
             >
               <span>{t("randomizer.applySensBtn")}</span>
-              <span className="font-mono text-blue-200">
+              <span className="font-mono text-primary-foreground opacity-90 underline underline-offset-2">
                 {prediction.label}
               </span>
             </button>

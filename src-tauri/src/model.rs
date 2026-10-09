@@ -245,3 +245,28 @@ mod tests {
         assert!(!parsed.notify_step_advance);
     }
 }
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GamePlaylistItem {
+    #[serde(alias = "scenario_name", alias = "scenarioName", alias = "taskName")]
+    pub scenario_name: String,
+    #[serde(alias = "play_Count", alias = "playCount", alias = "repetitions", default = "default_play_count")]
+    pub play_count: f64,
+}
+
+fn default_play_count() -> f64 {
+    1.0
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GamePlaylist {
+    #[serde(alias = "playlistName", alias = "playlist_name")]
+    pub playlist_name: String,
+    #[serde(alias = "playlistId", alias = "playlist_id", default)]
+    pub playlist_id: Option<serde_json::Value>,
+    #[serde(alias = "scenarioList", alias = "scenario_list", alias = "playlist", default)]
+    pub scenario_list: Vec<GamePlaylistItem>,
+    #[serde(default)]
+    pub description: Option<String>,
+}

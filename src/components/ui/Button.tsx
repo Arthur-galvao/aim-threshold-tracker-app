@@ -23,7 +23,7 @@ export function Button({
 
   const variantClasses = {
     primary:
-      "bg-primary text-primary-fg hover:opacity-90 active:scale-[0.985] shadow-sm disabled:opacity-40 disabled:pointer-events-none transition-all duration-150",
+      "bg-primary text-primary-foreground hover:opacity-90 active:scale-[0.985] shadow-sm disabled:opacity-40 disabled:pointer-events-none transition-all duration-150",
     secondary:
       "bg-surface-subtle text-text-main border border-edge hover:bg-surface-hover hover:border-edge-strong active:scale-[0.985] disabled:opacity-40 disabled:pointer-events-none transition-all duration-150",
     ghost:

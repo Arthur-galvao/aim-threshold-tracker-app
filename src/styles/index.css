@@ -186,8 +186,8 @@ body {
 
   /* Buttons */
   .minimal-btn {
-    background-color: var(--primary);
-    color: var(--primary-foreground);
+    background-color: hsl(var(--primary));
+    color: hsl(var(--primary-foreground));
     font-weight: 600;
     font-size: 0.75rem;
     border-radius: 6px;
@@ -198,6 +198,12 @@ body {
     align-items: center;
     justify-content: center;
     cursor: pointer;
+  }
+
+  .modal-scrim {
+    background-color: var(--scrim);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
   }
 
   .minimal-btn:hover {
@@ -229,7 +235,20 @@ body {
     color: var(--text-main);
   }
 
+  .minimal-btn:disabled,
+  .minimal-btn-secondary:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    pointer-events: none;
+  }
+
   /* Invisible / Slim Custom Scrollbar (eliminates native gray Windows scrollbar) */
+  .custom-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
+    overscroll-behavior: contain;
+  }
+
   .custom-scrollbar::-webkit-scrollbar,
   .no-scrollbar::-webkit-scrollbar {
     width: 4px;

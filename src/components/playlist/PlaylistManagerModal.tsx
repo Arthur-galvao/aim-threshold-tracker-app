@@ -17,7 +17,7 @@ interface PlaylistManagerModalProps {
   onUpdatePlaylist: (playlist: Playlist) => Promise<void>;
   onDeletePlaylist: (id: string) => Promise<void>;
   onStartPlaylist: (playlist: Playlist) => void;
-  onSyncKovaak?: () => Promise<void>;
+  onSyncGames?: () => Promise<void>;
 }
 
 export function PlaylistManagerModal({
@@ -30,7 +30,7 @@ export function PlaylistManagerModal({
   onUpdatePlaylist,
   onDeletePlaylist,
   onStartPlaylist,
-  onSyncKovaak,
+  onSyncGames,
 }: PlaylistManagerModalProps) {
   const { t } = useI18n();
   const [editingPlaylist, setEditingPlaylist] = useState<Playlist | null>(null);
@@ -77,10 +77,10 @@ export function PlaylistManagerModal({
   };
 
   const handleSyncKovaak = async () => {
-    if (!onSyncKovaak || isSyncing) return;
+    if (!onSyncGames || isSyncing) return;
     setIsSyncing(true);
     try {
-      await onSyncKovaak();
+      await onSyncGames();
     } finally {
       setIsSyncing(false);
     }
@@ -100,9 +100,8 @@ export function PlaylistManagerModal({
       onClose={onClose}
       title={modalTitle}
       maxWidth="2xl"
-      className="max-h-[90vh] flex flex-col"
     >
-      <div className="overflow-y-auto flex-1 pr-1 scrollbar-thin scrollbar-thumb-surface-hover scrollbar-track-transparent">
+      <div className="flex-1 pr-1">
         {isCreating || editingPlaylist ? (
           <PlaylistEditor
             initialPlaylist={editingPlaylist}
@@ -142,16 +141,16 @@ export function PlaylistManagerModal({
                 {t("playlist.subtitle")}
               </span>
               <div className="flex items-center gap-2 self-end sm:self-auto">
-                {onSyncKovaak && (
+                {onSyncGames && (
                   <Button
                     variant="secondary"
                     size="sm"
                     onClick={handleSyncKovaak}
                     disabled={isSyncing}
-                    title={t("playlist.syncKovaak")}
+                    title={t("playlist.syncGames")}
                     icon={<ArrowsClockwise size={13} weight="bold" className={isSyncing ? "animate-spin" : ""} />}
                   >
-                    {isSyncing ? t("playlist.syncing") : t("playlist.syncKovaak")}
+                    {isSyncing ? t("playlist.syncing") : t("playlist.syncGames")}
                   </Button>
                 )}
                 <Button
@@ -270,3 +269,4 @@ export function PlaylistManagerModal({
     </Dialog>
   );
 }
+

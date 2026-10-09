@@ -42,10 +42,12 @@ export default {
         primary: {
           DEFAULT: "hsl(var(--primary) / <alpha-value>)",
           foreground: "hsl(var(--primary-foreground) / <alpha-value>)",
+          fg: "hsl(var(--primary-foreground) / <alpha-value>)",
         },
         accent: {
           DEFAULT: "hsl(var(--accent) / <alpha-value>)",
           foreground: "hsl(var(--accent-foreground) / <alpha-value>)",
+          fg: "hsl(var(--accent-foreground) / <alpha-value>)",
           soft: "var(--accent-soft)",
           edge: "var(--accent-edge)",
         },

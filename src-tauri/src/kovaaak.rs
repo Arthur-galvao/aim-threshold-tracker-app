@@ -1,32 +1,11 @@
-use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct KovaakPlaylistItem {
-    #[serde(alias = "scenario_name", alias = "scenarioName")]
-    pub scenario_name: String,
-    #[serde(alias = "play_Count", alias = "playCount", default = "default_play_count")]
-    pub play_count: f64,
-}
 
-fn default_play_count() -> f64 {
-    1.0
-}
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct KovaakPlaylist {
-    #[serde(alias = "playlistName", alias = "playlist_name")]
-    pub playlist_name: String,
-    #[serde(alias = "playlistId", alias = "playlist_id", default)]
-    pub playlist_id: Option<serde_json::Value>,
-    #[serde(alias = "scenarioList", alias = "scenario_list", default)]
-    pub scenario_list: Vec<KovaakPlaylistItem>,
-    #[serde(default)]
-    pub description: Option<String>,
-}
+
+
+
 
 pub fn detect_kovaak_path() -> Option<PathBuf> {
     let mut candidates: Vec<PathBuf> = Vec::new();
@@ -104,7 +83,7 @@ pub fn detect_kovaak_playlists_dir(stats_path: Option<&str>) -> Option<PathBuf> 
         .find(|path| path.exists() && path.is_dir())
 }
 
-pub fn load_all_kovaak_playlists(stats_path: Option<&str>) -> Vec<KovaakPlaylist> {
+pub fn load_all_kovaak_playlists(stats_path: Option<&str>) -> Vec<crate::model::GamePlaylist> {
     let dir = match detect_kovaak_playlists_dir(stats_path) {
         Some(d) => d,
         None => return Vec::new(),
@@ -122,7 +101,7 @@ pub fn load_all_kovaak_playlists(stats_path: Option<&str>) -> Vec<KovaakPlaylist
             if let Some(ext) = path.extension() {
                 if ext.eq_ignore_ascii_case("json") {
                     if let Ok(content) = fs::read_to_string(&path) {
-                        if let Ok(parsed) = serde_json::from_str::<KovaakPlaylist>(&content) {
+                        if let Ok(parsed) = serde_json::from_str::<crate::model::GamePlaylist>(&content) {
                             if !parsed.playlist_name.trim().is_empty() && !parsed.scenario_list.is_empty() {
                                 playlists.push(parsed);
                             }
@@ -136,7 +115,7 @@ pub fn load_all_kovaak_playlists(stats_path: Option<&str>) -> Vec<KovaakPlaylist
     playlists
 }
 
-pub fn detect_playlist_in_progress(stats_path: Option<&str>) -> Option<KovaakPlaylist> {
+pub fn detect_playlist_in_progress(stats_path: Option<&str>) -> Option<crate::model::GamePlaylist> {
     let mut candidates: Vec<PathBuf> = Vec::new();
 
     if let Some(sp) = stats_path {
@@ -173,7 +152,7 @@ pub fn detect_playlist_in_progress(stats_path: Option<&str>) -> Option<KovaakPla
     for candidate in candidates {
         if candidate.exists() && candidate.is_file() {
             if let Ok(content) = fs::read_to_string(&candidate) {
-                if let Ok(parsed) = serde_json::from_str::<KovaakPlaylist>(&content) {
+                if let Ok(parsed) = serde_json::from_str::<crate::model::GamePlaylist>(&content) {
                     return Some(parsed);
                 }
             }
@@ -237,7 +216,7 @@ mod tests {
             "description": "Flick training"
         }"#;
 
-        let parsed: KovaakPlaylist = serde_json::from_str(sample).expect("failed to parse playlist");
+        let parsed: crate::model::GamePlaylist = serde_json::from_str(sample).expect("failed to parse playlist");
         assert_eq!(parsed.playlist_name, "@thrFPS - ANATOMIA DO FLICK v1");
         assert_eq!(parsed.scenario_list.len(), 2);
         assert_eq!(parsed.scenario_list[0].scenario_name, "WALLHACK - VBRClick Easy");
@@ -295,7 +274,7 @@ mod tests {
             "description": "Daily tracking routine"
         }"#;
 
-        let parsed: KovaakPlaylist = serde_json::from_str(sample).expect("failed to parse playlist in progress");
+        let parsed: crate::model::GamePlaylist = serde_json::from_str(sample).expect("failed to parse playlist in progress");
         assert_eq!(parsed.playlist_name, "Voltaic Daily - Tracking");
         assert_eq!(parsed.playlist_id, Some(serde_json::json!(987654)));
         assert_eq!(parsed.scenario_list.len(), 2);
@@ -333,3 +312,6 @@ mod tests {
         let _ = fs::remove_dir_all(tmp_dir);
     }
 }
+
+
+

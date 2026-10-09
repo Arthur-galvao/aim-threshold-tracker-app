@@ -72,6 +72,13 @@ export function SettingsModal({
   const { t } = useI18n();
 
   useEffect(() => {
+    if (open) {
+      setManualPath(settingsPath ?? "");
+      setManualRawaccel(rawaccelPath ?? "");
+    }
+  }, [open, settingsPath, rawaccelPath]);
+
+  useEffect(() => {
     if (!open) return;
 
     if (propCloseToTray !== undefined) {
@@ -157,9 +164,8 @@ export function SettingsModal({
       onClose={onClose}
       title={t("settings.title")}
       maxWidth="lg"
-      className="max-h-[90vh] overflow-y-auto"
     >
-      <div className="space-y-5">
+      <div className="space-y-5 pb-4">
         {/* Status Section */}
         <div>
           <div className="flex items-center justify-between mb-2">

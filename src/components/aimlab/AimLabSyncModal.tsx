@@ -28,23 +28,6 @@ export function AimLabSyncModal({ open, onClose, onImportComplete }: AimLabSyncM
     }
   };
 
-  const handleCsvImport = async (file: File) => {
-    try {
-      setLoading(true);
-      setError(null);
-      // We don't read the file in JS because Tauri needs the path, 
-      // but since HTML file inputs give a File object with a .path in Electron/Tauri sometimes, 
-      // we must get the real OS path.
-      // In Tauri v2, `file.path` is available on desktop if we use the right input type, 
-      // but simpler is to use `@tauri-apps/plugin-dialog` to pick the file natively.
-      // For now we'll do the standard dialog approach inside tauri-bridge, or assume `file` is handled.
-    } catch (err: any) {
-      setError(err?.toString() || "Erro ao importar CSV.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
   return (
     <Dialog
       open={open}

@@ -15,6 +15,7 @@ import {
   saveAppData,
   importJsonBackup,
   getKovaakPlaylists,
+  getAimlabPlaylists,
   getPlaylistInProgress,
   listenKovaakPlaylistActive,
   getSettings,
@@ -52,7 +53,7 @@ interface AppContextValue {
   createPlaylist: (name: string, items?: PlaylistItem[]) => Promise<Playlist>;
   updatePlaylist: (playlist: Playlist) => Promise<void>;
   deletePlaylist: (id: string) => Promise<void>;
-  syncKovaakPlaylists: (manual?: boolean) => Promise<{ imported: number; total: number }>;
+  syncGamePlaylists: (manual?: boolean) => Promise<{ imported: number; total: number }>;
   playlistRunner: PlaylistRunnerState;
 }
 
@@ -106,13 +107,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     []
   );
 
-  const syncKovaakPlaylists = useCallback(
+  const syncGamePlaylists = useCallback(
     async (manual: boolean = false): Promise<{ imported: number; total: number }> => {
       try {
-        const rawPlaylists = await getKovaakPlaylists();
+                const rawKovaak = await getKovaakPlaylists();
+        const rawAimlab = await getAimlabPlaylists();
+        const rawPlaylists = [...(rawKovaak || []), ...(rawAimlab || [])];
         if (!rawPlaylists || rawPlaylists.length === 0) {
           if (manual) {
-            showToast(t("toast.noNewKovaakPlaylists"), "info");
+            showToast(t("toast.noNewGamePlaylists"), "info");
           }
           return { imported: 0, total: 0 };
         }
@@ -191,9 +194,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         });
 
         if (importedCount > 0) {
-          showToast(t("toast.kovaakPlaylistsImported", { n: importedCount }), "success");
+          showToast(t("toast.gamePlaylistsImported", { n: importedCount }), "success");
         } else if (manual) {
-          showToast(t("toast.noNewKovaakPlaylists"), "info");
+          showToast(t("toast.noNewGamePlaylists"), "info");
         }
 
         return { imported: importedCount, total: rawPlaylists.length };
@@ -211,10 +214,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     void refreshData().then(() => {
       if (!initialSyncDone.current) {
         initialSyncDone.current = true;
-        void syncKovaakPlaylists(false);
+        void syncGamePlaylists(false);
       }
     });
-  }, [refreshData, syncKovaakPlaylists]);
+  }, [refreshData, syncGamePlaylists]);
 
   const activeTask = useMemo(
     () => appData.tasks.find((t) => t.id === appData.activeTaskId) ?? null,
@@ -580,7 +583,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     createPlaylist,
     updatePlaylist,
     deletePlaylist,
-    syncKovaakPlaylists,
+    syncGamePlaylists,
     playlistRunner,
   };
 
@@ -592,3 +595,5 @@ export function useApp() {
   if (!ctx) throw new Error("useApp must be used within AppProvider");
   return ctx;
 }
+
+

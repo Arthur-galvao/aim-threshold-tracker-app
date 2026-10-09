@@ -57,7 +57,11 @@ fn detect_kovaak_path() -> Result<Option<String>, String> {
 }
 
 #[tauri::command]
-fn get_kovaak_playlists(state: State<'_, AppState>) -> Result<Vec<kovaaak::KovaakPlaylist>, String> {
+fn get_aimlab_playlists(_state: State<'_, AppState>) -> Result<Vec<crate::model::GamePlaylist>, String> {
+    Ok(crate::aimlab::load_all_aimlab_playlists())
+}
+#[tauri::command]
+fn get_kovaak_playlists(state: State<'_, AppState>) -> Result<Vec<crate::model::GamePlaylist>, String> {
     let stats_path = {
         let settings = state.settings.lock().unwrap();
         settings.kovaak_stats_path.clone()
@@ -66,7 +70,7 @@ fn get_kovaak_playlists(state: State<'_, AppState>) -> Result<Vec<kovaaak::Kovaa
 }
 
 #[tauri::command]
-fn get_playlist_in_progress(state: State<'_, AppState>) -> Result<Option<kovaaak::KovaakPlaylist>, String> {
+fn get_playlist_in_progress(state: State<'_, AppState>) -> Result<Option<crate::model::GamePlaylist>, String> {
     let stats_path = {
         let settings = state.settings.lock().unwrap();
         settings.kovaak_stats_path.clone()
@@ -429,6 +433,7 @@ pub fn run() {
             detect_kovaak_path,
             get_kovaak_playlists,
             get_playlist_in_progress,
+            get_aimlab_playlists,
             get_settings,
             save_settings,
             set_stats_path,
@@ -450,3 +455,6 @@ pub fn run() {
         .run(tauri::generate_context!())
         .expect("erro ao executar o aplicativo Tauri");
 }
+
+
+

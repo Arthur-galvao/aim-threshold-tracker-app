@@ -29,7 +29,7 @@ interface ScenarioListProps {
   runningStepIndex?: number;
   onJumpToStep?: (stepIndex: number) => void;
   onOpenPlaylistManager?: () => void;
-  onSyncKovaak?: () => Promise<void>;
+  onSyncGames?: () => Promise<void>;
 }
 
 export function ScenarioList({
@@ -46,7 +46,7 @@ export function ScenarioList({
   runningStepIndex,
   onJumpToStep,
   onOpenPlaylistManager,
-  onSyncKovaak,
+  onSyncGames,
 }: ScenarioListProps) {
   const { t } = useI18n();
   const [sidebarTab, setSidebarTab] = useState<"scenarios" | "playlists">("scenarios");
@@ -119,10 +119,10 @@ export function ScenarioList({
   };
 
   const handleSyncKovaak = async () => {
-    if (!onSyncKovaak || isSyncing) return;
+    if (!onSyncGames || isSyncing) return;
     setIsSyncing(true);
     try {
-      await onSyncKovaak();
+      await onSyncGames();
     } finally {
       setIsSyncing(false);
     }
@@ -321,12 +321,12 @@ export function ScenarioList({
             </>
           ) : (
             <>
-              {onSyncKovaak && (
+              {onSyncGames && (
                 <button
                   type="button"
                   onClick={handleSyncKovaak}
                   disabled={isSyncing}
-                  title={t("playlist.syncKovaak")}
+                  title={t("playlist.syncGames")}
                   className="bg-surface p-2 rounded-lg text-text-secondary hover:text-text-main border border-edge disabled:opacity-50 shrink-0 inline-flex items-center"
                 >
                   <ArrowsClockwise size={14} weight="bold" className={isSyncing ? "animate-spin" : ""} />
@@ -444,7 +444,7 @@ export function ScenarioList({
           playlists.length === 0 ? (
             <div className="py-8 text-center text-[10px] font-mono uppercase tracking-widest text-text-faint border border-dashed border-edge rounded-lg space-y-3 px-3">
               <p>{t("playlist.emptySidebar")}</p>
-              {onSyncKovaak && (
+              {onSyncGames && (
                 <button
                   type="button"
                   onClick={handleSyncKovaak}
@@ -667,3 +667,4 @@ export function ScenarioList({
     </section>
   );
 }
+

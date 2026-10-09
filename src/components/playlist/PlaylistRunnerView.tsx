@@ -14,7 +14,7 @@ interface PlaylistRunnerViewProps {
   playlists: Playlist[];
   tasks: Task[];
   onOpenManager: () => void;
-  onSyncKovaak?: () => Promise<void>;
+  onSyncGames?: () => Promise<void>;
   onApplySens?: (sensCm: number) => Promise<void>;
 }
 
@@ -29,7 +29,7 @@ export function PlaylistRunnerView({
   playlists,
   tasks,
   onOpenManager,
-  onSyncKovaak,
+  onSyncGames,
   onApplySens,
 }: PlaylistRunnerViewProps) {
   const { t } = useI18n();
@@ -54,10 +54,10 @@ export function PlaylistRunnerView({
   }, [runner.activePlaylist, playlistStatsMap, tasks]);
 
   const handleSync = async () => {
-    if (!onSyncKovaak || isSyncing) return;
+    if (!onSyncGames || isSyncing) return;
     setIsSyncing(true);
     try {
-      await onSyncKovaak();
+      await onSyncGames();
     } finally {
       setIsSyncing(false);
     }
@@ -111,13 +111,13 @@ export function PlaylistRunnerView({
             </h2>
           </div>
           <div className="flex items-center gap-2">
-            {onSyncKovaak && (
+            {onSyncGames && (
               <button
                 type="button"
                 onClick={handleSync}
                 disabled={isSyncing}
                 className="bg-surface py-2 px-3.5 rounded-lg text-[10px] font-mono font-bold uppercase tracking-widest text-text-secondary hover:text-text-main border border-edge flex items-center gap-1.5 transition-all disabled:opacity-50"
-                title={t("playlist.syncKovaak")}
+                title={t("playlist.syncGames")}
               >
                 <svg
                   className={`w-3.5 h-3.5 ${isSyncing ? "animate-spin" : ""}`}
@@ -526,3 +526,4 @@ export function PlaylistRunnerView({
     </div>
   );
 }
+
