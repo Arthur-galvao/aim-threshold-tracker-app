@@ -108,7 +108,7 @@ const SCENARIO_RULES: ScenarioRule[] = [
   },
   {
     test: (n) =>
-      ["tracking", "centering", "prediction", "cata", "control", "pressure"].some(
+      ["tracking", "centering", "prediction", "cata", "control", "pressure", "kontr", "contr"].some(
         (k) => n.includes(k)
       ),
     category: "Control Tracking",
@@ -116,10 +116,38 @@ const SCENARIO_RULES: ScenarioRule[] = [
   },
 ];
 
+export function cleanScenarioName(raw: string): string {
+  if (!raw) return "";
+  const trimmed = raw.trim();
+
+  // Pattern: CsLevel.<author>.<scenario>.<hash/code>
+  // e.g. "CsLevel.Lowgravity56.VT Suave.RX1H0T" -> "VT Suave"
+  // e.g. "CsLevel.VT Empyrean.VT Float.QZWM5U" -> "VT Float"
+  if (trimmed.startsWith("CsLevel.")) {
+    const parts = trimmed.split(".");
+    if (parts.length >= 4) {
+      const middle = parts.slice(2, parts.length - 1).join(".").trim();
+      if (middle) return middle;
+    } else if (parts.length === 3) {
+      const middle = parts[1].trim();
+      if (middle) return middle;
+    }
+  }
+
+  // Pattern: CsLevel<guid>
+  if (trimmed.startsWith("CsLevel")) {
+    const stripped = trimmed.replace(/^CsLevel[-_.]*/i, "").trim();
+    if (stripped) return stripped;
+  }
+
+  return trimmed;
+}
+
 export function categorizeScenario(
   scenario: string
 ): { category: string; subcategory: string } {
-  const name = scenario.trim().toLowerCase();
+  const cleaned = cleanScenarioName(scenario);
+  const name = cleaned.toLowerCase();
   for (const rule of SCENARIO_RULES) {
     if (rule.test(name)) {
       return { category: rule.category, subcategory: rule.subcategory };
@@ -131,6 +159,14 @@ export function categorizeScenario(
 export function migrateAndCategorizeTasks(tasks: Task[]): boolean {
   let changed = false;
   for (const task of tasks) {
+    if (task.name.startsWith("CsLevel")) {
+      const cleaned = cleanScenarioName(task.name);
+      if (cleaned !== task.name) {
+        task.name = cleaned;
+        changed = true;
+      }
+    }
+
     if (task.category === "Voltaic / Outros") {
       const { category, subcategory } = categorizeScenario(task.name);
       task.category = category;

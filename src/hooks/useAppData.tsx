@@ -29,7 +29,11 @@ import {
   recalculateAllTaskThresholds,
   recalculateAllTasks,
 } from "@/lib/threshold";
-import { categorizeScenario, migrateAndCategorizeTasks } from "@/lib/viscose";
+import {
+  categorizeScenario,
+  cleanScenarioName,
+  migrateAndCategorizeTasks,
+} from "@/lib/viscose";
 import { useI18n } from "@/lib/i18n";
 import { usePlaylistRunner, type PlaylistRunnerState } from "./usePlaylistRunner";
 
@@ -141,7 +145,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
             for (let idx = 0; idx < kpl.scenarioList.length; idx++) {
               const item = kpl.scenarioList[idx];
-              const scenarioName = item.scenarioName.trim();
+              const rawName = item.scenarioName.trim();
+              if (!rawName) continue;
+              const scenarioName = cleanScenarioName(rawName);
               if (!scenarioName) continue;
 
               let task = updatedTasks.find(

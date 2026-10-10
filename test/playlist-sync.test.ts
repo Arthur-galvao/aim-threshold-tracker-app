@@ -518,5 +518,50 @@ describe("playlist-sync and detection", () => {
       checkDir(componentsDir);
     });
   });
+
+  describe("Aim Lab scenario resolution and migration", () => {
+    it("cleans Aim Lab internal Creator Studio level names to user-friendly titles", async () => {
+      const { cleanScenarioName } = await import("../src/lib/viscose.ts");
+
+      assert.equal(cleanScenarioName("CsLevel.Lowgravity56.VT Suave.RX1H0T"), "VT Suave");
+      assert.equal(cleanScenarioName("CsLevel.morcaillionaire.rA Twosh.RCGDKY"), "rA Twosh");
+      assert.equal(cleanScenarioName("CsLevel.VT Empyrean.VT Float.QZWM5U"), "VT Float");
+      assert.equal(cleanScenarioName("CsLevel.Lowgravity56.Mini's H.RVK2R3"), "Mini's H");
+      assert.equal(
+        cleanScenarioName("CsLevel2ea08b52-c743-4474-82f1-c965bf42d35f"),
+        "2ea08b52-c743-4474-82f1-c965bf42d35f"
+      );
+      assert.equal(cleanScenarioName("1w2ts Pasu"), "1w2ts Pasu");
+      assert.equal(cleanScenarioName("SpiderShot"), "SpiderShot");
+    });
+
+    it("migrates and re-categorizes existing tasks with CsLevel names", async () => {
+      const { migrateAndCategorizeTasks } = await import("../src/lib/viscose.ts");
+
+      const tasks: Task[] = [
+        {
+          id: "t1",
+          name: "CsLevel.Lowgravity56.VT Suave.RX1H0T",
+          category: "Click Timing",
+          subcategory: "Precision",
+          sessions: [],
+        },
+        {
+          id: "t2",
+          name: "CsLevel.Lowgravity56.VT Kontr.RR4V90",
+          category: "Click Timing",
+          subcategory: "Precision",
+          sessions: [],
+        },
+      ];
+
+      const changed = migrateAndCategorizeTasks(tasks);
+      assert.equal(changed, true);
+      assert.equal(tasks[0].name, "VT Suave");
+      assert.equal(tasks[1].name, "VT Kontr");
+      // VT Kontr matches control tracking rule
+      assert.equal(tasks[1].category, "Control Tracking");
+    });
+  });
 });
 

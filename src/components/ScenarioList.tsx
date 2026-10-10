@@ -15,7 +15,7 @@ import {
   List,
 } from "@phosphor-icons/react";
 import type { Playlist, Task } from "@/lib/types";
-import { VISCOSE_CATEGORIES, getDisplaySens } from "@/lib/viscose";
+import { VISCOSE_CATEGORIES, getDisplaySens, cleanScenarioName } from "@/lib/viscose";
 import { valorantToCm360, type RunDataPoint } from "@/lib/sens-analytics";
 import { useI18n } from "@/lib/i18n";
 import { Tooltip } from "@/components/ui/Tooltip";
@@ -537,8 +537,8 @@ export function ScenarioList({
                                       {isActive && !selectMode && (
                                         <div className="w-1 h-3 rounded-full bg-score shrink-0" />
                                       )}
-                                      <span className="truncate" title={task.name}>
-                                        {task.name}
+                                      <span className="truncate" title={cleanScenarioName(task.name)}>
+                                        {cleanScenarioName(task.name)}
                                       </span>
                                     </div>
                                     {task.sessions && task.sessions.length > 0 && (
@@ -705,7 +705,7 @@ export function ScenarioList({
                                       }`}
                                     />
                                     <span className="truncate">
-                                      {task ? task.name : `Cenário (${item.taskId.slice(0, 6)})`}
+                                      {task ? cleanScenarioName(task.name) : `Cenário (${item.taskId.slice(0, 6)})`}
                                     </span>
                                   </div>
 

@@ -317,6 +317,10 @@ pub fn run() {
                 let _ = storage::save_app_data(app.handle(), &data);
             }
 
+            if aimlab::migrate_existing_aimlab_tasks(&mut data) {
+                let _ = storage::save_app_data(app.handle(), &data);
+            }
+
             let (avail, found_dir, err_msg, gui_running) = randomizer::check_rawaccel_availability(settings.randomizer.rawaccel_dir.as_deref());
 
             if settings.randomizer.rawaccel_dir.is_none() {
