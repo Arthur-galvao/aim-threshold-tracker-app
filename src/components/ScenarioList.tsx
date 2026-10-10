@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { motion, AnimatePresence } from "motion/react";
 import {
   MagnifyingGlass,
   X,
@@ -6,14 +7,18 @@ import {
   Plus,
   ArrowsClockwise,
   CaretDown,
+  CaretLeft,
+  CaretRight,
   Play,
   Stop,
   Trash,
+  List,
 } from "@phosphor-icons/react";
 import type { Playlist, Task } from "@/lib/types";
 import { VISCOSE_CATEGORIES, getDisplaySens } from "@/lib/viscose";
 import { valorantToCm360, type RunDataPoint } from "@/lib/sens-analytics";
 import { useI18n } from "@/lib/i18n";
+import { Tooltip } from "@/components/ui/Tooltip";
 
 interface ScenarioListProps {
   tasks: Task[];
@@ -30,6 +35,8 @@ interface ScenarioListProps {
   onJumpToStep?: (stepIndex: number) => void;
   onOpenPlaylistManager?: () => void;
   onSyncGames?: () => Promise<void>;
+  sidebarCollapsed?: boolean;
+  onToggleSidebar?: () => void;
 }
 
 export function ScenarioList({
@@ -47,8 +54,14 @@ export function ScenarioList({
   onJumpToStep,
   onOpenPlaylistManager,
   onSyncGames,
+  sidebarCollapsed,
+  onToggleSidebar,
 }: ScenarioListProps) {
   const { t } = useI18n();
+  const [internalCollapsed, setInternalCollapsed] = useState(false);
+  const isCollapsed = sidebarCollapsed !== undefined ? sidebarCollapsed : internalCollapsed;
+  const toggleCollapse = onToggleSidebar ?? (() => setInternalCollapsed((prev) => !prev));
+
   const [sidebarTab, setSidebarTab] = useState<"scenarios" | "playlists">("scenarios");
   const [search, setSearch] = useState("");
   const [selectMode, setSelectMode] = useState(false);
@@ -141,8 +154,8 @@ export function ScenarioList({
     });
   }, [playlists, search, taskMap]);
 
-  const handleSelectAll = (filteredTasks: Task[]) => {
-    const allFilteredIds = filteredTasks.map((t) => t.id);
+  const handleSelectAll = (filteredTasksList: Task[]) => {
+    const allFilteredIds = filteredTasksList.map((t) => t.id);
     const allSelected = allFilteredIds.every((id) => selectedIds.has(id));
     setSelectedIds((prev) => {
       const next = new Set(prev);
@@ -163,7 +176,6 @@ export function ScenarioList({
     }
   };
 
-  // Filter tasks by search query
   const filteredTasks = useMemo(() => {
     const query = search.trim().toLowerCase();
     if (!query) return tasks;
@@ -175,7 +187,6 @@ export function ScenarioList({
     );
   }, [tasks, search]);
 
-  // Group filtered tasks by Category -> Subcategory
   const groupedTasks = useMemo(() => {
     const knownCategories = Object.keys(VISCOSE_CATEGORIES);
     const categorySet = new Set(knownCategories);
@@ -225,38 +236,119 @@ export function ScenarioList({
     return Math.max(...task.sessions.map((s) => s.pb));
   };
 
+  // Render Collapsed Sidebar Rail
+  if (isCollapsed) {
+    return (
+      <aside className="w-14 shrink-0 h-screen max-h-screen border-r border-edge bg-[#0c0e16]/85 backdrop-blur-md flex flex-col items-center py-3.5 px-1.5 select-none z-20 transition-all duration-200">
+        <Tooltip content="Expand sidebar" side="right">
+          <button
+            type="button"
+            onClick={toggleCollapse}
+            aria-label="Expand sidebar"
+            className="w-9 h-9 rounded-lg bg-surface hover:bg-surface-hover border border-edge text-text-secondary hover:text-text-main flex items-center justify-center transition-colors cursor-pointer mb-4"
+          >
+            <CaretRight size={15} weight="bold" />
+          </button>
+        </Tooltip>
+
+        <div className="flex flex-col items-center gap-2 flex-1">
+          <Tooltip content={t("scenarioList.title")} side="right">
+            <button
+              type="button"
+              onClick={() => {
+                setSidebarTab("scenarios");
+                toggleCollapse();
+              }}
+              className={`w-9 h-9 rounded-lg flex items-center justify-center transition-all cursor-pointer ${
+                sidebarTab === "scenarios"
+                  ? "bg-surface-subtle text-text-main border border-edge font-bold shadow-xs"
+                  : "text-text-faint hover:text-text-secondary hover:bg-surface-hover/50"
+              }`}
+            >
+              <List size={16} weight="bold" />
+            </button>
+          </Tooltip>
+
+          <Tooltip content={t("tab.playlist")} side="right">
+            <button
+              type="button"
+              onClick={() => {
+                setSidebarTab("playlists");
+                toggleCollapse();
+              }}
+              className={`w-9 h-9 rounded-lg flex items-center justify-center transition-all cursor-pointer ${
+                sidebarTab === "playlists"
+                  ? "bg-surface-subtle text-text-main border border-edge font-bold shadow-xs"
+                  : "text-text-faint hover:text-text-secondary hover:bg-surface-hover/50"
+              }`}
+            >
+              <Play size={14} weight="bold" />
+            </button>
+          </Tooltip>
+        </div>
+
+        <div className="pt-2 border-t border-edge w-full flex justify-center">
+          <Tooltip content={t("task.new")} side="right">
+            <button
+              type="button"
+              onClick={onNewTask}
+              aria-label="New Task"
+              className="w-9 h-9 rounded-lg bg-surface hover:bg-surface-hover border border-edge text-text-secondary hover:text-text-main flex items-center justify-center transition-colors cursor-pointer"
+            >
+              <Plus size={15} weight="bold" />
+            </button>
+          </Tooltip>
+        </div>
+      </aside>
+    );
+  }
+
+  // Render Full Structured Sidebar
   return (
-    <section className="panel p-5 rounded-[10px] border border-edge transition-all duration-200 flex flex-col">
-      {/* Segmented Tab Switcher Header */}
-      <div className="grid grid-cols-2 p-1 rounded-lg bg-surface-subtle border border-edge mb-3">
-        <button
-          type="button"
-          onClick={() => setSidebarTab("scenarios")}
-          className={`flex items-center justify-center gap-1.5 py-1.5 rounded-md text-[10px] uppercase tracking-widest font-mono font-semibold transition-all ${
-            sidebarTab === "scenarios"
-              ? "bg-surface text-text-main shadow-xs border border-edge"
-              : "text-text-faint hover:text-text-secondary"
-          }`}
-        >
-          <span>{t("scenarioList.title")}</span>
-          <span className="text-[9px] px-1.5 rounded-sm bg-surface-hover text-text-secondary font-mono">
-            {tasks.length}
-          </span>
-        </button>
-        <button
-          type="button"
-          onClick={() => setSidebarTab("playlists")}
-          className={`flex items-center justify-center gap-1.5 py-1.5 rounded-md text-[10px] uppercase tracking-widest font-mono font-semibold transition-all ${
-            sidebarTab === "playlists"
-              ? "bg-surface text-text-main shadow-xs border border-edge"
-              : "text-text-faint hover:text-text-secondary"
-          }`}
-        >
-          <span>{t("tab.playlist")}</span>
-          <span className="text-[9px] px-1.5 rounded-sm bg-surface-hover text-text-secondary font-mono">
-            {playlists.length}
-          </span>
-        </button>
+    <aside className="w-80 shrink-0 h-screen max-h-screen border-r border-edge bg-[#0c0e16]/85 backdrop-blur-md flex flex-col p-3.5 sm:p-4 select-none z-20 transition-all duration-200">
+      {/* Top Header Row: Tab Switcher & Collapse Button */}
+      <div className="flex items-center gap-2 mb-3">
+        <div className="grid grid-cols-2 p-1 rounded-lg bg-surface-subtle border border-edge flex-1">
+          <button
+            type="button"
+            onClick={() => setSidebarTab("scenarios")}
+            className={`flex items-center justify-center gap-1.5 py-1.5 rounded-md text-[10px] uppercase tracking-widest font-mono font-semibold transition-all cursor-pointer ${
+              sidebarTab === "scenarios"
+                ? "bg-surface text-text-main shadow-xs border border-edge"
+                : "text-text-faint hover:text-text-secondary"
+            }`}
+          >
+            <span>{t("scenarioList.title")}</span>
+            <span className="text-[9px] px-1.5 rounded-sm bg-surface-hover text-text-secondary font-mono">
+              {tasks.length}
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setSidebarTab("playlists")}
+            className={`flex items-center justify-center gap-1.5 py-1.5 rounded-md text-[10px] uppercase tracking-widest font-mono font-semibold transition-all cursor-pointer ${
+              sidebarTab === "playlists"
+                ? "bg-surface text-text-main shadow-xs border border-edge"
+                : "text-text-faint hover:text-text-secondary"
+            }`}
+          >
+            <span>{t("tab.playlist")}</span>
+            <span className="text-[9px] px-1.5 rounded-sm bg-surface-hover text-text-secondary font-mono">
+              {playlists.length}
+            </span>
+          </button>
+        </div>
+
+        <Tooltip content="Collapse sidebar" side="left">
+          <button
+            type="button"
+            onClick={toggleCollapse}
+            aria-label="Collapse sidebar"
+            className="w-8 h-8 rounded-lg bg-surface hover:bg-surface-hover border border-edge text-text-faint hover:text-text-main flex items-center justify-center transition-colors cursor-pointer shrink-0"
+          >
+            <CaretLeft size={14} weight="bold" />
+          </button>
+        </Tooltip>
       </div>
 
       {/* Search Input & Action Buttons */}
@@ -271,25 +363,24 @@ export function ScenarioList({
                 ? t("playlist.searchPlaceholder")
                 : t("scenarioList.search")
             }
-            className="minimal-input text-[11px] font-mono py-2 pl-8 pr-8 w-full uppercase placeholder:text-text-faint"
+            className="minimal-input text-[11px] font-mono py-1.5 pl-8 pr-8 w-full uppercase placeholder:text-text-faint"
           />
           <MagnifyingGlass
-            size={14}
+            size={13}
             weight="bold"
             className="text-text-muted absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none"
           />
           {search && (
             <button
               onClick={() => setSearch("")}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-main p-0.5 rounded-full"
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-main p-0.5 rounded-full cursor-pointer"
             >
-              <X size={13} weight="bold" />
+              <X size={12} weight="bold" />
             </button>
           )}
         </div>
 
-        {/* Action buttons */}
-        <div className="flex items-center gap-1.5 shrink-0">
+        <div className="flex items-center gap-1 shrink-0">
           {sidebarTab === "scenarios" ? (
             <>
               {onAddToPlaylist && tasks.length > 0 && (
@@ -300,22 +391,22 @@ export function ScenarioList({
                     if (selectMode) setSelectedIds(new Set());
                   }}
                   title={selectMode ? t("scenarioList.cancelSelect") : t("scenarioList.selectMode")}
-                  className={`p-2 text-[10px] font-mono font-bold rounded-lg border transition-all shrink-0 ${
+                  className={`p-2 text-[10px] font-mono font-bold rounded-lg border transition-all shrink-0 cursor-pointer ${
                     selectMode
                       ? "bg-score text-white border-score shadow-sm"
-                      : "bg-surface text-text-secondary hover:text-text-main border-edge"
+                      : "bg-surface text-text-secondary hover:text-text-main border border-edge"
                   }`}
                 >
-                  <Checks size={14} weight="bold" />
+                  <Checks size={13} weight="bold" />
                 </button>
               )}
 
               <button
                 type="button"
                 onClick={onNewTask}
-                className="bg-surface px-3 py-2 text-[10px] font-mono font-bold uppercase tracking-widest gap-1.5 text-text-secondary hover:text-text-main border border-edge rounded-lg shrink-0 inline-flex items-center"
+                className="bg-surface px-2.5 py-1.5 text-[10px] font-mono font-bold uppercase tracking-widest gap-1 text-text-secondary hover:text-text-main border border-edge rounded-lg shrink-0 inline-flex items-center cursor-pointer"
               >
-                <Plus size={13} weight="bold" />
+                <Plus size={12} weight="bold" />
                 <span>{t("task.new").replace("+ ", "")}</span>
               </button>
             </>
@@ -327,18 +418,18 @@ export function ScenarioList({
                   onClick={handleSyncKovaak}
                   disabled={isSyncing}
                   title={t("playlist.syncGames")}
-                  className="bg-surface p-2 rounded-lg text-text-secondary hover:text-text-main border border-edge disabled:opacity-50 shrink-0 inline-flex items-center"
+                  className="bg-surface p-2 rounded-lg text-text-secondary hover:text-text-main border border-edge disabled:opacity-50 shrink-0 inline-flex items-center cursor-pointer"
                 >
-                  <ArrowsClockwise size={14} weight="bold" className={isSyncing ? "animate-spin" : ""} />
+                  <ArrowsClockwise size={13} weight="bold" className={isSyncing ? "animate-spin" : ""} />
                 </button>
               )}
               {onOpenPlaylistManager && (
                 <button
                   type="button"
                   onClick={onOpenPlaylistManager}
-                  className="bg-surface px-3 py-2 text-[10px] font-mono font-bold uppercase tracking-widest gap-1.5 text-text-secondary hover:text-text-main border border-edge rounded-lg shrink-0 inline-flex items-center"
+                  className="bg-surface px-2.5 py-1.5 text-[10px] font-mono font-bold uppercase tracking-widest gap-1 text-text-secondary hover:text-text-main border border-edge rounded-lg shrink-0 inline-flex items-center cursor-pointer"
                 >
-                  <Plus size={13} weight="bold" />
+                  <Plus size={12} weight="bold" />
                   <span>PLAYLIST</span>
                 </button>
               )}
@@ -353,7 +444,7 @@ export function ScenarioList({
           <span>{t("scenarioList.selectedCount", { n: selectedIds.size })}</span>
           <button
             onClick={() => handleSelectAll(filteredTasks)}
-            className="hover:underline text-[9px] uppercase tracking-widest"
+            className="hover:underline text-[9px] uppercase tracking-widest cursor-pointer"
           >
             {filteredTasks.every((t) => selectedIds.has(t.id))
               ? t("scenarioList.collapseAll")
@@ -362,8 +453,8 @@ export function ScenarioList({
         </div>
       )}
 
-      {/* Scrollable Scenario or Playlist List */}
-      <div className="max-h-[420px] overflow-y-auto space-y-2 pr-1 scrollbar-thin scrollbar-thumb-surface-hover scrollbar-track-transparent">
+      {/* Middle Scrollable Items Container (Independent full-height scroll) */}
+      <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar space-y-2 pr-1">
         {sidebarTab === "scenarios" ? (
           tasks.length === 0 ? (
             <div className="py-8 text-center text-[10px] font-mono uppercase tracking-widest text-text-faint border border-dashed border-edge rounded-lg">
@@ -375,69 +466,98 @@ export function ScenarioList({
             </div>
           ) : (
             groupedTasks.map(({ category, subcategories, totalCount }) => {
-              const isCollapsed = collapsedCategories.has(category);
+              const isCollapsedCategory = collapsedCategories.has(category);
               return (
-                <div key={category} className="space-y-1 mb-3 border-b border-edge pb-2">
+                <div key={category} className="space-y-1 mb-2 border-b border-edge pb-2">
                   {/* Category Header */}
                   <button
                     type="button"
                     onClick={() => toggleCategory(category)}
                     className="w-full px-2 py-1 flex items-center justify-between text-left cursor-pointer select-none text-[11px] font-mono uppercase tracking-wider text-text-faint hover:text-text-main transition-colors"
                   >
-                    <span>{category}</span>
-                    <span className="text-[10px] text-text-muted">{totalCount}</span>
+                    <div className="flex items-center gap-1.5">
+                      <CaretDown
+                        size={11}
+                        weight="bold"
+                        className={`transition-transform duration-200 ${
+                          isCollapsedCategory ? "-rotate-90 text-text-muted" : "rotate-0 text-text-secondary"
+                        }`}
+                      />
+                      <span>{category}</span>
+                    </div>
+                    <span className="text-[10px] text-text-muted font-mono">{totalCount}</span>
                   </button>
 
-                  {/* Subcategories & Items */}
-                  {!isCollapsed && (
-                    <div className="px-1 space-y-1">
-                      {subcategories.map(({ subcategory, tasks: subTasks }) => (
-                        <div key={subcategory} className="space-y-0.5">
-                          {subTasks.map((task) => {
-                            const isSelected = selectedIds.has(task.id);
-                            const isActive = task.id === activeTaskId;
+                  {/* Smooth Accordion with AnimatePresence */}
+                  <AnimatePresence initial={false}>
+                    {!isCollapsedCategory && (
+                      <motion.div
+                        key={`cat-content-${category}`}
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: "auto", opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.18, ease: "easeInOut" }}
+                        className="overflow-hidden"
+                      >
+                        <div className="px-1 space-y-1 pt-0.5">
+                          {subcategories.map(({ subcategory, tasks: subTasks }) => (
+                            <div key={subcategory} className="space-y-0.5">
+                              {subTasks.map((task) => {
+                                const isSelected = selectedIds.has(task.id);
+                                const isActive = task.id === activeTaskId;
 
-                            return (
-                              <div
-                                key={task.id}
-                                onClick={() => {
-                                  if (selectMode) {
-                                    toggleSelectTask(task.id);
-                                  } else {
-                                    onTaskChange(task.id);
-                                  }
-                                }}
-                                className={`group px-2 py-1.5 rounded-md text-xs cursor-pointer transition-all flex items-center justify-between gap-2 ${
-                                  isActive && !selectMode
-                                    ? "bg-surface-subtle text-text-main font-medium shadow-xs"
-                                    : isSelected && selectMode
-                                    ? "bg-score-soft text-text-main"
-                                    : "text-text-secondary hover:text-text-main hover:bg-surface-hover/60"
-                                }`}
-                              >
-                                <div className="flex items-center gap-2 min-w-0 flex-1">
-                                  {selectMode && (
-                                    <input
-                                      type="checkbox"
-                                      checked={isSelected}
-                                      onChange={() => toggleSelectTask(task.id)}
-                                      onClick={(e) => e.stopPropagation()}
-                                      className="rounded-sm border-edge text-score focus:ring-0 cursor-pointer"
-                                    />
-                                  )}
-                                  <span className="truncate">{task.name}</span>
-                                </div>
-                              </div>
-                            );
-                          })}
+                                return (
+                                  <div
+                                    key={task.id}
+                                    onClick={() => {
+                                      if (selectMode) {
+                                        toggleSelectTask(task.id);
+                                      } else {
+                                        onTaskChange(task.id);
+                                      }
+                                    }}
+                                    className={`group px-2 py-1.5 rounded-md text-xs cursor-pointer transition-all flex items-center justify-between gap-2 ${
+                                      isActive && !selectMode
+                                        ? "bg-surface-subtle text-text-main font-medium shadow-xs border border-edge"
+                                        : isSelected && selectMode
+                                        ? "bg-score-soft text-text-main border border-score/30"
+                                        : "text-text-secondary hover:text-text-main hover:bg-surface-hover/60"
+                                    }`}
+                                  >
+                                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                                      {selectMode && (
+                                        <input
+                                          type="checkbox"
+                                          checked={isSelected}
+                                          onChange={() => toggleSelectTask(task.id)}
+                                          onClick={(e) => e.stopPropagation()}
+                                          className="rounded-sm border-edge text-score focus:ring-0 cursor-pointer"
+                                        />
+                                      )}
+                                      {isActive && !selectMode && (
+                                        <div className="w-1 h-3 rounded-full bg-score shrink-0" />
+                                      )}
+                                      <span className="truncate" title={task.name}>
+                                        {task.name}
+                                      </span>
+                                    </div>
+                                    {task.sessions && task.sessions.length > 0 && (
+                                      <span className="text-[10px] font-mono tabular-nums text-text-faint px-1.5 py-0.2 rounded bg-surface border border-edge shrink-0">
+                                        {Math.max(...task.sessions.map((s) => s.pb))}
+                                      </span>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          ))}
                         </div>
-                      ))}
-                    </div>
-                  )}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
               );
             })
-
           )
         ) : (
           /* Playlists Tab View */
@@ -449,9 +569,9 @@ export function ScenarioList({
                   type="button"
                   onClick={handleSyncKovaak}
                   disabled={isSyncing}
-                  className="bg-surface px-3 py-1.5 text-text-secondary hover:text-text-main border border-edge rounded-md mx-auto inline-flex items-center gap-1.5 disabled:opacity-50"
+                  className="bg-surface px-3 py-1.5 text-text-secondary hover:text-text-main border border-edge rounded-md mx-auto inline-flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
                 >
-                  <ArrowsClockwise className={isSyncing ? "animate-spin" : ""} size={14} />
+                  <ArrowsClockwise className={isSyncing ? "animate-spin" : ""} size={13} />
                   <span>{isSyncing ? "SYNCING..." : "SYNC KOVAAK"}</span>
                 </button>
               )}
@@ -468,16 +588,16 @@ export function ScenarioList({
               return (
                 <div
                   key={pl.id}
-                  className={`border rounded-lg transition-all overflow-hidden ${
+                  className={`rounded-lg transition-all overflow-hidden mb-2 border ${
                     isRunningThis
-                      ? "border-score/40 bg-score/5 shadow-xs"
-                      : "border-edge bg-surface"
+                      ? "border-score/35 bg-score/[0.04] shadow-xs relative before:absolute before:left-0 before:top-0 before:bottom-0 before:w-1 before:bg-score"
+                      : "border-edge bg-surface/70 hover:bg-surface hover:border-edge-strong"
                   }`}
                 >
                   {/* Playlist Header Row */}
                   <div
                     onClick={() => toggleExpandPlaylist(pl.id)}
-                    className="w-full px-3 py-2 flex items-center justify-between gap-2 hover:bg-surface-hover transition-colors cursor-pointer select-none"
+                    className="w-full px-3 py-2 flex items-center justify-between gap-2 hover:bg-surface-hover/70 transition-colors cursor-pointer select-none"
                   >
                     <div className="flex items-center gap-2 min-w-0 flex-1">
                       <CaretDown
@@ -487,10 +607,10 @@ export function ScenarioList({
                           isExpanded ? "rotate-0" : "-rotate-90"
                         }`}
                       />
-                      <span className="text-[11px] font-mono font-bold uppercase tracking-widest text-text-main truncate" title={pl.name}>
+                      <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-text-main truncate" title={pl.name}>
                         {pl.name}
                       </span>
-                      <span className="text-[9px] px-1.5 rounded-sm bg-surface-subtle border border-edge text-text-muted font-mono font-bold shrink-0">
+                      <span className="text-[9px] px-1.5 py-0.2 rounded bg-surface-subtle border border-edge text-text-faint font-mono shrink-0">
                         {pl.items.length}
                       </span>
                     </div>
@@ -508,20 +628,20 @@ export function ScenarioList({
                           }
                         }}
                         title={isRunningThis ? t("runner.exit") : t("playlist.start")}
-                        className={`px-2 py-0.5 rounded-sm text-[9px] uppercase tracking-widest font-mono font-bold transition-all flex items-center gap-1 shrink-0 ${
+                        className={`px-2 py-0.5 rounded text-[9px] uppercase tracking-wider font-mono font-bold transition-all flex items-center gap-1 shrink-0 cursor-pointer active:scale-95 ${
                           isRunningThis
-                            ? "bg-red/10 hover:bg-red/20 text-red border border-red/30"
-                            : "bg-score/10 hover:bg-score/20 text-score border border-score/30"
+                            ? "bg-red/15 hover:bg-red/25 text-red border border-red/30"
+                            : "bg-score/10 hover:bg-score/20 text-score border border-score/25"
                         }`}
                       >
                         {isRunningThis ? (
                           <>
-                            <Stop size={10} weight="bold" />
+                            <Stop size={10} weight="fill" />
                             <span>STOP</span>
                           </>
                         ) : (
                           <>
-                            <Play size={10} weight="bold" />
+                            <Play size={10} weight="fill" />
                             <span>PLAY</span>
                           </>
                         )}
@@ -529,89 +649,100 @@ export function ScenarioList({
                     )}
                   </div>
 
-                  {/* Expanded Scenario Items */}
-                  {isExpanded && (
-                    <div className="px-2 pb-2 space-y-1">
-                      {pl.items.length === 0 ? (
-                        <div className="text-[10px] font-mono uppercase tracking-widest text-text-faint text-center py-2">
-                          {t("playlist.emptyList")}
-                        </div>
-                      ) : (
-                        pl.items.map((item, idx) => {
-                          const task = taskMap.get(item.taskId);
-                          const isStepActive = isRunningThis && runningStepIndex === idx;
-                          const isActive = task && task.id === activeTaskId;
-                          const displaySensInfo = task
-                            ? categorySensMap.get(`${task.category}__${task.subcategory}`) ??
-                              getDisplaySens(task.category, task.subcategory)
-                            : null;
-                          const pb = task ? getTaskPb(task) : null;
-                          const targetLabel =
-                            item.targetMode === "time"
-                              ? `${item.targetValue}s`
-                              : `${item.targetValue}x`;
-
-                          return (
-                            <div
-                              key={`${pl.id}-${item.taskId}-${idx}`}
-                              onClick={() => {
-                                if (isRunningThis && onJumpToStep) {
-                                  onJumpToStep(idx);
-                                } else if (task) {
-                                  onTaskChange(task.id);
-                                }
-                              }}
-                              className={`group px-2 py-1.5 rounded-md border text-[10px] font-mono cursor-pointer transition-all flex items-center justify-between gap-2 ${
-                                isActive || isStepActive
-                                  ? "bg-score/10 border-score/40 text-text-main font-bold shadow-sm"
-                                  : "bg-surface-subtle border-edge hover:border-edge-strong text-text-secondary hover:text-text-main font-semibold"
-                              }`}
-                            >
-                              <div className="flex items-center gap-2 min-w-0 flex-1">
-                                <div
-                                  className={`w-1.5 h-1.5 rounded-sm shrink-0 ${
-                                    isActive || isStepActive
-                                      ? "bg-score"
-                                      : "bg-transparent group-hover:bg-text-faint"
-                                  }`}
-                                />
-                                <span className="truncate">
-                                  {task ? task.name : `Cenário (${item.taskId.slice(0, 6)})`}
-                                </span>
-                              </div>
-
-                              <div className="flex items-center gap-1.5 shrink-0">
-                                {displaySensInfo && (
-                                  <span
-                                    title={
-                                      displaySensInfo.source === "predicted"
-                                        ? t("categorySens.sourcePredicted")
-                                        : t("categorySens.sourceViscose")
-                                    }
-                                    className={`px-1 rounded-sm border ${
-                                      displaySensInfo.source === "predicted"
-                                        ? "bg-emerald/10 border-emerald/20 text-emerald"
-                                        : "bg-surface border-edge text-text-faint"
-                                    }`}
-                                  >
-                                    {displaySensInfo.value}cm
-                                  </span>
-                                )}
-                                {pb !== null && (
-                                  <span className="px-1 rounded-sm bg-surface border border-edge text-text-secondary">
-                                    {pb}
-                                  </span>
-                                )}
-                                <span className="text-text-faint opacity-80">
-                                  {targetLabel}
-                                </span>
-                              </div>
+                  {/* Smooth Accordion for Playlist Items */}
+                  <AnimatePresence initial={false}>
+                    {isExpanded && (
+                      <motion.div
+                        key={`pl-content-${pl.id}`}
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: "auto", opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.18, ease: "easeInOut" }}
+                        className="overflow-hidden"
+                      >
+                        <div className="px-2 pb-2 space-y-1 pt-1">
+                          {pl.items.length === 0 ? (
+                            <div className="text-[10px] font-mono uppercase tracking-widest text-text-faint text-center py-2">
+                              {t("playlist.emptyList")}
                             </div>
-                          );
-                        })
-                      )}
-                    </div>
-                  )}
+                          ) : (
+                            pl.items.map((item, idx) => {
+                              const task = taskMap.get(item.taskId);
+                              const isStepActive = isRunningThis && runningStepIndex === idx;
+                              const isActive = task && task.id === activeTaskId;
+                              const displaySensInfo = task
+                                ? categorySensMap.get(`${task.category}__${task.subcategory}`) ??
+                                  getDisplaySens(task.category, task.subcategory)
+                                : null;
+                              const pb = task ? getTaskPb(task) : null;
+                              const targetLabel =
+                                item.targetMode === "time"
+                                  ? `${item.targetValue}s`
+                                  : `${item.targetValue}x`;
+
+                              return (
+                                <div
+                                  key={`${pl.id}-${item.taskId}-${idx}`}
+                                  onClick={() => {
+                                    if (isRunningThis && onJumpToStep) {
+                                      onJumpToStep(idx);
+                                    } else if (task) {
+                                      onTaskChange(task.id);
+                                    }
+                                  }}
+                                  className={`group px-2 py-1.5 rounded-md border text-[10px] font-mono cursor-pointer transition-all flex items-center justify-between gap-2 ${
+                                    isActive || isStepActive
+                                      ? "bg-score/10 border-score/30 text-text-main font-semibold shadow-xs"
+                                      : "bg-surface-subtle/50 border-edge hover:border-edge-strong text-text-secondary hover:text-text-main font-medium"
+                                  }`}
+                                >
+                                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                                    <div
+                                      className={`w-1.5 h-1.5 rounded-sm shrink-0 ${
+                                        isActive || isStepActive
+                                          ? "bg-score"
+                                          : "bg-transparent group-hover:bg-text-faint"
+                                      }`}
+                                    />
+                                    <span className="truncate">
+                                      {task ? task.name : `Cenário (${item.taskId.slice(0, 6)})`}
+                                    </span>
+                                  </div>
+
+                                  <div className="flex items-center gap-1.5 shrink-0">
+                                    {displaySensInfo && (
+                                      <span
+                                        title={
+                                          displaySensInfo.source === "predicted"
+                                            ? t("categorySens.sourcePredicted")
+                                            : t("categorySens.sourceViscose")
+                                        }
+                                        className={`px-1 rounded-sm border ${
+                                          displaySensInfo.source === "predicted"
+                                            ? "bg-emerald/10 border-emerald/20 text-emerald"
+                                            : "bg-surface border border-edge text-text-faint"
+                                        }`}
+                                      >
+                                        {displaySensInfo.value}cm
+                                      </span>
+                                    )}
+                                    {pb !== null && (
+                                      <span className="px-1 rounded-sm bg-surface border border-edge text-text-secondary">
+                                        {pb}
+                                      </span>
+                                    )}
+                                    <span className="text-text-faint opacity-80">
+                                      {targetLabel}
+                                    </span>
+                                  </div>
+                                </div>
+                              );
+                            })
+                          )}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
               );
             })
@@ -621,10 +752,10 @@ export function ScenarioList({
 
       {/* Bottom Action: Add Selected to Playlist (Scenarios tab only) */}
       {sidebarTab === "scenarios" && selectMode && selectedIds.size > 0 && (
-        <div className="mt-3 pt-3 border-t border-edge">
+        <div className="mt-2.5 pt-2.5 border-t border-edge">
           <button
             onClick={handleAddSelected}
-            className="w-full bg-score hover:bg-score/90 text-surface font-mono font-bold uppercase tracking-widest py-2 px-3 rounded-lg text-[10px] flex items-center justify-center gap-2 shadow-sm transition-all"
+            className="w-full bg-score hover:bg-score/90 text-surface font-mono font-bold uppercase tracking-widest py-2 px-3 rounded-lg text-[10px] flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer"
           >
             <Plus size={12} weight="bold" />
             <span>
@@ -637,7 +768,7 @@ export function ScenarioList({
       )}
 
       {/* Footer */}
-      <div className="mt-3.5 pt-2.5 border-t border-edge flex justify-between items-center text-[10px] font-mono font-bold uppercase tracking-widest text-text-faint">
+      <div className="mt-2.5 pt-2.5 border-t border-edge flex justify-between items-center text-[10px] font-mono font-bold uppercase tracking-widest text-text-faint">
         <span className="opacity-80">
           {sidebarTab === "scenarios"
             ? t("task.count", { n: tasks.length })
@@ -647,10 +778,10 @@ export function ScenarioList({
         {sidebarTab === "scenarios" && activeTask && !selectMode && (
           <button
             onClick={onDeleteTask}
-            className="text-text-muted hover:text-red transition-colors flex items-center gap-1 px-2 py-1 rounded-md hover:bg-red/10"
+            className="text-text-muted hover:text-red transition-colors flex items-center gap-1 px-2 py-1 rounded-md hover:bg-red/10 cursor-pointer"
           >
             <Trash size={12} weight="bold" />
-            <span>DELETE</span>
+            <span>{t("hist.delete")}</span>
           </button>
         )}
 
@@ -658,13 +789,12 @@ export function ScenarioList({
           <button
             type="button"
             onClick={onOpenPlaylistManager}
-            className="text-text-faint hover:text-text-main transition-colors flex items-center gap-1 px-2 py-1 rounded-md hover:bg-surface-hover"
+            className="text-text-faint hover:text-text-main transition-colors flex items-center gap-1 px-2 py-1 rounded-md hover:bg-surface-hover cursor-pointer"
           >
-            <span>MANAGE</span>
+            <span>{t("playlist.manage")}</span>
           </button>
         )}
       </div>
-    </section>
+    </aside>
   );
 }
-

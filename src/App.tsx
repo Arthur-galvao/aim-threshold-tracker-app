@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { motion, AnimatePresence } from "motion/react";
 import { AppProvider, useApp } from "@/hooks/useAppData";
 import { useKovaakWatcher } from "@/hooks/useKovaakWatcher";
 import { useSensRandomizer } from "@/hooks/useSensRandomizer";
@@ -20,6 +21,7 @@ import { AimLabSyncModal } from "@/components/aimlab/AimLabSyncModal";
 import { Toast } from "@/components/Toast";
 import type { AppSettings, Playlist } from "@/lib/types";
 import { getSettings, saveSettings } from "@/lib/tauri-bridge";
+import { getStoredTheme, applyTheme, type AppTheme } from "@/lib/theme";
 
 function Dashboard() {
   const {
@@ -60,12 +62,18 @@ function Dashboard() {
   } = useSensRandomizer();
 
   const [activeTab, setActiveTab] = useState<"dashboard" | "randomizer" | "playlist">("dashboard");
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [aimlabOpen, setAimlabOpen] = useState(false);
+  const [theme, setTheme] = useState<AppTheme>(getStoredTheme);
   const [newTaskOpen, setNewTaskOpen] = useState(false);
   const [sessionModalOpen, setSessionModalOpen] = useState(false);
   const [playlistManagerOpen, setPlaylistManagerOpen] = useState(false);
   const [pendingPlaylistTaskIds, setPendingPlaylistTaskIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    applyTheme(theme);
+  }, [theme]);
 
   const handleAddToPlaylist = useCallback((taskIds: string[]) => {
     setPendingPlaylistTaskIds(taskIds);
@@ -141,7 +149,7 @@ function Dashboard() {
   );
 
   return (
-    <div className="relative min-h-screen h-screen bg-[#090b10] text-text-main flex flex-row overflow-hidden selection:bg-blue-500/25 selection:text-blue-200">
+    <div className="relative min-h-screen h-screen bg-base text-text-main flex flex-row overflow-hidden selection:bg-score/25 selection:text-score">
       <div className="dot-bg" aria-hidden="true" />
 
       {/* Pane 1: Scenario Navigation Sidebar */}
@@ -165,6 +173,8 @@ function Dashboard() {
         onSyncGames={async () => {
           await syncGamePlaylists(true);
         }}
+        sidebarCollapsed={sidebarCollapsed}
+        onToggleSidebar={() => setSidebarCollapsed((prev) => !prev)}
       />
 
       {/* Pane 3: Main Workspace Stage */}
@@ -177,55 +187,68 @@ function Dashboard() {
           onOpenAimlab={() => setAimlabOpen(true)}
           watcherStatus={watcherStatus}
           onNewSession={() => setSessionModalOpen(true)}
+          currentTheme={theme}
+          onThemeChange={setTheme}
         />
 
-        <main className="flex-1 p-4 sm:p-6 lg:p-7 space-y-5 max-w-[1550px] w-full mx-auto">
-          {activeTab === "dashboard" ? (
-            <>
-              {/* Active Playlist Runner Banner in Dashboard */}
-              <DashboardPlaylistRunner runner={playlistRunner} />
+        <main className="flex-1 p-4 sm:p-6 lg:p-7 max-w-[1550px] w-full mx-auto">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={activeTab}
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -4 }}
+              transition={{ duration: 0.15, ease: "easeOut" }}
+              className="space-y-5"
+            >
+              {activeTab === "dashboard" ? (
+                <>
+                  {/* Active Playlist Runner Banner in Dashboard */}
+                  <DashboardPlaylistRunner runner={playlistRunner} />
 
-              {/* Top Full-Width KPI Metrics Cards */}
-              <section aria-label="KPI Metrics">
-                <MetricsCards activeTask={activeTask} />
-              </section>
+                  {/* Top Full-Width KPI Metrics Cards */}
+                  <section aria-label="KPI Metrics">
+                    <MetricsCards activeTask={activeTask} />
+                  </section>
 
-              {/* Full-Width Telemetry Data Chart ("Data Chart" in mockup) */}
-              <section aria-label="Telemetry Chart">
-                <ProgressChart activeTask={activeTask} />
-              </section>
+                  {/* Full-Width Telemetry Data Chart ("Data Chart" in mockup) */}
+                  <section aria-label="Telemetry Chart">
+                    <ProgressChart activeTask={activeTask} />
+                  </section>
 
-              {/* Full-Width Scenario History Table ("Scenario Table" in mockup) */}
-              <section aria-label="Session History">
-                <HistoryTable
+                  {/* Full-Width Scenario History Table ("Scenario Table" in mockup) */}
+                  <section aria-label="Session History">
+                    <HistoryTable
+                      activeTask={activeTask}
+                      onDeleteSession={deleteSession}
+                      onCopyEscalate={handleCopyEscalate}
+                      onNewSession={() => setSessionModalOpen(true)}
+                    />
+                  </section>
+                </>
+              ) : activeTab === "randomizer" ? (
+                <SensRandomizerView
                   activeTask={activeTask}
-                  onDeleteSession={deleteSession}
-                  onCopyEscalate={handleCopyEscalate}
-                  onNewSession={() => setSessionModalOpen(true)}
+                  allTasks={appData.tasks}
+                  playlists={appData.playlists ?? []}
                 />
-              </section>
-            </>
-          ) : activeTab === "randomizer" ? (
-            <SensRandomizerView
-              activeTask={activeTask}
-              allTasks={appData.tasks}
-              playlists={appData.playlists ?? []}
-            />
-          ) : (
-            <PlaylistRunnerView
-              runner={playlistRunner}
-              playlists={appData.playlists ?? []}
-              tasks={appData.tasks}
-              onOpenManager={() => {
-                setPendingPlaylistTaskIds([]);
-                setPlaylistManagerOpen(true);
-              }}
-              onSyncGames={async () => {
-                await syncGamePlaylists(true);
-              }}
-              onApplySens={handleApplySens}
-            />
-          )}
+              ) : (
+                <PlaylistRunnerView
+                  runner={playlistRunner}
+                  playlists={appData.playlists ?? []}
+                  tasks={appData.tasks}
+                  onOpenManager={() => {
+                    setPendingPlaylistTaskIds([]);
+                    setPlaylistManagerOpen(true);
+                  }}
+                  onSyncGames={async () => {
+                    await syncGamePlaylists(true);
+                  }}
+                  onApplySens={handleApplySens}
+                />
+              )}
+            </motion.div>
+          </AnimatePresence>
         </main>
 
         <footer className="py-4 px-6 text-center text-xs text-text-faint border-t border-edge bg-[#07080c]/60">
@@ -273,6 +296,8 @@ function Dashboard() {
         onLoadDemo={loadDemoData}
         onClear={clearAllData}
         onUpdateAppSettings={handleUpdateAppSettings}
+        currentTheme={theme}
+        onThemeChange={setTheme}
       />
 
       <AimLabSyncModal

@@ -73,3 +73,12 @@ pnpm-debug.log*
 .agents/
 .antigravity/
 .superpowers/
+
+# Local test & debug artifacts
+debug_cards.js
+find_duplicates.cjs
+test_output.css
+screenshot_tool.js
+*.png
+!src-tauri/icons/*.png
+src/components/DesignMockupsModal.tsx

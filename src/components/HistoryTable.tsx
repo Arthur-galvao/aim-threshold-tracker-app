@@ -7,6 +7,7 @@ import { formatSensitivity } from "@/lib/sens-analytics";
 import { Button } from "@/components/ui/Button";
 import { IconButton } from "@/components/ui/IconButton";
 import { Badge } from "@/components/ui/Badge";
+import { Tooltip } from "@/components/ui/Tooltip";
 
 import {
   Table,
@@ -34,10 +35,11 @@ export function HistoryTable({
   const sessions = activeTask
     ? [...activeTask.sessions].sort((a, b) => b.date.localeCompare(a.date))
     : [];
+  const maxPB = sessions.length > 0 ? Math.max(...sessions.map((s) => s.pb)) : null;
   const { t } = useI18n();
 
   return (
-    <div className="p-4 sm:p-5 rounded-xl bg-[#12141e]/60">
+    <div className="p-4 sm:p-5 rounded-xl bg-surface border border-edge shadow-xs">
       <div className="flex items-center justify-between gap-3 mb-4">
         <div className="flex items-center gap-2.5">
           <div className="w-6 h-6 rounded-md bg-surface-subtle text-text-secondary border border-edge flex items-center justify-center">
@@ -55,26 +57,30 @@ export function HistoryTable({
 
         <div className="flex items-center gap-2">
           {onNewSession && (
+            <Tooltip content={t("session.title")}>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={onNewSession}
+                className="h-7.5 px-2.5 text-xs rounded-md font-mono"
+                icon={<Plus size={12} weight="bold" />}
+              >
+                {t("session.title")}
+              </Button>
+            </Tooltip>
+          )}
+          <Tooltip content={t("hist.copy")}>
             <Button
               variant="secondary"
               size="sm"
-              onClick={onNewSession}
+              onClick={onCopyEscalate}
+              disabled={!activeTask?.sessions.length}
               className="h-7.5 px-2.5 text-xs rounded-md font-mono"
-              icon={<Plus size={12} weight="bold" />}
+              icon={<Copy size={12} weight="bold" />}
             >
-              {t("session.title")}
+              {t("hist.copy")}
             </Button>
-          )}
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={onCopyEscalate}
-            disabled={!activeTask?.sessions.length}
-            className="h-7.5 px-2.5 text-xs rounded-md font-mono"
-            icon={<Copy size={12} weight="bold" />}
-          >
-            {t("hist.copy")}
-          </Button>
+          </Tooltip>
         </div>
       </div>
 
@@ -108,7 +114,7 @@ export function HistoryTable({
                 return (
                   <TableRow
                     key={session.id}
-                    className="group border-b border-edge hover:bg-surface-hover/30 transition-colors"
+                    className="group border-b border-edge hover:bg-surface-hover/50 transition-colors duration-150"
                   >
                     <TableCell className="text-text-secondary tabular-nums font-mono text-xs font-medium">
                       {d}/{m}
@@ -121,13 +127,26 @@ export function HistoryTable({
                         <span className="font-bold font-mono text-text-main text-xs sm:text-sm">
                           {session.pb}
                         </span>
-                        <Badge
-                          variant={isTargetBeat ? "emerald" : "neutral"}
-                          size="sm"
-                          className="font-mono text-[10px]"
+                        {maxPB !== null && session.pb === maxPB && (
+                          <span className="text-[9px] font-mono font-bold px-1.5 py-0.2 rounded bg-amber-soft text-amber border border-amber-edge">
+                            {t("hist.pbBadge")}
+                          </span>
+                        )}
+                        <Tooltip
+                          content={
+                            isTargetBeat
+                              ? t("hist.aboveThreshold", { n: delta })
+                              : t("hist.belowThreshold", { n: Math.abs(delta) })
+                          }
                         >
-                          {delta > 0 ? `+${delta}` : delta === 0 ? "= 0" : `${delta}`}
-                        </Badge>
+                          <Badge
+                            variant={isTargetBeat ? "emerald" : "neutral"}
+                            size="sm"
+                            className="font-mono text-[10px]"
+                          >
+                            {delta > 0 ? `+${delta}` : delta === 0 ? "= 0" : `${delta}`}
+                          </Badge>
+                        </Tooltip>
                       </div>
                     </TableCell>
                     <TableCell className="font-bold font-mono tabular-nums text-score text-xs">
@@ -157,15 +176,17 @@ export function HistoryTable({
                           </button>
                         </div>
                       ) : (
-                        <IconButton
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setConfirmDeleteId(session.id)}
-                          aria-label={t("hist.delete")}
-                          className="text-text-faint hover:text-red hover:bg-red-soft transition-colors opacity-70 group-hover:opacity-100"
-                        >
-                          <Trash size={13} weight="regular" />
-                        </IconButton>
+                        <Tooltip content={t("hist.delete")}>
+                          <IconButton
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setConfirmDeleteId(session.id)}
+                            aria-label={t("hist.delete")}
+                            className="text-text-faint hover:text-red hover:bg-red-soft transition-colors opacity-70 group-hover:opacity-100"
+                          >
+                            <Trash size={13} weight="regular" />
+                          </IconButton>
+                        </Tooltip>
                       )}
                     </TableCell>
                   </TableRow>

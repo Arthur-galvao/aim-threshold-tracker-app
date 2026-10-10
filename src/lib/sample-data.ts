@@ -2,7 +2,25 @@ import type { AppData } from "./types";
 
 export const SAMPLE_DATA: AppData = {
   activeTaskId: "task_1",
-  playlists: [],
+  playlists: [
+    {
+      id: "pl_demo_1",
+      name: "Voltaic Intermediate Benchmark",
+      createdAt: "2026-10-28T10:00:00.000Z",
+      items: [
+        { id: "pli_1", taskId: "task_1", targetMode: "time", targetValue: 60 },
+        { id: "pli_2", taskId: "task_2", targetMode: "reps", targetValue: 3 },
+      ],
+    },
+    {
+      id: "pl_demo_2",
+      name: "Flick Precision Routine",
+      createdAt: "2026-10-28T10:00:00.000Z",
+      items: [
+        { id: "pli_3", taskId: "task_1", targetMode: "reps", targetValue: 5 },
+      ],
+    },
+  ],
   tasks: [
     {
       id: "task_1",

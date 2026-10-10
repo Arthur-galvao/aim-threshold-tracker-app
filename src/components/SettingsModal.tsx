@@ -10,12 +10,15 @@ import {
   Stop,
   MagnifyingGlass,
   Wrench,
+  Palette,
+  Check,
 } from "@phosphor-icons/react";
 import type { AppSettings, WatcherStatus } from "@/lib/types";
 import { getSettings, pickStatsFolder, saveSettings } from "@/lib/tauri-bridge";
 import { useI18n } from "@/lib/i18n";
 import { Dialog } from "@/components/ui/Dialog";
 import { Button } from "@/components/ui/Button";
+import { APP_THEMES, type AppTheme } from "@/lib/theme";
 
 interface SettingsModalProps {
   open: boolean;
@@ -39,6 +42,8 @@ interface SettingsModalProps {
   autoDetectPlaylist?: boolean;
   notifyStepAdvance?: boolean;
   onUpdateAppSettings?: (settings: Partial<AppSettings>) => Promise<void>;
+  currentTheme?: AppTheme;
+  onThemeChange?: (theme: AppTheme) => void;
 }
 
 export function SettingsModal({
@@ -63,6 +68,8 @@ export function SettingsModal({
   autoDetectPlaylist: propAutoDetectPlaylist,
   notifyStepAdvance: propNotifyStepAdvance,
   onUpdateAppSettings,
+  currentTheme = "cyber-lab",
+  onThemeChange,
 }: SettingsModalProps) {
   const [manualPath, setManualPath] = useState(settingsPath ?? "");
   const [manualRawaccel, setManualRawaccel] = useState(rawaccelPath ?? "");
@@ -462,6 +469,57 @@ export function SettingsModal({
             </div>
           </div>
         </div>
+
+        {/* Visual Theme Selection */}
+        {onThemeChange && (
+          <div className="space-y-3 pt-3 border-t border-edge">
+            <div>
+              <h4 className="text-[10px] font-mono tracking-widest uppercase font-bold uppercase tracking-wider text-text-main flex items-center gap-1.5">
+                <Palette size={13} weight="bold" className="text-score" />
+                <span>{t("theme.title")}</span>
+              </h4>
+              <p className="text-[11px] text-text-muted mt-0.5">
+                {t("theme.subtitle")}
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              {APP_THEMES.map((th) => {
+                const isSelected = th.id === currentTheme;
+                return (
+                  <button
+                    key={th.id}
+                    type="button"
+                    onClick={() => onThemeChange(th.id)}
+                    className={`p-2.5 rounded-lg border text-left font-mono transition-all flex items-start gap-2.5 cursor-pointer select-none ${
+                      isSelected
+                        ? "bg-surface-subtle border-score/40 shadow-xs"
+                        : "bg-surface/60 border-edge hover:border-edge-strong hover:bg-surface"
+                    }`}
+                  >
+                    <span
+                      className="w-3.5 h-3.5 rounded-full shrink-0 mt-0.5 shadow-xs"
+                      style={{ backgroundColor: th.color }}
+                    />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-1">
+                        <span className="text-[11px] font-bold text-text-main truncate">
+                          {th.name}
+                        </span>
+                        {isSelected && (
+                          <Check size={12} weight="bold" className="text-score shrink-0" />
+                        )}
+                      </div>
+                      <p className="text-[9px] text-text-muted line-clamp-1 mt-0.5 leading-tight">
+                        {th.desc}
+                      </p>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Data Management Section */}
         <div className="space-y-3 pt-3 border-t border-edge">

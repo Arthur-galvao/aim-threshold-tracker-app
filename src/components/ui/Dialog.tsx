@@ -1,6 +1,8 @@
-import React, { useEffect, useRef } from "react";
+import * as React from "react";
+import { Dialog as BaseDialog } from "@base-ui/react";
 import { X } from "@phosphor-icons/react";
 import { IconButton } from "./IconButton";
+import { cn } from "@/lib/utils";
 
 export interface DialogProps {
   open: boolean;
@@ -23,66 +25,6 @@ export function Dialog({
   className = "",
   contentClassName,
 }: DialogProps) {
-  const dialogRef = useRef<HTMLDivElement>(null);
-  const previousActiveElementRef = useRef<HTMLElement | null>(null);
-  const onCloseRef = useRef(onClose);
-  onCloseRef.current = onClose;
-
-  useEffect(() => {
-    if (!open) return;
-
-    previousActiveElementRef.current = document.activeElement as HTMLElement;
-
-    // Focus first focusable element within dialog ONCE on open, without scrolling
-    const focusable = dialogRef.current?.querySelectorAll<HTMLElement>(
-      'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
-    );
-    if (focusable && focusable.length > 0) {
-      focusable[0].focus({ preventScroll: true });
-    }
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        onCloseRef.current();
-        return;
-      }
-
-      if (e.key === "Tab") {
-        const focusable = dialogRef.current?.querySelectorAll<HTMLElement>(
-          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
-        );
-        if (!focusable || focusable.length === 0) return;
-
-        const first = focusable[0];
-        const last = focusable[focusable.length - 1];
-
-        if (e.shiftKey) {
-          if (document.activeElement === first) {
-            e.preventDefault();
-            last.focus({ preventScroll: true });
-          }
-        } else {
-          if (document.activeElement === last) {
-            e.preventDefault();
-            first.focus({ preventScroll: true });
-          }
-        }
-      }
-    };
-
-    document.addEventListener("keydown", handleKeyDown);
-    document.body.style.overflow = "hidden";
-
-    return () => {
-      document.removeEventListener("keydown", handleKeyDown);
-      document.body.style.overflow = "";
-      previousActiveElementRef.current?.focus({ preventScroll: true });
-    };
-  }, [open]);
-
-  if (!open) return null;
-
   const maxWidthClasses = {
     sm: "max-w-sm",
     md: "max-w-md",
@@ -95,47 +37,64 @@ export function Dialog({
     "mt-2 min-h-0 flex-1 overflow-y-auto custom-scrollbar pr-1 -mr-1 overscroll-contain";
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 overflow-hidden animate-fade-in"
+    <BaseDialog.Root
+      open={open}
+      onOpenChange={(isOpen) => {
+        if (!isOpen) onClose();
+      }}
     >
-      {/* Backdrop */}
-      <div
-        className="fixed inset-0 modal-scrim transition-opacity"
-        onClick={onClose}
-        aria-hidden="true"
-      />
-
-      {/* Dialog Window */}
-      <div
-        ref={dialogRef}
-        className={`relative w-full ${maxWidthClasses} panel p-6 rounded-2xl shadow-overlay border border-edge bg-surface z-10 max-h-[85vh] flex flex-col animate-pop-in ${className}`}
-      >
-        <div className="flex items-start justify-between gap-4 mb-3 shrink-0">
-          <div>
-            {title && (
-              <h2 className="text-base font-semibold text-text-main tracking-tight">
-                {title}
-              </h2>
+      <BaseDialog.Portal>
+        <BaseDialog.Backdrop className="fixed inset-0 z-50 modal-scrim transition-opacity duration-200 animate-fade-in" />
+        <BaseDialog.Popup
+          className={cn(
+            "fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 overflow-hidden pointer-events-none focus:outline-none"
+          )}
+        >
+          <div
+            className={cn(
+              "pointer-events-auto relative w-full panel p-6 rounded-2xl shadow-overlay border border-edge bg-surface z-10 max-h-[85vh] flex flex-col animate-pop-in",
+              maxWidthClasses,
+              className
             )}
-            {description && (
-              <p className="text-xs text-text-secondary mt-1">{description}</p>
-            )}
-          </div>
-          <IconButton
-            size="sm"
-            variant="ghost"
-            aria-label="Fechar"
-            onClick={onClose}
-            className="-mr-1.5 -mt-1.5"
           >
-            <X size={16} weight="bold" />
-          </IconButton>
-        </div>
+            <div className="flex items-start justify-between gap-4 mb-3 shrink-0">
+              <div>
+                {title && (
+                  <BaseDialog.Title className="text-base font-semibold text-text-main tracking-tight font-sans">
+                    {title}
+                  </BaseDialog.Title>
+                )}
+                {description && (
+                  <BaseDialog.Description className="text-xs text-text-secondary mt-1 font-sans">
+                    {description}
+                  </BaseDialog.Description>
+                )}
+              </div>
+              <IconButton
+                size="sm"
+                variant="ghost"
+                aria-label="Close"
+                onClick={onClose}
+                className="-mr-1.5 -mt-1.5 text-text-faint hover:text-text-main"
+              >
+                <X size={16} weight="bold" />
+              </IconButton>
+            </div>
 
-        <div className={contentClassName ?? defaultContentClass}>{children}</div>
-      </div>
-    </div>
+            <div className={contentClassName ?? defaultContentClass}>
+              {children}
+            </div>
+          </div>
+        </BaseDialog.Popup>
+      </BaseDialog.Portal>
+    </BaseDialog.Root>
   );
 }
+
+export const DialogRoot = BaseDialog.Root;
+export const DialogPortal = BaseDialog.Portal;
+export const DialogBackdrop = BaseDialog.Backdrop;
+export const DialogPopup = BaseDialog.Popup;
+export const DialogTitle = BaseDialog.Title;
+export const DialogDescription = BaseDialog.Description;
+export const DialogClose = BaseDialog.Close;

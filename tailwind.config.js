@@ -52,21 +52,21 @@ export default {
           edge: "var(--accent-edge)",
         },
         score: {
-          DEFAULT: "var(--score)",
+          DEFAULT: "rgb(var(--score-rgb) / <alpha-value>)",
           soft: "var(--score-soft)",
         },
         amber: {
-          DEFAULT: "var(--amber)",
+          DEFAULT: "rgb(var(--amber-rgb) / <alpha-value>)",
           soft: "var(--amber-soft)",
           edge: "var(--amber-edge)",
         },
         emerald: {
-          DEFAULT: "var(--emerald)",
+          DEFAULT: "rgb(var(--emerald-rgb) / <alpha-value>)",
           soft: "var(--emerald-soft)",
           edge: "var(--emerald-edge)",
         },
         red: {
-          DEFAULT: "var(--red)",
+          DEFAULT: "rgb(var(--red-rgb) / <alpha-value>)",
           soft: "var(--red-soft)",
           edge: "var(--red-edge)",
         },
@@ -110,6 +110,11 @@ export default {
         popIn: {
           "0%": { opacity: "0", transform: "scale(0.97)" },
           "100%": { opacity: "1", transform: "scale(1)" },
+        },
+        "border-beam": {
+          "100%": {
+            "offset-distance": "100%",
+          },
         },
       },
       animation: {

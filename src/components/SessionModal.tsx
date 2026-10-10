@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { NotePencil, FloppyDisk, Target, X } from "@phosphor-icons/react";
+import { NotePencil, FloppyDisk, Target } from "@phosphor-icons/react";
 import type { Task } from "@/lib/types";
 import {
   estimateSessionThreshold,
@@ -9,6 +9,7 @@ import {
 import { getRecommendedSens } from "@/lib/viscose";
 import { useI18n } from "@/lib/i18n";
 import { Button } from "@/components/ui/Button";
+import { Dialog } from "@/components/ui/Dialog";
 
 interface SessionModalProps {
   open: boolean;
@@ -46,8 +47,6 @@ export function SessionModal({
     }
   }, [activeTask]);
 
-  if (!open) return null;
-
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     const scores = parseInputScores(scoresInput);
@@ -59,33 +58,29 @@ export function SessionModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-fadeIn">
-      <div className="w-full max-w-md bg-[#0f1118] border border-edge rounded-xl shadow-2xl p-5 space-y-4">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-md bg-surface-subtle text-text-secondary border border-edge flex items-center justify-center">
-              <NotePencil size={15} weight="bold" />
-            </div>
-            <div>
-              <h2 className="text-xs font-bold uppercase tracking-wider text-text-main font-mono">
-                {t("session.title")}
-              </h2>
-              {activeTask && (
-                <p className="text-[11px] text-text-faint font-mono truncate max-w-[260px]">
-                  {activeTask.name}
-                </p>
-              )}
-            </div>
+    <Dialog
+      open={open}
+      onClose={onClose}
+      maxWidth="md"
+      title={
+        <div className="flex items-center gap-2">
+          <div className="w-7 h-7 rounded-md bg-surface-subtle text-text-secondary border border-edge flex items-center justify-center">
+            <NotePencil size={15} weight="bold" />
           </div>
-          <button
-            onClick={onClose}
-            className="p-1 rounded-md text-text-faint hover:text-text-main hover:bg-surface-subtle cursor-pointer"
-          >
-            <X size={15} weight="bold" />
-          </button>
+          <div>
+            <span className="text-xs font-bold uppercase tracking-wider text-text-main font-mono block">
+              {t("session.title")}
+            </span>
+            {activeTask && (
+              <span className="text-[11px] text-text-faint font-mono truncate max-w-[260px] block font-normal">
+                {activeTask.name}
+              </span>
+            )}
+          </div>
         </div>
-
+      }
+    >
+      <div className="space-y-4">
         {/* Goal Indicator */}
         <div className="border border-edge rounded-lg p-3 bg-surface-subtle/40 space-y-1">
           <div className="flex items-center justify-between">
@@ -207,6 +202,6 @@ export function SessionModal({
           </div>
         </form>
       </div>
-    </div>
+    </Dialog>
   );
 }
