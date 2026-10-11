@@ -773,3 +773,136 @@ export function computePlaylistSensStats(
     normalizedRuns,
   };
 }
+
+export interface ScenarioIdealSens {
+  value: number;
+  source: "empirical" | "viscose";
+  confidence: "high" | "medium" | "low" | "insufficient";
+  count: number;
+  viscoseSens: number;
+  empiricalSens: number | null;
+  scenarioName?: string;
+}
+
+/**
+ * Determina a sensibilidade ideal para um cenario:
+ * 1. Se houver >= 3 runs elegiveis (sens >= 5cm, score > 0) em um sweet spot Bayesiano estavel: adota o pico empirico.
+ * 2. Se houver falta de dados no cenario, mas a categoria possuir >= 8 runs agrupadas em allTasks: herda o pico da categoria.
+ * 3. Caso contrario (falta de dados geral): recorre a recomendacao estatica da Viscose.
+ */
+export function getScenarioIdealSens(
+  task: Task | null | undefined,
+  allTasks?: Task[]
+): ScenarioIdealSens {
+  const category = task?.category || "Click Timing";
+  const subcategory = task?.subcategory || "Precision";
+  const viscoseSens =
+    getRecommendedSens(category, subcategory) ??
+    getRecommendedSens("Click Timing", "Precision") ??
+    45;
+
+  if (!task || !task.sessions || task.sessions.length === 0) {
+    return {
+      value: viscoseSens,
+      source: "viscose",
+      confidence: "insufficient",
+      count: 0,
+      viscoseSens,
+      empiricalSens: null,
+      scenarioName: task?.name,
+    };
+  }
+
+  // Coleta runs elegiveis do cenario
+  const taskRuns: RunDataPoint[] = [];
+  for (const sess of task.sessions) {
+    const cm = valorantToCm360(sess.sens);
+    if (cm >= 5 && sess.pb > 0) {
+      taskRuns.push({
+        sens: Number(cm.toFixed(1)),
+        score: sess.pb,
+        rawScore: sess.pb,
+        date: sess.date,
+        scenario: task.name,
+      });
+    }
+  }
+
+  // Tentativa 1: Sweet Spot Bayesiano local do cenario (>= 3 runs estaveis)
+  if (taskRuns.length >= 3) {
+    const analysis = computeSweetSpotAnalytics(taskRuns);
+    if (analysis && analysis.bestBucket && !analysis.isProvisional) {
+      return {
+        value: analysis.bestBucket.sens,
+        source: "empirical",
+        confidence: analysis.bestBucket.confidenceLevel,
+        count: taskRuns.length,
+        viscoseSens,
+        empiricalSens: analysis.bestBucket.sens,
+        scenarioName: task.name,
+      };
+    }
+  }
+
+  // Tentativa 2: Agrupamento da categoria se allTasks fornecido e local insuficiente
+  if (allTasks && allTasks.length > 0) {
+    const groupRuns: RunDataPoint[] = [];
+    for (const t of allTasks) {
+      if (t.category === category && t.subcategory === subcategory) {
+        for (const sess of t.sessions) {
+          const cm = valorantToCm360(sess.sens);
+          if (cm >= 5 && sess.pb > 0) {
+            groupRuns.push({
+              sens: Number(cm.toFixed(1)),
+              score: sess.pb,
+              rawScore: sess.pb,
+            });
+          }
+        }
+      }
+    }
+
+    if (groupRuns.length >= 8) {
+      const pred = predictOptimalSensitivity([], "equilibrado", { groupRuns });
+      if (pred && pred.confidence !== "insufficient") {
+        return {
+          value: pred.predictedSens,
+          source: "empirical",
+          confidence: pred.confidence,
+          count: groupRuns.length,
+          viscoseSens,
+          empiricalSens: pred.predictedSens,
+          scenarioName: task.name,
+        };
+      }
+    }
+  }
+
+  // Fallback por falta de dados: Viscose Benchmark
+  return {
+    value: viscoseSens,
+    source: "viscose",
+    confidence: taskRuns.length >= 2 ? "low" : "insufficient",
+    count: taskRuns.length,
+    viscoseSens,
+    empiricalSens: null,
+    scenarioName: task.name,
+  };
+}
+
+/**
+ * Calcula os limites do randomizador com base no spread percentual customizavel (padrao 25%).
+ */
+export function calculateSensRange(
+  baseSensCm: number,
+  spreadPercent: number = 25
+): { minCm: number; maxCm: number; minMult: number; maxMult: number; spreadPercent: number } {
+  const spread = Math.max(1, Math.min(90, spreadPercent));
+  const pct = spread / 100;
+  const minCm = Number((baseSensCm * (1 - pct)).toFixed(1));
+  const maxCm = Number((baseSensCm * (1 + pct)).toFixed(1));
+  const minMult = Number((1 - pct).toFixed(2));
+  const maxMult = Number((1 + pct).toFixed(2));
+  return { minCm, maxCm, minMult, maxMult, spreadPercent: spread };
+}
+

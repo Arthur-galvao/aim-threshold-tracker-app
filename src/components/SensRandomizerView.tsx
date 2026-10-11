@@ -212,6 +212,8 @@ export function SensRandomizerView({
         onTriggerRandomize={triggerRandomize}
         onDetectPath={detectPath}
         onTestWriter={testWriter}
+        activeTask={activeTask}
+        allTasks={allTasks}
       />
 
       <SensRandomizerChart

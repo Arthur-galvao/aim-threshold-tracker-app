@@ -5,6 +5,7 @@ import { getRecommendedSens } from "@/lib/viscose";
 import {
   computePlaylistSensStats,
   formatSensitivity,
+  getScenarioIdealSens,
   type PlaylistSensStats,
 } from "@/lib/sens-analytics";
 import type { PlaylistRunnerState } from "@/hooks/usePlaylistRunner";
@@ -68,9 +69,8 @@ export function PlaylistRunnerView({
   const isLastStep = activePlaylist
     ? currentStepIndex === activePlaylist.items.length - 1
     : false;
-  const recSens = currentTask
-    ? getRecommendedSens(currentTask.category, currentTask.subcategory)
-    : null;
+  const idealSens = currentTask ? getScenarioIdealSens(currentTask, tasks) : null;
+  const recSens = idealSens ? idealSens.value : (currentTask ? getRecommendedSens(currentTask.category, currentTask.subcategory) : null);
   const isPlaylistPredicted = activePlaylistStats?.displaySens.source === "predicted";
 
   // Calculation for progress
@@ -417,8 +417,13 @@ export function PlaylistRunnerView({
                     <span>/</span>
                     <div className="inline-flex items-center gap-1.5 pl-1.5 border-l border-edge">
                       <span className="text-text-secondary">{t("runner.scenarioSens")}:</span>
-                      <span className="px-1.5 rounded-sm bg-score/10 text-score border border-score/20 font-bold">
-                        {recSens} cm
+                      <span className="px-1.5 rounded-sm bg-score/10 text-score border border-score/20 font-bold flex items-center gap-1">
+                        <span>{recSens} cm</span>
+                        {idealSens && (
+                          <span className="text-[8px] uppercase px-1 py-0.2 rounded bg-surface-subtle border border-edge text-text-faint font-normal">
+                            {idealSens.source === "empirical" ? "EMP" : "VIS"}
+                          </span>
+                        )}
                       </span>
                       {onApplySens && (
                         <button

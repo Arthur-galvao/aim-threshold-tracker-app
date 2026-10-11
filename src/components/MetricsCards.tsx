@@ -1,6 +1,6 @@
 import type { Task } from "@/lib/types";
 import { computeTaskMetrics } from "@/lib/threshold";
-import { formatSensitivity } from "@/lib/sens-analytics";
+import { formatSensitivity, getScenarioIdealSens } from "@/lib/sens-analytics";
 import { getRecommendedSens } from "@/lib/viscose";
 import { useI18n } from "@/lib/i18n";
 import {
@@ -13,6 +13,7 @@ import { SpotlightCard } from "@/components/ui/SpotlightCard";
 
 interface MetricsCardsProps {
   activeTask: Task | null;
+  allTasks?: Task[];
 }
 
 function MiniSparkline({
@@ -57,7 +58,7 @@ function MiniSparkline({
   );
 }
 
-export function MetricsCards({ activeTask }: MetricsCardsProps) {
+export function MetricsCards({ activeTask, allTasks }: MetricsCardsProps) {
   const { t } = useI18n();
   const metrics = computeTaskMetrics(activeTask);
   const deltas = computeMetricDeltas(activeTask);
@@ -80,7 +81,8 @@ export function MetricsCards({ activeTask }: MetricsCardsProps) {
     { text: t("metric.consistencyVar"), cls: "bg-surface-subtle text-text-faint border border-edge" }
   ) : null;
 
-  const recSens = activeTask ? getRecommendedSens(activeTask.category, activeTask.subcategory) : null;
+  const idealSens = activeTask ? getScenarioIdealSens(activeTask, allTasks) : null;
+  const recSens = idealSens ? idealSens.value : (activeTask ? getRecommendedSens(activeTask.category, activeTask.subcategory) : null);
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
@@ -185,9 +187,15 @@ export function MetricsCards({ activeTask }: MetricsCardsProps) {
           <span className="text-[10px] font-mono font-medium tracking-wider text-text-faint uppercase">
             {t("metric.sens")}
           </span>
-          {recSens && (
-            <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-surface border border-edge text-text-secondary">
-              {t("metric.targetSens")} {recSens}cm
+          {idealSens && (
+            <span
+              className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-surface border border-edge text-text-secondary flex items-center gap-1"
+              title={idealSens.source === "empirical" ? t("randomizer.idealSensSourceEmpirical") : t("randomizer.idealSensSourceViscose")}
+            >
+              <span>{t("metric.targetSens")} {recSens}cm</span>
+              <span className="text-[8px] uppercase px-1 py-0.2 rounded bg-surface-subtle border border-edge text-text-faint font-normal">
+                {idealSens.source === "empirical" ? "EMP" : "VIS"}
+              </span>
             </span>
           )}
         </div>

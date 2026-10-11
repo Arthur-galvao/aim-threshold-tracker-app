@@ -150,11 +150,21 @@ pub fn generate_next_sens(settings: &RandomizerSettings, current_sens: f64) -> (
 
     let is_cm_mode = settings.range_mode.eq_ignore_ascii_case("cm360");
 
-    let min_cm = settings.min_cm.min(settings.max_cm).max(5.0);
-    let max_cm = settings.min_cm.max(settings.max_cm).max(5.0);
-
-    let min_mult = settings.min_mult.min(settings.max_mult).max(0.1);
-    let max_mult = settings.min_mult.max(settings.max_mult).max(0.1);
+    let (min_cm, max_cm, min_mult, max_mult) = if settings.auto_scenario_sens && settings.spread_percent > 0.0 {
+        let pct = (settings.spread_percent / 100.0).clamp(0.01, 0.90);
+        let c_min = (base_cm * (1.0 - pct)).max(5.0);
+        let c_max = (base_cm * (1.0 + pct)).max(5.0);
+        let m_min = (1.0 - pct).max(0.1);
+        let m_max = (1.0 + pct).max(0.1);
+        (c_min, c_max, m_min, m_max)
+    } else {
+        (
+            settings.min_cm.min(settings.max_cm).max(5.0),
+            settings.min_cm.max(settings.max_cm).max(5.0),
+            settings.min_mult.min(settings.max_mult).max(0.1),
+            settings.min_mult.max(settings.max_mult).max(0.1),
+        )
+    };
 
     let mut target_cm = current_sens;
     let mut target_mult = 1.0;
@@ -323,6 +333,8 @@ mod tests {
             max_mult: 1.3,
             avoid_repeats: true,
             rawaccel_dir: None,
+            spread_percent: 25.0,
+            auto_scenario_sens: false,
         };
 
         for _ in 0..50 {
@@ -346,12 +358,38 @@ mod tests {
             max_mult: 1.2,
             avoid_repeats: false,
             rawaccel_dir: None,
+            spread_percent: 25.0,
+            auto_scenario_sens: false,
         };
 
         for _ in 0..50 {
             let (cm, mult) = generate_next_sens(&settings, 40.0);
             assert!(mult >= 0.8 && mult <= 1.2);
             assert!(cm > 0.0);
+        }
+    }
+
+    #[test]
+    fn test_generate_next_sens_auto_spread() {
+        let settings = RandomizerSettings {
+            enabled: true,
+            base_sens_cm: 40.0,
+            range_mode: "cm360".to_string(),
+            min_cm: 10.0,
+            max_cm: 90.0,
+            min_mult: 0.5,
+            max_mult: 1.5,
+            avoid_repeats: false,
+            rawaccel_dir: None,
+            spread_percent: 25.0,
+            auto_scenario_sens: true,
+        };
+
+        // Com base = 40.0 e spread = 25%, min_cm = 30.0 e max_cm = 50.0
+        for _ in 0..50 {
+            let (cm, mult) = generate_next_sens(&settings, 40.0);
+            assert!(cm >= 30.0 && cm <= 50.0);
+            assert!(mult > 0.0);
         }
     }
 

@@ -14,6 +14,8 @@ import {
   predictOptimalSensitivity,
   PREDICTOR_PROFILES,
   computePlaylistSensStats,
+  getScenarioIdealSens,
+  calculateSensRange,
   type CategoryRunPoint,
   type RunDataPoint,
   type PlaylistCategorySlice,
@@ -877,6 +879,129 @@ describe("sens-analytics", () => {
       // Verify App.tsx defines handleApplySens and passes to PlaylistRunnerView
       assert.ok(appCode.includes("handleApplySens"));
       assert.ok(appCode.includes("onApplySens={handleApplySens}"));
+    });
+  });
+
+  describe("getScenarioIdealSens", () => {
+    it("falls back to Viscose benchmark when task is null or has no sessions", () => {
+      const nullRes = getScenarioIdealSens(null);
+      assert.equal(nullRes.source, "viscose");
+      assert.equal(nullRes.value, 60); // Default Click Timing / Precision
+      assert.equal(nullRes.confidence, "insufficient");
+
+      const emptyTask: Task = {
+        id: "t1",
+        name: "VT Pasu Small",
+        category: "Click Timing",
+        subcategory: "Reading",
+        sessions: [],
+      };
+      const emptyRes = getScenarioIdealSens(emptyTask);
+      assert.equal(emptyRes.source, "viscose");
+      assert.equal(emptyRes.value, 45); // Viscose Click Timing / Reading
+      assert.equal(emptyRes.confidence, "insufficient");
+      assert.equal(emptyRes.count, 0);
+    });
+
+    it("falls back to Viscose benchmark when runs are insufficient (< 3 runs)", () => {
+      const task: Task = {
+        id: "t2",
+        name: "VT Smoothbot",
+        category: "Control Tracking",
+        subcategory: "Arm",
+        sessions: [
+          { date: "2026-10-01", pb: 120, threshold: 100, sens: 34 },
+          { date: "2026-10-02", pb: 125, threshold: 100, sens: 34 },
+        ],
+      };
+      const res = getScenarioIdealSens(task);
+      assert.equal(res.source, "viscose");
+      assert.equal(res.value, 34); // Viscose Control Tracking / Arm
+      assert.equal(res.count, 2);
+    });
+
+    it("returns empirical sweet spot when task has >= 3 stable runs with best bucket", () => {
+      const task: Task = {
+        id: "t3",
+        name: "VT Multiclick",
+        category: "Flick Tech",
+        subcategory: "Speed",
+        sessions: [
+          { date: "2026-10-01", pb: 150, threshold: 100, sens: 42 },
+          { date: "2026-10-02", pb: 152, threshold: 100, sens: 42 },
+          { date: "2026-10-03", pb: 148, threshold: 100, sens: 42 },
+          { date: "2026-10-04", pb: 110, threshold: 100, sens: 55 },
+          { date: "2026-10-05", pb: 105, threshold: 100, sens: 55 },
+        ],
+      };
+      const res = getScenarioIdealSens(task);
+      assert.equal(res.source, "empirical");
+      assert.equal(res.value, 42);
+      assert.equal(res.viscoseSens, 45);
+      assert.equal(res.count, 5);
+      assert.ok(res.empiricalSens !== null);
+    });
+
+    it("inherits category group prediction when scenario is insufficient but category has >= 8 runs", () => {
+      const targetTask: Task = {
+        id: "t4_target",
+        name: "VT Air Angel",
+        category: "Reactive Tracking",
+        subcategory: "Control",
+        sessions: [
+          { date: "2026-10-01", pb: 80, threshold: 70, sens: 30 },
+        ],
+      };
+
+      const siblingTask: Task = {
+        id: "t4_sibling",
+        name: "VT Air Voltaic",
+        category: "Reactive Tracking",
+        subcategory: "Control",
+        sessions: Array.from({ length: 8 }, (_, i) => ({
+          date: `2026-10-0${i + 1}`,
+          pb: 100 + i * 2,
+          threshold: 90,
+          sens: 36,
+        })),
+      };
+
+      const res = getScenarioIdealSens(targetTask, [targetTask, siblingTask]);
+      assert.equal(res.source, "empirical");
+      assert.equal(res.value, 36);
+      assert.equal(res.viscoseSens, 34);
+    });
+  });
+
+  describe("calculateSensRange", () => {
+    it("calculates symmetric range around base sensitivity with default 25% spread", () => {
+      const range = calculateSensRange(40.0);
+      assert.equal(range.spreadPercent, 25);
+      assert.equal(range.minCm, 30.0); // 40 * 0.75
+      assert.equal(range.maxCm, 50.0); // 40 * 1.25
+      assert.equal(range.minMult, 0.75);
+      assert.equal(range.maxMult, 1.25);
+    });
+
+    it("calculates range with custom spread percent (e.g. 20%)", () => {
+      const range = calculateSensRange(50.0, 20);
+      assert.equal(range.spreadPercent, 20);
+      assert.equal(range.minCm, 40.0); // 50 * 0.80
+      assert.equal(range.maxCm, 60.0); // 50 * 1.20
+      assert.equal(range.minMult, 0.80);
+      assert.equal(range.maxMult, 1.20);
+    });
+
+    it("clamps extreme spread values safely between 1 and 90", () => {
+      const low = calculateSensRange(40.0, -10);
+      assert.equal(low.spreadPercent, 1);
+      assert.equal(low.minCm, 39.6);
+      assert.equal(low.maxCm, 40.4);
+
+      const high = calculateSensRange(40.0, 150);
+      assert.equal(high.spreadPercent, 90);
+      assert.equal(high.minCm, 4.0);
+      assert.equal(high.maxCm, 76.0);
     });
   });
 });

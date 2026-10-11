@@ -1,12 +1,15 @@
 import { useMemo } from "react";
 import { Play, Check, CaretLeft, CaretRight, X, ArrowCounterClockwise } from "@phosphor-icons/react";
 import type { PlaylistRunnerState } from "@/hooks/usePlaylistRunner";
+import type { Task } from "@/lib/types";
 import { useI18n } from "@/lib/i18n";
 import { getRecommendedSens } from "@/lib/viscose";
+import { getScenarioIdealSens } from "@/lib/sens-analytics";
 import { Button } from "@/components/ui/Button";
 
 interface DashboardPlaylistRunnerProps {
   runner: PlaylistRunnerState;
+  tasks?: Task[];
 }
 
 function formatDuration(totalSeconds: number): string {
@@ -15,14 +18,13 @@ function formatDuration(totalSeconds: number): string {
   return `${mins}:${secs.toString().padStart(2, "0")}`;
 }
 
-export function DashboardPlaylistRunner({ runner }: DashboardPlaylistRunnerProps) {
+export function DashboardPlaylistRunner({ runner, tasks }: DashboardPlaylistRunnerProps) {
   const { t } = useI18n();
 
   const { activePlaylist, currentStepIndex, currentItem, currentTask, isRunning, isFinished } = runner;
 
-  const recSens = currentTask
-    ? getRecommendedSens(currentTask.category, currentTask.subcategory)
-    : null;
+  const idealSens = currentTask ? getScenarioIdealSens(currentTask, tasks) : null;
+  const recSens = idealSens ? idealSens.value : (currentTask ? getRecommendedSens(currentTask.category, currentTask.subcategory) : null);
 
   const progressData = useMemo(() => {
     if (!currentItem) return { percentage: 0, label: "" };
@@ -110,9 +112,15 @@ export function DashboardPlaylistRunner({ runner }: DashboardPlaylistRunnerProps
             </div>
             <div className="text-[11px] text-text-secondary truncate mt-0.5 flex items-center gap-1.5 flex-wrap">
               <span>{currentTask ? currentTask.name : "Cenário"}</span>
-              {recSens && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-surface text-score border border-edge font-mono font-medium">
-                  {recSens} cm
+              {idealSens && (
+                <span
+                  className="text-[10px] px-1.5 py-0.5 rounded-full bg-surface text-score border border-edge font-mono font-medium flex items-center gap-1"
+                  title={idealSens.source === "empirical" ? t("randomizer.idealSensSourceEmpirical") : t("randomizer.idealSensSourceViscose")}
+                >
+                  <span>{recSens} cm</span>
+                  <span className="text-[8px] uppercase px-1 py-0.2 rounded bg-surface-subtle border border-edge text-text-faint font-normal">
+                    {idealSens.source === "empirical" ? "EMP" : "VIS"}
+                  </span>
                 </span>
               )}
             </div>

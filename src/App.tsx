@@ -22,6 +22,7 @@ import { Toast } from "@/components/Toast";
 import type { AppSettings, Playlist } from "@/lib/types";
 import { getSettings, saveSettings } from "@/lib/tauri-bridge";
 import { getStoredTheme, applyTheme, type AppTheme } from "@/lib/theme";
+import { getScenarioIdealSens } from "@/lib/sens-analytics";
 
 function Dashboard() {
   const {
@@ -59,6 +60,7 @@ function Dashboard() {
     detectPath: detectRawaccelPath,
     saveSettings: saveRandomizerSettings,
     testWriter: testRawaccelWriter,
+    syncScenarioSens,
   } = useSensRandomizer();
 
   const [activeTab, setActiveTab] = useState<"dashboard" | "randomizer" | "playlist">("dashboard");
@@ -88,6 +90,22 @@ function Dashboard() {
   );
 
   const { t } = useI18n();
+
+  // Sincroniza sensibilidade base com o cenario ativo quando autoScenarioSens estiver habilitado
+  useEffect(() => {
+    if (!randomizerSettings.autoScenarioSens || !activeTask) return;
+    const ideal = getScenarioIdealSens(activeTask, appData.tasks);
+    if (Math.abs(randomizerSettings.baseSensCm - ideal.value) >= 0.1) {
+      void syncScenarioSens(ideal.value, randomizerSettings.enabled, ideal.source);
+    }
+  }, [
+    activeTask?.id,
+    randomizerSettings.autoScenarioSens,
+    randomizerSettings.enabled,
+    randomizerSettings.baseSensCm,
+    appData.tasks,
+    syncScenarioSens,
+  ]);
 
   // Safety lock guard: if RawAccel is not available, guarantee user cannot remain on randomizer
   useEffect(() => {
@@ -204,11 +222,11 @@ function Dashboard() {
               {activeTab === "dashboard" ? (
                 <>
                   {/* Active Playlist Runner Banner in Dashboard */}
-                  <DashboardPlaylistRunner runner={playlistRunner} />
+                  <DashboardPlaylistRunner runner={playlistRunner} tasks={appData.tasks} />
 
                   {/* Top Full-Width KPI Metrics Cards */}
                   <section aria-label="KPI Metrics">
-                    <MetricsCards activeTask={activeTask} />
+                    <MetricsCards activeTask={activeTask} allTasks={appData.tasks} />
                   </section>
 
                   {/* Full-Width Telemetry Data Chart ("Data Chart" in mockup) */}

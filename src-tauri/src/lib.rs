@@ -237,6 +237,7 @@ fn save_randomizer_settings(
     }
     let app_settings = state.settings.lock().unwrap().clone();
     storage::save_settings(&app, &app_settings)?;
+    let _ = app.emit("randomizer_settings_updated", &settings);
 
     let (avail, found_dir, err_msg, gui_running) = randomizer::check_rawaccel_availability(settings.rawaccel_dir.as_deref());
     {

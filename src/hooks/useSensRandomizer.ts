@@ -14,6 +14,8 @@ export interface RandomizerSettings {
   maxMult: number;
   avoidRepeats: boolean;
   rawaccelDir: string | null;
+  spreadPercent: number;
+  autoScenarioSens: boolean;
 }
 
 export interface RandomizerState {
@@ -37,6 +39,8 @@ const DEFAULT_SETTINGS: RandomizerSettings = {
   maxMult: 1.35,
   avoidRepeats: true,
   rawaccelDir: null,
+  spreadPercent: 25.0,
+  autoScenarioSens: true,
 };
 
 const DEFAULT_STATE: RandomizerState = {
@@ -77,7 +81,9 @@ export function useSensRandomizer() {
   useEffect(() => {
     refreshState();
 
-    let unlisten: (() => void) | undefined;
+    let unlistenSens: (() => void) | undefined;
+    let unlistenSettings: (() => void) | undefined;
+
     listen<RandomizerState>("sens_updated", (event) => {
       setRandomizerState(event.payload);
       if (event.payload.activeMult === 1.0 && event.payload.lastRunScenario === null) {
@@ -92,21 +98,30 @@ export function useSensRandomizer() {
         );
       }
     }).then((fn) => {
-      unlisten = fn;
+      unlistenSens = fn;
+    });
+
+    listen<RandomizerSettings>("randomizer_settings_updated", (event) => {
+      setSettings(event.payload);
+    }).then((fn) => {
+      unlistenSettings = fn;
     });
 
     return () => {
-      if (unlisten) unlisten();
+      if (unlistenSens) unlistenSens();
+      if (unlistenSettings) unlistenSettings();
     };
   }, [refreshState, showToast, t]);
 
   const saveSettings = useCallback(
-    async (newSettings: RandomizerSettings) => {
+    async (newSettings: RandomizerSettings, silent = false) => {
       try {
         const updatedState = await invoke<RandomizerState>("save_randomizer_settings", { settings: newSettings });
         setSettings(newSettings);
         setRandomizerState(updatedState);
-        showToast(t("randomizer.saveSettings"), "success");
+        if (!silent) {
+          showToast(t("randomizer.saveSettings"), "success");
+        }
       } catch (err) {
         showToast(String(err), "error");
       }
@@ -134,6 +149,23 @@ export function useSensRandomizer() {
       showToast(String(err), "error");
     }
   }, [showToast, t]);
+
+  const syncScenarioSens = useCallback(
+    async (targetSens: number, reRollNow = false, idealSource?: "empirical" | "viscose") => {
+      const rounded = Number(targetSens.toFixed(1));
+      if (settings.baseSensCm === rounded && !reRollNow) return;
+      const nextSettings = { ...settings, baseSensCm: rounded };
+      await saveSettings(nextSettings, true);
+      const sourceLabel = idealSource === "empirical"
+        ? t("randomizer.idealSensSourceEmpirical")
+        : t("randomizer.idealSensSourceViscose");
+      showToast(`${t("randomizer.idealSensToast")}: ${rounded} cm (${sourceLabel})`, "info");
+      if (reRollNow && settings.enabled && randomizerState.available) {
+        await triggerRandomize();
+      }
+    },
+    [settings, saveSettings, triggerRandomize, randomizerState.available, showToast, t]
+  );
 
   const detectPath = useCallback(async (): Promise<string | null> => {
     try {
@@ -183,6 +215,7 @@ export function useSensRandomizer() {
     saveSettings,
     toggleEnabled,
     triggerRandomize,
+    syncScenarioSens,
     detectPath,
     testWriter,
     refreshState,

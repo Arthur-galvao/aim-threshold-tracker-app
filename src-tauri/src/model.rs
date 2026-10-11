@@ -62,6 +62,10 @@ pub struct KovaakRun {
     pub source_file: String,
 }
 
+fn default_spread_percent() -> f64 {
+    25.0
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RandomizerSettings {
@@ -74,6 +78,10 @@ pub struct RandomizerSettings {
     pub max_mult: f64,
     pub avoid_repeats: bool,
     pub rawaccel_dir: Option<String>,
+    #[serde(default = "default_spread_percent")]
+    pub spread_percent: f64,
+    #[serde(default = "default_true")]
+    pub auto_scenario_sens: bool,
 }
 
 impl Default for RandomizerSettings {
@@ -88,6 +96,8 @@ impl Default for RandomizerSettings {
             max_mult: 1.35,
             avoid_repeats: true,
             rawaccel_dir: None,
+            spread_percent: 25.0,
+            auto_scenario_sens: true,
         }
     }
 }

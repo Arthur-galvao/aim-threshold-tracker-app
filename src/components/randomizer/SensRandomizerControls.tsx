@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo } from "react";
 import { useI18n } from "@/lib/i18n";
 import type { RandomizerSettings, RandomizerState } from "@/hooks/useSensRandomizer";
+import type { Task } from "@/lib/types";
+import { calculateSensRange, getScenarioIdealSens } from "@/lib/sens-analytics";
 
 interface SensRandomizerControlsProps {
   settings: RandomizerSettings;
@@ -12,6 +14,8 @@ interface SensRandomizerControlsProps {
   onTriggerRandomize: () => Promise<void>;
   onDetectPath: () => Promise<string | null>;
   onTestWriter: (customPath?: string) => Promise<string>;
+  activeTask?: Task | null;
+  allTasks?: Task[];
 }
 
 export function SensRandomizerControls({
@@ -24,6 +28,8 @@ export function SensRandomizerControls({
   onTriggerRandomize,
   onDetectPath,
   onTestWriter,
+  activeTask,
+  allTasks,
 }: SensRandomizerControlsProps) {
   const { t } = useI18n();
 
@@ -35,6 +41,8 @@ export function SensRandomizerControls({
     maxMult: String(settings.maxMult || 1.35),
     rangeMode: (settings.rangeMode === "multiplier" ? "multiplier" : "cm360") as "cm360" | "multiplier",
     avoidRepeats: settings.avoidRepeats ?? true,
+    spreadPercent: settings.spreadPercent ?? 25.0,
+    autoScenarioSens: settings.autoScenarioSens ?? true,
   });
 
   useEffect(() => {
@@ -46,6 +54,8 @@ export function SensRandomizerControls({
       maxMult: String(settings.maxMult || 1.35),
       rangeMode: settings.rangeMode === "multiplier" ? "multiplier" : "cm360",
       avoidRepeats: settings.avoidRepeats ?? true,
+      spreadPercent: settings.spreadPercent ?? 25.0,
+      autoScenarioSens: settings.autoScenarioSens ?? true,
     });
   }, [settings]);
 
@@ -55,16 +65,34 @@ export function SensRandomizerControls({
   const parsedMinMult = parseFloat(form.minMult) || settings.minMult || 0.75;
   const parsedMaxMult = parseFloat(form.maxMult) || settings.maxMult || 1.35;
 
-  const handleSave = async () => {
+  const idealSens = useMemo(() => {
+    return getScenarioIdealSens(activeTask, allTasks);
+  }, [activeTask, allTasks]);
+
+  const calculatedRange = useMemo(() => {
+    return calculateSensRange(parsedBase, form.spreadPercent);
+  }, [parsedBase, form.spreadPercent]);
+
+  const handleSave = async (override?: Partial<typeof form>) => {
+    const nextForm = { ...form, ...override };
+    const pBase = parseFloat(nextForm.baseSens) || settings.baseSensCm || 50;
+    const pMinCm = parseFloat(nextForm.minCm) || settings.minCm || 20;
+    const pMaxCm = parseFloat(nextForm.maxCm) || settings.maxCm || 90;
+    const pMinMult = parseFloat(nextForm.minMult) || settings.minMult || 0.75;
+    const pMaxMult = parseFloat(nextForm.maxMult) || settings.maxMult || 1.35;
+    const range = calculateSensRange(pBase, nextForm.spreadPercent);
+
     await onSaveSettings({
       ...settings,
-      rangeMode: form.rangeMode,
-      avoidRepeats: form.avoidRepeats,
-      baseSensCm: parsedBase,
-      minCm: parsedMinCm,
-      maxCm: parsedMaxCm,
-      minMult: parsedMinMult,
-      maxMult: parsedMaxMult,
+      rangeMode: nextForm.rangeMode,
+      avoidRepeats: nextForm.avoidRepeats,
+      baseSensCm: pBase,
+      spreadPercent: nextForm.spreadPercent,
+      autoScenarioSens: nextForm.autoScenarioSens,
+      minCm: nextForm.autoScenarioSens ? range.minCm : pMinCm,
+      maxCm: nextForm.autoScenarioSens ? range.maxCm : pMaxCm,
+      minMult: nextForm.autoScenarioSens ? range.minMult : pMinMult,
+      maxMult: nextForm.autoScenarioSens ? range.maxMult : pMaxMult,
     });
   };
 
@@ -174,6 +202,74 @@ export function SensRandomizerControls({
             </p>
           </div>
 
+          {/* Active Scenario & Ideal Sensitivity Card */}
+          <div className="p-3.5 rounded-xl border border-edge bg-surface-subtle/40 space-y-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-text-faint">
+                  {t("randomizer.activeScenarioTitle")}
+                </span>
+                <p className="text-xs font-bold text-text-main truncate mt-0.5" title={activeTask?.name ?? t("randomizer.scopeNone")}>
+                  {activeTask?.name ?? t("randomizer.scopeNone")}
+                </p>
+              </div>
+
+              {idealSens && (
+                <div className="text-right shrink-0">
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-text-faint block">
+                    {t("randomizer.idealSensLabel")}
+                  </span>
+                  <div className="flex items-center gap-1.5 mt-0.5 justify-end">
+                    <span className="text-xs font-mono font-bold text-score">
+                      {idealSens.value} cm
+                    </span>
+                    <span
+                      className={`text-[9px] uppercase px-1.5 py-0.2 rounded font-semibold border ${
+                        idealSens.source === "empirical"
+                          ? "bg-emerald-soft text-emerald border-emerald-edge"
+                          : "bg-surface-subtle text-text-faint border-edge"
+                      }`}
+                      title={idealSens.source === "empirical" ? t("randomizer.idealSensSourceEmpirical") : t("randomizer.idealSensSourceViscose")}
+                    >
+                      {idealSens.source === "empirical" ? "EMP" : "VIS"}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Sync Toggle */}
+            <label
+              htmlFor="autoScenarioSensCheck"
+              className="flex items-center justify-between p-2 rounded-lg bg-surface border border-edge hover:bg-surface-hover/50 transition-colors cursor-pointer text-xs"
+            >
+              <div className="pr-2">
+                <span className="font-semibold text-text-main block">
+                  {t("randomizer.autoScenarioSens")}
+                </span>
+                <span className="text-[10px] text-text-faint block">
+                  {t("randomizer.autoScenarioSensDesc")}
+                </span>
+              </div>
+              <input
+                id="autoScenarioSensCheck"
+                type="checkbox"
+                checked={form.autoScenarioSens}
+                onChange={(e) => {
+                  const checked = e.target.checked;
+                  updateField("autoScenarioSens", checked);
+                  if (checked && idealSens) {
+                    updateField("baseSens", String(idealSens.value));
+                    void handleSave({ autoScenarioSens: true, baseSens: String(idealSens.value) });
+                  } else {
+                    void handleSave({ autoScenarioSens: false });
+                  }
+                }}
+                className="w-4 h-4 rounded border-edge-strong bg-surface text-accent cursor-pointer accent-blue-500 shrink-0"
+              />
+            </label>
+          </div>
+
           {/* Base Sens Input */}
           <div>
             <div className="flex items-center justify-between mb-1">
@@ -181,7 +277,11 @@ export function SensRandomizerControls({
                 {t("randomizer.baseSens")}
               </label>
               <span className="text-[10px] text-text-faint font-mono">
-                {t("randomizer.baseSensSource")}
+                {form.autoScenarioSens ? (
+                  idealSens?.source === "empirical" ? t("randomizer.idealSensSourceEmpirical") : t("randomizer.idealSensSourceViscose")
+                ) : (
+                  t("randomizer.baseSensSource")
+                )}
               </span>
             </div>
             <div className="relative flex items-center">
@@ -192,7 +292,12 @@ export function SensRandomizerControls({
                 value={form.baseSens}
                 onChange={(e) => {
                   const val = e.target.value.replace(",", ".");
-                  if (val === "" || /^\d*\.?\d*$/.test(val)) updateField("baseSens", val);
+                  if (val === "" || /^\d*\.?\d*$/.test(val)) {
+                    updateField("baseSens", val);
+                    if (form.autoScenarioSens) {
+                      updateField("autoScenarioSens", false);
+                    }
+                  }
                 }}
                 onBlur={() => {
                   if (!form.baseSens.trim() || isNaN(parseFloat(form.baseSens))) {
@@ -203,6 +308,75 @@ export function SensRandomizerControls({
               />
               <span className="absolute right-2 text-[10px] font-mono text-text-faint uppercase pointer-events-none">
                 cm/360
+              </span>
+            </div>
+            {!form.autoScenarioSens && settings.autoScenarioSens && (
+              <p className="text-[10px] text-amber-400 mt-1">
+                {t("randomizer.manualOverrideNotice")}
+              </p>
+            )}
+          </div>
+
+          {/* Spread Percentage Control (±%) */}
+          <div className="p-3 rounded-xl border border-edge bg-surface-subtle/30 space-y-2.5">
+            <div className="flex items-center justify-between">
+              <div>
+                <label htmlFor="spreadSlider" className="text-[11px] font-semibold uppercase tracking-wider text-text-main block">
+                  {t("randomizer.spreadPercent")}
+                </label>
+                <span className="text-[10px] text-text-faint">
+                  {t("randomizer.spreadPercentDesc")}
+                </span>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="text-xs font-mono font-bold text-text-main">
+                  ±{form.spreadPercent}%
+                </span>
+              </div>
+            </div>
+
+            {/* Slider */}
+            <div className="flex items-center gap-3">
+              <input
+                id="spreadSlider"
+                type="range"
+                min={5}
+                max={75}
+                step={1}
+                value={form.spreadPercent}
+                onChange={(e) => {
+                  const val = Number(e.target.value);
+                  updateField("spreadPercent", val);
+                }}
+                className="w-full accent-blue-500 cursor-pointer h-1.5 bg-surface rounded-lg border border-edge"
+              />
+            </div>
+
+            {/* Quick Presets */}
+            <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+              {[15, 20, 25, 30, 35].map((preset) => (
+                <button
+                  key={preset}
+                  type="button"
+                  onClick={() => updateField("spreadPercent", preset)}
+                  className={`text-[10px] font-mono font-semibold px-2 py-0.5 rounded-full border transition-all ${
+                    form.spreadPercent === preset
+                      ? "bg-score-soft text-score border-score/30"
+                      : "bg-surface hover:bg-surface-hover text-text-secondary border-edge"
+                  }`}
+                >
+                  ±{preset}%
+                </button>
+              ))}
+            </div>
+
+            {/* Real-time Calculated Range */}
+            <div className="pt-1 border-t border-edge flex items-center justify-between text-[11px]">
+              <span className="text-text-faint">{t("randomizer.spreadCalculatedRange")}</span>
+              <span className="font-mono font-semibold text-text-main">
+                {form.rangeMode === "cm360"
+                  ? `${calculatedRange.minCm.toFixed(1)} cm - ${calculatedRange.maxCm.toFixed(1)} cm`
+                  : `${calculatedRange.minMult.toFixed(2)}x - ${calculatedRange.maxMult.toFixed(2)}x`}
               </span>
             </div>
           </div>
@@ -249,7 +423,8 @@ export function SensRandomizerControls({
                   id="minCmInput"
                   type="text"
                   inputMode="decimal"
-                  value={form.minCm}
+                  value={form.autoScenarioSens ? String(calculatedRange.minCm) : form.minCm}
+                  disabled={form.autoScenarioSens}
                   onChange={(e) => {
                     const val = e.target.value.replace(",", ".");
                     if (val === "" || /^\d*\.?\d*$/.test(val)) updateField("minCm", val);
@@ -257,7 +432,7 @@ export function SensRandomizerControls({
                   onBlur={() => {
                     if (!form.minCm.trim() || isNaN(parseFloat(form.minCm))) updateField("minCm", String(settings.minCm || 20));
                   }}
-                  className="minimal-input text-xs font-mono font-medium px-3 py-2 tabular-nums"
+                  className="minimal-input text-xs font-mono font-medium px-3 py-2 tabular-nums disabled:opacity-60 disabled:cursor-not-allowed"
                 />
               </div>
               <div>
@@ -268,7 +443,8 @@ export function SensRandomizerControls({
                   id="maxCmInput"
                   type="text"
                   inputMode="decimal"
-                  value={form.maxCm}
+                  value={form.autoScenarioSens ? String(calculatedRange.maxCm) : form.maxCm}
+                  disabled={form.autoScenarioSens}
                   onChange={(e) => {
                     const val = e.target.value.replace(",", ".");
                     if (val === "" || /^\d*\.?\d*$/.test(val)) updateField("maxCm", val);
@@ -276,7 +452,7 @@ export function SensRandomizerControls({
                   onBlur={() => {
                     if (!form.maxCm.trim() || isNaN(parseFloat(form.maxCm))) updateField("maxCm", String(settings.maxCm || 90));
                   }}
-                  className="minimal-input text-xs font-mono font-medium px-3 py-2 tabular-nums"
+                  className="minimal-input text-xs font-mono font-medium px-3 py-2 tabular-nums disabled:opacity-60 disabled:cursor-not-allowed"
                 />
               </div>
             </div>
@@ -290,7 +466,8 @@ export function SensRandomizerControls({
                   id="minMultInput"
                   type="text"
                   inputMode="decimal"
-                  value={form.minMult}
+                  value={form.autoScenarioSens ? String(calculatedRange.minMult) : form.minMult}
+                  disabled={form.autoScenarioSens}
                   onChange={(e) => {
                     const val = e.target.value.replace(",", ".");
                     if (val === "" || /^\d*\.?\d*$/.test(val)) updateField("minMult", val);
@@ -298,7 +475,7 @@ export function SensRandomizerControls({
                   onBlur={() => {
                     if (!form.minMult.trim() || isNaN(parseFloat(form.minMult))) updateField("minMult", String(settings.minMult || 0.75));
                   }}
-                  className="minimal-input text-xs font-mono font-medium px-3 py-2 tabular-nums"
+                  className="minimal-input text-xs font-mono font-medium px-3 py-2 tabular-nums disabled:opacity-60 disabled:cursor-not-allowed"
                 />
               </div>
               <div>
@@ -309,7 +486,8 @@ export function SensRandomizerControls({
                   id="maxMultInput"
                   type="text"
                   inputMode="decimal"
-                  value={form.maxMult}
+                  value={form.autoScenarioSens ? String(calculatedRange.maxMult) : form.maxMult}
+                  disabled={form.autoScenarioSens}
                   onChange={(e) => {
                     const val = e.target.value.replace(",", ".");
                     if (val === "" || /^\d*\.?\d*$/.test(val)) updateField("maxMult", val);
@@ -317,7 +495,7 @@ export function SensRandomizerControls({
                   onBlur={() => {
                     if (!form.maxMult.trim() || isNaN(parseFloat(form.maxMult))) updateField("maxMult", String(settings.maxMult || 1.35));
                   }}
-                  className="minimal-input text-xs font-mono font-medium px-3 py-2 tabular-nums"
+                  className="minimal-input text-xs font-mono font-medium px-3 py-2 tabular-nums disabled:opacity-60 disabled:cursor-not-allowed"
                 />
               </div>
             </div>
@@ -328,8 +506,8 @@ export function SensRandomizerControls({
             <span className="text-text-faint font-medium">{t("randomizer.configuredRange")}</span>
             <span className="text-text-main font-mono font-semibold">
               {form.rangeMode === "cm360"
-                ? `${parsedMinCm.toFixed(1)} cm - ${parsedMaxCm.toFixed(1)} cm`
-                : `${parsedMinMult.toFixed(2)}x - ${parsedMaxMult.toFixed(2)}x`}
+                ? `${(form.autoScenarioSens ? calculatedRange.minCm : parsedMinCm).toFixed(1)} cm - ${(form.autoScenarioSens ? calculatedRange.maxCm : parsedMaxCm).toFixed(1)} cm`
+                : `${(form.autoScenarioSens ? calculatedRange.minMult : parsedMinMult).toFixed(2)}x - ${(form.autoScenarioSens ? calculatedRange.maxMult : parsedMaxMult).toFixed(2)}x`}
             </span>
           </div>
 
@@ -353,7 +531,7 @@ export function SensRandomizerControls({
           {/* Save Button */}
           <button
             type="button"
-            onClick={handleSave}
+            onClick={() => void handleSave()}
             className="w-full py-2 px-4 minimal-btn text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer shadow-sm hover:opacity-90 active:scale-[0.99] transition-all"
           >
             <svg
