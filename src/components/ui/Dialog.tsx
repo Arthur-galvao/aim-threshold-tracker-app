@@ -47,12 +47,12 @@ export function Dialog({
         <BaseDialog.Backdrop className="fixed inset-0 z-50 modal-scrim transition-opacity duration-200 animate-fade-in" />
         <BaseDialog.Popup
           className={cn(
-            "fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 overflow-hidden pointer-events-none focus:outline-none"
+            "fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 lg:p-6 overflow-hidden pointer-events-none focus:outline-none"
           )}
         >
           <div
             className={cn(
-              "pointer-events-auto relative w-full panel p-6 rounded-2xl shadow-overlay border border-edge bg-surface z-10 max-h-[85vh] flex flex-col animate-pop-in",
+              "pointer-events-auto relative w-full panel p-4 sm:p-6 rounded-2xl shadow-overlay border border-edge bg-surface z-10 max-h-[92vh] sm:max-h-[88vh] flex flex-col animate-pop-in",
               maxWidthClasses,
               className
             )}

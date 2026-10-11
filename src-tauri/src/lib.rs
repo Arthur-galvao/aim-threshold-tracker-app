@@ -87,10 +87,23 @@ fn get_settings(state: State<'_, AppState>) -> Result<AppSettings, String> {
 fn save_settings(
     app: AppHandle,
     state: State<'_, AppState>,
-    settings: AppSettings,
+    mut settings: AppSettings,
 ) -> Result<(), String> {
+    settings.randomizer.mouse_dpi = settings.mouse_dpi;
     storage::save_settings(&app, &settings)?;
-    *state.settings.lock().unwrap() = settings;
+    *state.settings.lock().unwrap() = settings.clone();
+    let _ = app.emit("randomizer_settings_updated", &settings.randomizer);
+
+    if settings.randomizer.enabled {
+        let (avail, found_dir, _, _) = randomizer::check_rawaccel_availability(settings.randomizer.rawaccel_dir.as_deref());
+        if avail {
+            if let Some(ref dir) = found_dir {
+                let current_mult = state.randomizer_state.lock().unwrap().active_mult;
+                let _ = randomizer::update_and_apply_scale(dir, current_mult, settings.mouse_dpi);
+            }
+        }
+    }
+
     Ok(())
 }
 
@@ -225,14 +238,15 @@ fn save_randomizer_settings(
     state: State<'_, AppState>,
     settings: RandomizerSettings,
 ) -> Result<RandomizerState, String> {
-    let was_enabled = {
+    let (was_enabled, prev_dpi) = {
         let s = state.settings.lock().unwrap();
-        s.randomizer.enabled
+        (s.randomizer.enabled, s.randomizer.mouse_dpi)
     };
     let is_enabled = settings.enabled;
 
     {
         let mut app_settings = state.settings.lock().unwrap();
+        app_settings.mouse_dpi = settings.mouse_dpi;
         app_settings.randomizer = settings.clone();
     }
     let app_settings = state.settings.lock().unwrap().clone();
@@ -251,7 +265,7 @@ fn save_randomizer_settings(
         return randomizer::apply_next_sens(&app, None, None);
     } else if was_enabled && !is_enabled && avail {
         if let Some(ref dir) = found_dir {
-            let _ = randomizer::restore_base_sens(dir);
+            let _ = randomizer::restore_base_sens(dir, settings.mouse_dpi);
         }
         let now_iso = chrono::Local::now().to_rfc3339();
         let base_cm = if settings.base_sens_cm > 0.0 { settings.base_sens_cm } else { 40.0 };
@@ -263,7 +277,21 @@ fn save_randomizer_settings(
             r_state.clone()
         };
         let _ = app.emit("sens_updated", &new_state);
+    } else if !is_enabled {
+        let base_cm = if settings.base_sens_cm > 0.0 { settings.base_sens_cm } else { 40.0 };
+        let new_state = {
+            let mut r_state = state.randomizer_state.lock().unwrap();
+            r_state.active_sens_cm = base_cm;
+            r_state.active_mult = 1.0;
+            r_state.clone()
+        };
+        let _ = app.emit("sens_updated", &new_state);
         return Ok(new_state);
+    } else if is_enabled && avail && (prev_dpi - settings.mouse_dpi).abs() > 0.01 {
+        if let Some(ref dir) = found_dir {
+            let current_mult = state.randomizer_state.lock().unwrap().active_mult;
+            let _ = randomizer::update_and_apply_scale(dir, current_mult, settings.mouse_dpi);
+        }
     }
 
     Ok(state.randomizer_state.lock().unwrap().clone())
@@ -301,8 +329,12 @@ fn test_rawaccel_writer(_app: AppHandle, state: State<'_, AppState>, path: Optio
         return Err(format!("Diretório inválido: writer.exe ou settings.json ausentes em {}", target_dir.display()));
     }
 
-    let current_mult = state.randomizer_state.lock().unwrap().active_mult;
-    randomizer::update_and_apply_scale(&target_dir, current_mult)?;
+    let (current_mult, mouse_dpi) = {
+        let s = state.settings.lock().unwrap();
+        let mult = state.randomizer_state.lock().unwrap().active_mult;
+        (mult, s.randomizer.mouse_dpi)
+    };
+    randomizer::update_and_apply_scale(&target_dir, current_mult, mouse_dpi)?;
     Ok("Comunicação com o driver RawAccel testada com sucesso!".to_string())
 }
 
@@ -314,7 +346,7 @@ pub fn run() {
             let mut data = storage::load_app_data(app.handle());
             let mut settings = storage::load_settings(app.handle());
 
-            if watcher::migrate_existing_sensitivities(&mut data, settings.kovaak_stats_path.as_deref()) {
+            if watcher::migrate_existing_sensitivities(&mut data, settings.kovaak_stats_path.as_deref(), settings.mouse_dpi) {
                 let _ = storage::save_app_data(app.handle(), &data);
             }
 

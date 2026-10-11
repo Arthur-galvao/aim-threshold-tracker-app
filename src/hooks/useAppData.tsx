@@ -28,6 +28,7 @@ import {
 import {
   recalculateAllTaskThresholds,
   recalculateAllTasks,
+  sanitizeAppData,
 } from "@/lib/threshold";
 import {
   categorizeScenario,
@@ -85,10 +86,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const refreshData = useCallback(async () => {
     const data = await loadAppData();
     if (!data.playlists) data.playlists = [];
+    const sanitized = sanitizeAppData(data);
     recalculateAllTasks(data.tasks);
     const recategorized = migrateAndCategorizeTasks(data.tasks);
     setAppData(data);
-    if (recategorized) {
+    if (sanitized || recategorized) {
       void saveAppData(data);
     }
   }, []);
@@ -114,7 +116,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const syncGamePlaylists = useCallback(
     async (manual: boolean = false): Promise<{ imported: number; total: number }> => {
       try {
-                const rawKovaak = await getKovaakPlaylists();
+        const rawKovaak = await getKovaakPlaylists();
         const rawAimlab = await getAimlabPlaylists();
         const rawPlaylists = [...(rawKovaak || []), ...(rawAimlab || [])];
         if (!rawPlaylists || rawPlaylists.length === 0) {
@@ -128,18 +130,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
         await updateAppData((prev) => {
           const currentPlaylists = prev.playlists ?? [];
-          const existingNames = new Set(
-            currentPlaylists.map((p) => p.name.trim().toLowerCase())
-          );
-
           const updatedTasks = [...prev.tasks];
-          const newPlaylists: Playlist[] = [];
+          const updatedPlaylists = [...currentPlaylists];
 
           for (const kpl of rawPlaylists) {
             const cleanName = kpl.playlistName.trim();
-            if (!cleanName || existingNames.has(cleanName.toLowerCase())) {
-              continue;
-            }
+            if (!cleanName) continue;
 
             const items: PlaylistItem[] = [];
 
@@ -175,26 +171,39 @@ export function AppProvider({ children }: { children: ReactNode }) {
             }
 
             if (items.length > 0) {
-              const newPl: Playlist = {
-                id: `pl_${Date.now()}_${newPlaylists.length}`,
-                name: cleanName,
-                items,
-                createdAt: new Date().toISOString(),
-              };
-              newPlaylists.push(newPl);
-              existingNames.add(cleanName.toLowerCase());
-              importedCount++;
+              const existingIdx = updatedPlaylists.findIndex(
+                (p) => p.name.trim().toLowerCase() === cleanName.toLowerCase()
+              );
+              if (existingIdx >= 0) {
+                const existing = updatedPlaylists[existingIdx];
+                const refreshedItems = items.map((newItem, i) => {
+                  const existingItem = existing.items[i];
+                  return {
+                    ...newItem,
+                    targetMode: existingItem?.targetMode ?? newItem.targetMode,
+                    targetValue: existingItem?.targetValue ?? newItem.targetValue,
+                  };
+                });
+                updatedPlaylists[existingIdx] = {
+                  ...existing,
+                  items: refreshedItems,
+                };
+              } else {
+                updatedPlaylists.push({
+                  id: `pl_${Date.now()}_${updatedPlaylists.length}_${Math.random().toString(36).substring(2, 6)}`,
+                  name: cleanName,
+                  items,
+                  createdAt: new Date().toISOString(),
+                });
+                importedCount++;
+              }
             }
-          }
-
-          if (importedCount === 0) {
-            return prev;
           }
 
           return {
             ...prev,
             tasks: updatedTasks,
-            playlists: [...currentPlaylists, ...newPlaylists],
+            playlists: updatedPlaylists,
             activeTaskId: prev.activeTaskId ?? (updatedTasks[0]?.id ?? null),
           };
         });
@@ -456,7 +465,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const createTask = useCallback(
     async (name: string, category: string, subcategory: string) => {
       const newTask: Task = {
-        id: `task_${Date.now()}`,
+        id: `task_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
         name: name.trim(),
         category,
         subcategory,
@@ -496,7 +505,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
         scores.forEach((score, index) => {
           task.sessions.push({
-            id: `sess_${Date.now()}_${index}`,
+            id: `sess_${Date.now()}_${index}_${Math.random().toString(36).slice(2, 7)}`,
             date,
             sens,
             pb: score,

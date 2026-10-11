@@ -94,7 +94,7 @@ export function SensRandomizerAnalytics({
     <div className="space-y-6">
       {/* Sweet Spot Recommendation Hero Card */}
       {analysis && bestBucket && (
-        <div className="panel p-6 rounded-2xl border-edge-strong bg-surface/80 relative overflow-hidden">
+        <div className="panel p-4 sm:p-6 rounded-2xl border-edge-strong bg-surface/80 relative overflow-hidden">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-edge pb-5">
             <div>
               <div className="flex items-center gap-2">
@@ -127,7 +127,7 @@ export function SensRandomizerAnalytics({
             </button>
           </div>
 
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mt-5">
             <div className="p-4 rounded-xl bg-surface-subtle border border-edge">
               <span className="text-[11px] font-semibold uppercase tracking-wider text-text-faint block">
                 {t("randomizer.optimalRange")}
@@ -182,7 +182,7 @@ export function SensRandomizerAnalytics({
 
       {/* Experimental Sensitivity Predictor Card */}
       {prediction && (
-        <div className="panel p-5 rounded-2xl border border-edge bg-surface/60 space-y-4">
+        <div className="panel p-4 sm:p-5 rounded-2xl border border-edge bg-surface/60 space-y-4">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-edge pb-4">
             <div>
               <div className="flex items-center gap-2">
@@ -210,7 +210,7 @@ export function SensRandomizerAnalytics({
             </button>
           </div>
 
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
             {/* Predicted Sens */}
             <div className="p-3.5 rounded-xl bg-surface-subtle border border-edge">
               <span className="text-[11px] font-semibold uppercase tracking-wider text-text-faint block">
@@ -312,7 +312,7 @@ export function SensRandomizerAnalytics({
 
       {/* Sensitivity Buckets Breakdown Table */}
       {analysis && analysis.buckets.length > 0 && (
-        <div className="panel p-6 rounded-2xl space-y-4">
+        <div className="panel p-4 sm:p-6 rounded-2xl space-y-4">
           <div className="border-b border-edge pb-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
             <div>
               <h3 className="text-sm font-bold uppercase tracking-wider text-text-main">
@@ -331,8 +331,8 @@ export function SensRandomizerAnalytics({
             </span>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
+          <div className="overflow-x-auto custom-scrollbar">
+            <table className="w-full text-left text-xs min-w-[660px]">
               <thead>
                 <tr className="border-b border-edge text-[11px] font-bold uppercase tracking-wider text-text-faint">
                   <th className="pb-3 pl-3">{t("randomizer.colRange")}</th>
@@ -403,7 +403,7 @@ export function SensRandomizerAnalytics({
 
       {/* Recent Runs History */}
       {recentRuns.length > 0 && (
-        <div className="panel p-6 rounded-2xl space-y-4">
+        <div className="panel p-4 sm:p-6 rounded-2xl space-y-4">
           <div className="border-b border-edge pb-3">
             <h3 className="text-sm font-bold uppercase tracking-wider text-text-main">
               {t("randomizer.recentRunsTitle")}
@@ -413,8 +413,8 @@ export function SensRandomizerAnalytics({
             </p>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
+          <div className="overflow-x-auto custom-scrollbar">
+            <table className="w-full text-left text-xs min-w-[500px]">
               <thead>
                 <tr className="border-b border-edge text-[11px] font-bold uppercase tracking-wider text-text-faint">
                   <th className="pb-3 pl-3">{t("randomizer.colDate")}</th>

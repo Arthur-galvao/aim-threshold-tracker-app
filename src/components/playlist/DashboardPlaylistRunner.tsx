@@ -128,7 +128,7 @@ export function DashboardPlaylistRunner({ runner, tasks }: DashboardPlaylistRunn
         </div>
 
         {/* Right: Progress Metric & Controls */}
-        <div className="flex items-center gap-2.5 justify-between sm:justify-end shrink-0">
+        <div className="flex items-center gap-2.5 justify-between sm:justify-end shrink-0 w-full sm:w-auto">
           <div className="px-2.5 py-1 rounded-md bg-surface border border-edge text-[11px] font-mono text-text-main tabular-nums">
             {progressData.label}
           </div>

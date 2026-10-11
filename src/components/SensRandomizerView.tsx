@@ -6,6 +6,7 @@ import { useSensRandomizer } from "@/hooks/useSensRandomizer";
 import {
   computeSweetSpotAnalytics,
   valorantToCm360,
+  calculateSensRange,
   type RunDataPoint,
 } from "@/lib/sens-analytics";
 import { SensRandomizerControls } from "./randomizer/SensRandomizerControls";
@@ -183,10 +184,19 @@ export function SensRandomizerView({
 
   const handleApplySens = useCallback(
     async (sensCm: number) => {
+      const rounded = Number(sensCm.toFixed(1));
+      const centerSens = settings.autoScenarioSens
+        ? (settings.scenarioIdealCm ?? rounded)
+        : rounded;
+      const range = calculateSensRange(centerSens, settings.spreadPercent, rounded);
       await saveSettings({
         ...settings,
         rangeMode: "cm360",
-        baseSensCm: Number(sensCm.toFixed(1)),
+        baseSensCm: rounded,
+        minCm: settings.autoScenarioSens ? range.minCm : settings.minCm,
+        maxCm: settings.autoScenarioSens ? range.maxCm : settings.maxCm,
+        minMult: settings.autoScenarioSens ? range.minMult : settings.minMult,
+        maxMult: settings.autoScenarioSens ? range.maxMult : settings.maxMult,
       });
     },
     [saveSettings, settings]

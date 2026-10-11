@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useI18n } from "@/lib/i18n";
 import type { RandomizerSettings, RandomizerState } from "@/hooks/useSensRandomizer";
 import type { Task } from "@/lib/types";
-import { calculateSensRange, getScenarioIdealSens } from "@/lib/sens-analytics";
+import { calculateSensRange, getScenarioIdealSens, cm360ToValorant, cm360ToSource } from "@/lib/sens-analytics";
 
 interface SensRandomizerControlsProps {
   settings: RandomizerSettings;
@@ -43,7 +43,9 @@ export function SensRandomizerControls({
     avoidRepeats: settings.avoidRepeats ?? true,
     spreadPercent: settings.spreadPercent ?? 25.0,
     autoScenarioSens: settings.autoScenarioSens ?? true,
+    mouseDpi: settings.mouseDpi || 800,
   });
+  const [dpiInputText, setDpiInputText] = useState(String(settings.mouseDpi || 800));
 
   useEffect(() => {
     setForm({
@@ -56,7 +58,9 @@ export function SensRandomizerControls({
       avoidRepeats: settings.avoidRepeats ?? true,
       spreadPercent: settings.spreadPercent ?? 25.0,
       autoScenarioSens: settings.autoScenarioSens ?? true,
+      mouseDpi: settings.mouseDpi || 800,
     });
+    setDpiInputText(String(settings.mouseDpi || 800));
   }, [settings]);
 
   const parsedBase = parseFloat(form.baseSens) || settings.baseSensCm || 50;
@@ -66,12 +70,21 @@ export function SensRandomizerControls({
   const parsedMaxMult = parseFloat(form.maxMult) || settings.maxMult || 1.35;
 
   const idealSens = useMemo(() => {
-    return getScenarioIdealSens(activeTask, allTasks);
-  }, [activeTask, allTasks]);
+    return getScenarioIdealSens(activeTask, allTasks, form.mouseDpi);
+  }, [activeTask, allTasks, form.mouseDpi]);
 
+  const effectiveCenterSens = form.autoScenarioSens && idealSens ? idealSens.value : parsedBase;
   const calculatedRange = useMemo(() => {
-    return calculateSensRange(parsedBase, form.spreadPercent);
-  }, [parsedBase, form.spreadPercent]);
+    return calculateSensRange(effectiveCenterSens, form.spreadPercent, parsedBase);
+  }, [effectiveCenterSens, form.spreadPercent, parsedBase]);
+
+  const inGameValorant = useMemo(() => {
+    return cm360ToValorant(parsedBase, form.mouseDpi);
+  }, [parsedBase, form.mouseDpi]);
+
+  const inGameSource = useMemo(() => {
+    return cm360ToSource(parsedBase, form.mouseDpi);
+  }, [parsedBase, form.mouseDpi]);
 
   const handleSave = async (override?: Partial<typeof form>) => {
     const nextForm = { ...form, ...override };
@@ -80,7 +93,8 @@ export function SensRandomizerControls({
     const pMaxCm = parseFloat(nextForm.maxCm) || settings.maxCm || 90;
     const pMinMult = parseFloat(nextForm.minMult) || settings.minMult || 0.75;
     const pMaxMult = parseFloat(nextForm.maxMult) || settings.maxMult || 1.35;
-    const range = calculateSensRange(pBase, nextForm.spreadPercent);
+    const centerSens = nextForm.autoScenarioSens && idealSens ? idealSens.value : pBase;
+    const range = calculateSensRange(centerSens, nextForm.spreadPercent, pBase);
 
     await onSaveSettings({
       ...settings,
@@ -89,6 +103,8 @@ export function SensRandomizerControls({
       baseSensCm: pBase,
       spreadPercent: nextForm.spreadPercent,
       autoScenarioSens: nextForm.autoScenarioSens,
+      mouseDpi: nextForm.mouseDpi,
+      scenarioIdealCm: nextForm.autoScenarioSens && idealSens ? idealSens.value : undefined,
       minCm: nextForm.autoScenarioSens ? range.minCm : pMinCm,
       maxCm: nextForm.autoScenarioSens ? range.maxCm : pMaxCm,
       minMult: nextForm.autoScenarioSens ? range.minMult : pMinMult,
@@ -96,11 +112,9 @@ export function SensRandomizerControls({
     });
   };
 
-  const deltaFromBasePercent = useMemo(() => {
-    if (settings.baseSensCm <= 0) return 0;
-    const diff = randomizerState.activeSensCm - settings.baseSensCm;
-    return (diff / settings.baseSensCm) * 100;
-  }, [randomizerState.activeSensCm, settings.baseSensCm]);
+  const multDeltaPercent = useMemo(() => {
+    return (randomizerState.activeMult - 1.0) * 100;
+  }, [randomizerState.activeMult]);
 
   const updateField = (key: keyof typeof form, val: any) => {
     setForm((prev) => ({ ...prev, [key]: val }));
@@ -190,9 +204,9 @@ export function SensRandomizerControls({
       )}
 
       {/* Main 2-Column Grid: Config & Telemetry */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-5 items-start">
         {/* Left Column: Parameter Configuration */}
-        <div className="lg:col-span-6 panel p-5 rounded-2xl space-y-4">
+        <div className="panel p-4 sm:p-5 rounded-2xl space-y-4">
           <div className="border-b border-edge pb-2.5">
             <h3 className="text-xs font-bold uppercase tracking-wider text-text-main">
               {t("randomizer.paramsTitle")}
@@ -255,14 +269,12 @@ export function SensRandomizerControls({
                 id="autoScenarioSensCheck"
                 type="checkbox"
                 checked={form.autoScenarioSens}
-                onChange={(e) => {
+                onChange={async (e) => {
                   const checked = e.target.checked;
                   updateField("autoScenarioSens", checked);
-                  if (checked && idealSens) {
-                    updateField("baseSens", String(idealSens.value));
-                    void handleSave({ autoScenarioSens: true, baseSens: String(idealSens.value) });
-                  } else {
-                    void handleSave({ autoScenarioSens: false });
+                  await handleSave({ autoScenarioSens: checked });
+                  if (checked && settings.enabled && rawaccelAvailable) {
+                    await onTriggerRandomize();
                   }
                 }}
                 className="w-4 h-4 rounded border-edge-strong bg-surface text-accent cursor-pointer accent-blue-500 shrink-0"
@@ -270,18 +282,79 @@ export function SensRandomizerControls({
             </label>
           </div>
 
-          {/* Base Sens Input */}
+          {/* Mouse Hardware DPI */}
           <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-[11px] font-semibold uppercase tracking-wider text-text-faint">
+                {t("randomizer.mouseDpi")}
+              </label>
+              <span className="text-[10px] text-accent font-mono font-bold">
+                {form.mouseDpi} DPI
+              </span>
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {[400, 800, 1600, 3200].map((preset) => (
+                <button
+                  key={preset}
+                  type="button"
+                  onClick={() => {
+                    setDpiInputText(String(preset));
+                    updateField("mouseDpi", preset);
+                    void handleSave({ mouseDpi: preset });
+                  }}
+                  className={`px-2.5 py-1 rounded text-[11px] font-mono font-semibold transition-colors ${
+                    form.mouseDpi === preset
+                      ? "bg-accent text-white"
+                      : "bg-surface border border-edge text-text-secondary hover:text-text-main hover:bg-surface-hover"
+                  }`}
+                >
+                  {preset}
+                </button>
+              ))}
+              <div className="flex items-center ml-auto">
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={dpiInputText}
+                  onChange={(e) => {
+                    const clean = e.target.value.replace(/[^0-9]/g, "");
+                    setDpiInputText(clean);
+                    const val = parseInt(clean, 10);
+                    if (!isNaN(val) && val >= 100 && val <= 32000) {
+                      updateField("mouseDpi", val);
+                    }
+                  }}
+                  onBlur={() => {
+                    const parsed = parseInt(dpiInputText, 10);
+                    if (!isNaN(parsed) && parsed >= 100 && parsed <= 32000) {
+                      updateField("mouseDpi", parsed);
+                      void handleSave({ mouseDpi: parsed });
+                    } else {
+                      setDpiInputText(String(form.mouseDpi));
+                      void handleSave({ mouseDpi: form.mouseDpi });
+                    }
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      (e.target as HTMLInputElement).blur();
+                    }
+                  }}
+                  className="w-16 minimal-input py-1 px-2 text-[11px] font-mono font-medium text-right"
+                  aria-label={t("randomizer.mouseDpi")}
+                />
+                <span className="ml-1 text-[10px] font-mono text-text-muted uppercase">DPI</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Base Sens Input */}
+          <div className="space-y-2">
             <div className="flex items-center justify-between mb-1">
               <label htmlFor="baseSensInput" className="text-[11px] font-semibold uppercase tracking-wider text-text-faint">
                 {t("randomizer.baseSens")}
               </label>
               <span className="text-[10px] text-text-faint font-mono">
-                {form.autoScenarioSens ? (
-                  idealSens?.source === "empirical" ? t("randomizer.idealSensSourceEmpirical") : t("randomizer.idealSensSourceViscose")
-                ) : (
-                  t("randomizer.baseSensSource")
-                )}
+                {t("randomizer.baseSensSource")}
               </span>
             </div>
             <div className="relative flex items-center">
@@ -294,9 +367,6 @@ export function SensRandomizerControls({
                   const val = e.target.value.replace(",", ".");
                   if (val === "" || /^\d*\.?\d*$/.test(val)) {
                     updateField("baseSens", val);
-                    if (form.autoScenarioSens) {
-                      updateField("autoScenarioSens", false);
-                    }
                   }
                 }}
                 onBlur={() => {
@@ -310,11 +380,21 @@ export function SensRandomizerControls({
                 cm/360
               </span>
             </div>
-            {!form.autoScenarioSens && settings.autoScenarioSens && (
-              <p className="text-[10px] text-amber-400 mt-1">
-                {t("randomizer.manualOverrideNotice")}
-              </p>
-            )}
+
+            {/* In-Game Equivalent Preview */}
+            <div className="flex items-center justify-between text-[11px] px-2.5 py-1.5 rounded-lg bg-surface border border-edge font-mono text-text-secondary">
+              <span className="text-[10px] text-text-faint uppercase font-semibold">{t("randomizer.inGameEquivalent")}:</span>
+              <div className="flex items-center gap-3">
+                <span>
+                  <span className="text-text-faint">Val:</span>{" "}
+                  <strong className="text-text-main">{inGameValorant.toFixed(3)}</strong>
+                </span>
+                <span>
+                  <span className="text-text-faint">Source:</span>{" "}
+                  <strong className="text-text-main">{inGameSource.toFixed(3)}</strong>
+                </span>
+              </div>
+            </div>
           </div>
 
           {/* Spread Percentage Control (±%) */}
@@ -371,9 +451,9 @@ export function SensRandomizerControls({
             </div>
 
             {/* Real-time Calculated Range */}
-            <div className="pt-1 border-t border-edge flex items-center justify-between text-[11px]">
+            <div className="pt-1 border-t border-edge flex items-center justify-between text-[11px] flex-wrap gap-1">
               <span className="text-text-faint">{t("randomizer.spreadCalculatedRange")}</span>
-              <span className="font-mono font-semibold text-text-main">
+              <span className="font-mono font-semibold text-text-main whitespace-nowrap">
                 {form.rangeMode === "cm360"
                   ? `${calculatedRange.minCm.toFixed(1)} cm - ${calculatedRange.maxCm.toFixed(1)} cm`
                   : `${calculatedRange.minMult.toFixed(2)}x - ${calculatedRange.maxMult.toFixed(2)}x`}
@@ -502,9 +582,9 @@ export function SensRandomizerControls({
           )}
 
           {/* Configured Range Summary */}
-          <div className="px-3 py-1.5 rounded-lg bg-surface-subtle/70 border border-edge flex items-center justify-between text-[11px]">
+          <div className="px-3 py-1.5 rounded-lg bg-surface-subtle/70 border border-edge flex items-center justify-between text-[11px] flex-wrap gap-1">
             <span className="text-text-faint font-medium">{t("randomizer.configuredRange")}</span>
-            <span className="text-text-main font-mono font-semibold">
+            <span className="text-text-main font-mono font-semibold whitespace-nowrap">
               {form.rangeMode === "cm360"
                 ? `${(form.autoScenarioSens ? calculatedRange.minCm : parsedMinCm).toFixed(1)} cm - ${(form.autoScenarioSens ? calculatedRange.maxCm : parsedMaxCm).toFixed(1)} cm`
                 : `${(form.autoScenarioSens ? calculatedRange.minMult : parsedMinMult).toFixed(2)}x - ${(form.autoScenarioSens ? calculatedRange.maxMult : parsedMaxMult).toFixed(2)}x`}
@@ -552,7 +632,7 @@ export function SensRandomizerControls({
         </div>
 
         {/* Right Column: Telemetry & Status */}
-        <div className="lg:col-span-6 panel p-5 rounded-2xl space-y-4">
+        <div className="panel p-4 sm:p-5 rounded-2xl space-y-4">
           <div className="border-b border-edge pb-2.5 flex items-center justify-between">
             <h3 className="text-xs font-bold uppercase tracking-wider text-text-main">
               {t("randomizer.telemetryTitle")}
@@ -572,7 +652,7 @@ export function SensRandomizerControls({
           </div>
 
           {/* Big Active Sens KPI Card */}
-          <div className="p-4 rounded-xl bg-surface-subtle border border-edge flex items-center justify-between">
+          <div className="p-3.5 sm:p-4 rounded-xl bg-surface-subtle border border-edge flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <span className="text-[11px] uppercase tracking-wider text-text-faint font-medium">
                 {t("randomizer.activeSens")}
@@ -585,25 +665,25 @@ export function SensRandomizerControls({
               </div>
             </div>
 
-            <div className="text-right border-l border-edge pl-4">
+            <div className="text-left sm:text-right border-t sm:border-t-0 sm:border-l border-edge pt-2.5 sm:pt-0 sm:pl-4">
               <span className="text-[11px] uppercase tracking-wider text-text-faint font-medium">
                 {t("randomizer.activeMult")}
               </span>
-              <div className="flex items-baseline gap-1.5 mt-0.5 justify-end">
+              <div className="flex items-baseline gap-1.5 mt-0.5 justify-start sm:justify-end">
                 <span className="text-xl font-mono font-bold text-blue-400 tabular-nums">
                   {randomizerState.activeMult.toFixed(2)}x
                 </span>
                 <span
                   className={`text-[11px] font-mono font-semibold ${
-                    deltaFromBasePercent > 0
+                    multDeltaPercent > 0
                       ? "text-emerald-400"
-                      : deltaFromBasePercent < 0
+                      : multDeltaPercent < 0
                       ? "text-amber-400"
                       : "text-text-faint"
                   }`}
                 >
-                  ({deltaFromBasePercent >= 0 ? "+" : ""}
-                  {deltaFromBasePercent.toFixed(1)}%)
+                  ({multDeltaPercent >= 0 ? "+" : ""}
+                  {multDeltaPercent.toFixed(1)}%)
                 </span>
               </div>
             </div>

@@ -239,7 +239,7 @@ export function ScenarioList({
   // Render Collapsed Sidebar Rail
   if (isCollapsed) {
     return (
-      <aside className="w-14 shrink-0 h-screen max-h-screen border-r border-edge bg-[#0c0e16]/85 backdrop-blur-md flex flex-col items-center py-3.5 px-1.5 select-none z-20 transition-all duration-200">
+      <aside className="w-14 max-md:hidden shrink-0 h-screen max-h-screen border-r border-edge bg-[#0c0e16]/85 backdrop-blur-md flex flex-col items-center py-3.5 px-1.5 select-none z-20 transition-all duration-200">
         <Tooltip content="Expand sidebar" side="right">
           <button
             type="button"
@@ -305,7 +305,14 @@ export function ScenarioList({
 
   // Render Full Structured Sidebar
   return (
-    <aside className="w-80 shrink-0 h-screen max-h-screen border-r border-edge bg-[#0c0e16]/85 backdrop-blur-md flex flex-col p-3.5 sm:p-4 select-none z-20 transition-all duration-200">
+    <>
+      {/* Mobile Drawer Backdrop */}
+      <div
+        className="fixed inset-0 bg-black/60 backdrop-blur-xs z-40 md:hidden"
+        onClick={toggleCollapse}
+        aria-hidden="true"
+      />
+      <aside className="w-72 sm:w-80 max-md:fixed max-md:inset-y-0 max-md:left-0 max-md:z-50 max-md:shadow-2xl md:relative shrink-0 h-screen max-h-screen border-r border-edge bg-[#0c0e16]/95 md:bg-[#0c0e16]/85 backdrop-blur-md flex flex-col p-3 sm:p-4 select-none z-20 transition-all duration-200">
       {/* Top Header Row: Tab Switcher & Collapse Button */}
       <div className="flex items-center gap-2 mb-3">
         <div className="grid grid-cols-2 p-1 rounded-lg bg-surface-subtle border border-edge flex-1">
@@ -514,6 +521,9 @@ export function ScenarioList({
                                         toggleSelectTask(task.id);
                                       } else {
                                         onTaskChange(task.id);
+                                        if (typeof window !== "undefined" && window.innerWidth < 768) {
+                                          toggleCollapse();
+                                        }
                                       }
                                     }}
                                     className={`group px-2 py-1.5 rounded-md text-xs cursor-pointer transition-all flex items-center justify-between gap-2 ${
@@ -796,5 +806,6 @@ export function ScenarioList({
         )}
       </div>
     </aside>
+    </>
   );
 }

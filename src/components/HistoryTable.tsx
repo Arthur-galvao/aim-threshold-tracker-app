@@ -39,8 +39,8 @@ export function HistoryTable({
   const { t } = useI18n();
 
   return (
-    <div className="p-4 sm:p-5 rounded-xl bg-surface border border-edge shadow-xs">
-      <div className="flex items-center justify-between gap-3 mb-4">
+    <div className="p-3.5 sm:p-5 rounded-xl bg-surface border border-edge shadow-xs">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
         <div className="flex items-center gap-2.5">
           <div className="w-6 h-6 rounded-md bg-surface-subtle text-text-secondary border border-edge flex items-center justify-center">
             <ClockCounterClockwise size={13} weight="bold" />
@@ -55,7 +55,7 @@ export function HistoryTable({
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 self-end sm:self-auto">
           {onNewSession && (
             <Tooltip content={t("session.title")}>
               <Button
@@ -85,14 +85,14 @@ export function HistoryTable({
       </div>
 
       <div className="overflow-x-auto custom-scrollbar">
-        <Table>
+        <Table className="min-w-[480px]">
           <TableHeader>
             <TableRow className="border-b border-edge hover:bg-transparent">
-              <TableHead className="text-text-faint font-mono text-[11px] uppercase tracking-wider">{t("hist.colDate")}</TableHead>
-              <TableHead className="text-text-faint font-mono text-[11px] uppercase tracking-wider">{t("hist.colSens")}</TableHead>
-              <TableHead className="text-text-faint font-mono text-[11px] uppercase tracking-wider">{t("hist.colScore")}</TableHead>
-              <TableHead className="text-text-faint font-mono text-[11px] uppercase tracking-wider">{t("hist.colThreshold")}</TableHead>
-              <TableHead className="text-right text-text-faint font-mono text-[11px] uppercase tracking-wider">{t("hist.colAction")}</TableHead>
+              <TableHead className="text-text-faint font-mono text-[11px] uppercase tracking-wider whitespace-nowrap">{t("hist.colDate")}</TableHead>
+              <TableHead className="text-text-faint font-mono text-[11px] uppercase tracking-wider whitespace-nowrap">{t("hist.colSens")}</TableHead>
+              <TableHead className="text-text-faint font-mono text-[11px] uppercase tracking-wider whitespace-nowrap">{t("hist.colScore")}</TableHead>
+              <TableHead className="text-text-faint font-mono text-[11px] uppercase tracking-wider whitespace-nowrap">{t("hist.colThreshold")}</TableHead>
+              <TableHead className="text-right text-text-faint font-mono text-[11px] uppercase tracking-wider whitespace-nowrap">{t("hist.colAction")}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>

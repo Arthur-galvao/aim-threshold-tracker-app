@@ -393,8 +393,8 @@ export function PlaylistRunnerView({
       </div>
 
       {/* Current Scenario Card */}
-      <div className="panel p-6 sm:p-8 rounded-[10px] border border-edge space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-edge pb-5">
+      <div className="panel p-4 sm:p-6 lg:p-8 rounded-[10px] border border-edge space-y-6">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-edge pb-5">
           <div>
             <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-score">
               {t("runner.currentScenario")}
@@ -473,7 +473,7 @@ export function PlaylistRunnerView({
             )}
           </div>
 
-          <div className="flex items-center gap-3 self-start sm:self-auto">
+          <div className="flex items-center gap-3 self-start lg:self-auto">
             {runner.currentStepIndex > 0 && (
               <button
                 type="button"

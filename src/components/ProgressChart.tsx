@@ -211,8 +211,8 @@ export function ProgressChart({ activeTask }: ProgressChartProps) {
   }
 
   return (
-    <div className="p-4 sm:p-5 rounded-xl bg-surface border border-edge shadow-xs">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
+    <div className="p-3.5 sm:p-5 rounded-xl bg-surface border border-edge shadow-xs">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-4 sm:mb-5">
         <div className="flex items-center gap-2.5">
           <div className="w-6 h-6 rounded-md bg-surface-subtle text-text-secondary border border-edge flex items-center justify-center">
             <ChartLineUp size={13} weight="bold" className="text-score" />
@@ -227,9 +227,9 @@ export function ProgressChart({ activeTask }: ProgressChartProps) {
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-4">
+        <div className="flex flex-wrap items-center gap-2.5 sm:gap-4">
           {/* Interactive HTML Legend */}
-          <div className="flex items-center gap-2 sm:gap-3 text-[11px] font-mono select-none">
+          <div className="flex flex-wrap items-center gap-1.5 sm:gap-3 text-[10px] sm:text-[11px] font-mono select-none">
             <UiTooltip content={t("chart.toggleSeries")}>
               <button
                 type="button"
@@ -282,7 +282,7 @@ export function ProgressChart({ activeTask }: ProgressChartProps) {
               <button
                 type="button"
                 onClick={() => setAvgType("moving")}
-                className={`px-3 py-1 text-[10px] font-mono font-medium rounded transition-colors cursor-pointer ${
+                className={`px-2.5 sm:px-3 py-1 text-[10px] font-mono font-medium rounded transition-colors cursor-pointer ${
                   avgType === "moving"
                     ? "bg-surface text-text-main shadow-xs border border-edge"
                     : "text-text-faint hover:text-text-secondary"
@@ -295,7 +295,7 @@ export function ProgressChart({ activeTask }: ProgressChartProps) {
               <button
                 type="button"
                 onClick={() => setAvgType("overall")}
-                className={`px-3 py-1 text-[10px] font-mono font-medium rounded transition-colors cursor-pointer ${
+                className={`px-2.5 sm:px-3 py-1 text-[10px] font-mono font-medium rounded transition-colors cursor-pointer ${
                   avgType === "overall"
                     ? "bg-surface text-text-main shadow-xs border border-edge"
                     : "text-text-faint hover:text-text-secondary"
@@ -308,7 +308,7 @@ export function ProgressChart({ activeTask }: ProgressChartProps) {
         </div>
       </div>
 
-      <div className="relative h-72 sm:h-80 w-full">
+      <div className="relative h-60 sm:h-72 lg:h-80 w-full">
         <Line
           data={chartData}
           plugins={[crosshairPlugin]}

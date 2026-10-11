@@ -68,6 +68,7 @@ export interface AppSettings {
   close_to_tray?: boolean;
   auto_detect_playlist?: boolean;
   notify_step_advance?: boolean;
+  mouse_dpi?: number;
 }
 
 export interface ImportStats {

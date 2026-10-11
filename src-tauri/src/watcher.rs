@@ -102,10 +102,10 @@ fn is_stats_csv(path: &Path) -> bool {
 fn process_new_csv(app: &AppHandle, path: &Path) -> Result<bool, String> {
     let state: State<AppState> = app.state();
 
-    let (is_randomizer_enabled, active_sens, stats_path, auto_detect_playlist) = {
+    let (is_randomizer_enabled, active_sens, stats_path, auto_detect_playlist, mouse_dpi) = {
         let s = state.settings.lock().unwrap();
         let r = state.randomizer_state.lock().unwrap();
-        (s.randomizer.enabled, r.active_sens_cm, s.kovaak_stats_path.clone(), s.auto_detect_playlist)
+        (s.randomizer.enabled, r.active_sens_cm, s.kovaak_stats_path.clone(), s.auto_detect_playlist, s.mouse_dpi)
     };
 
     if is_randomizer_enabled && active_sens > 0.0 {
@@ -124,7 +124,7 @@ fn process_new_csv(app: &AppHandle, path: &Path) -> Result<bool, String> {
         }
     }
 
-    let mut run = wait_for_parse(path)?;
+    let mut run = wait_for_parse(path, mouse_dpi)?;
 
     {
         let mut emitted = state.emitted.lock().unwrap();
@@ -193,11 +193,11 @@ pub fn update_kovaak_csv_sensitivity(path: &Path, sens_cm: f64) -> Result<(), St
     Ok(())
 }
 
-fn wait_for_parse(path: &Path) -> Result<KovaakRun, String> {
+fn wait_for_parse(path: &Path, fallback_dpi: f64) -> Result<KovaakRun, String> {
     let mut attempts = 0;
     loop {
         thread::sleep(Duration::from_millis(1000));
-        if let Some(run) = parser::parse_stats_file(path) {
+        if let Some(run) = parser::parse_stats_file_with_fallback_dpi(path, fallback_dpi) {
             return Ok(run);
         }
         attempts += 1;
@@ -210,14 +210,14 @@ fn wait_for_parse(path: &Path) -> Result<KovaakRun, String> {
 pub fn import_existing(app: &AppHandle) -> Result<ImportStats, String> {
     let state: State<AppState> = app.state();
 
-    let dir = {
+    let (dir, mouse_dpi) = {
         let settings = state.settings.lock().unwrap();
-        settings
+        let path = settings
             .kovaak_stats_path
             .clone()
-            .ok_or_else(|| "Nenhuma pasta do KovaaK's configurada".to_string())?
+            .ok_or_else(|| "Nenhuma pasta do KovaaK's configurada".to_string())?;
+        (PathBuf::from(path), settings.mouse_dpi)
     };
-    let dir = PathBuf::from(dir);
 
     let entries = fs::read_dir(&dir).map_err(|e| format!("Falha ao ler a pasta {}: {e}", dir.display()))?;
     let mut csvs: Vec<PathBuf> = entries
@@ -232,7 +232,7 @@ pub fn import_existing(app: &AppHandle) -> Result<ImportStats, String> {
     let mut skipped = 0usize;
 
     for path in &csvs {
-        let run = match parser::parse_stats_file(path) {
+        let run = match parser::parse_stats_file_with_fallback_dpi(path, mouse_dpi) {
             Some(r) => r,
             None => {
                 skipped += 1;
@@ -281,9 +281,10 @@ pub fn import_existing(app: &AppHandle) -> Result<ImportStats, String> {
     Ok(stats)
 }
 
-pub fn migrate_existing_sensitivities(data: &mut AppData, stats_dir: Option<&str>) -> bool {
+pub fn migrate_existing_sensitivities(data: &mut AppData, stats_dir: Option<&str>, mouse_dpi: f64) -> bool {
     let mut updated = false;
     let base_dir = stats_dir.map(PathBuf::from);
+    let effective_dpi = if mouse_dpi > 0.0 { mouse_dpi } else { 800.0 };
 
     for task in &mut data.tasks {
         for session in &mut task.sessions {
@@ -295,7 +296,7 @@ pub fn migrate_existing_sensitivities(data: &mut AppData, stats_dir: Option<&str
                 if let (Some(ref dir), Some(ref file_name)) = (&base_dir, &session.source_file) {
                     let csv_path = dir.join(file_name);
                     if csv_path.exists() {
-                        if let Some(run) = parser::parse_stats_file(&csv_path) {
+                        if let Some(run) = parser::parse_stats_file_with_fallback_dpi(&csv_path, effective_dpi) {
                             if run.sens > 2.5 {
                                 session.sens = run.sens;
                                 converted = true;
@@ -307,7 +308,7 @@ pub fn migrate_existing_sensitivities(data: &mut AppData, stats_dir: Option<&str
 
                 // If source file not found or couldn't be parsed, fallback to Valorant conversion
                 if !converted {
-                    session.sens = parser::convert_sens_to_cm(session.sens, Some("Valorant"), 800.0);
+                    session.sens = parser::convert_sens_to_cm(session.sens, Some("Valorant"), effective_dpi);
                     updated = true;
                 }
             }
@@ -315,6 +316,18 @@ pub fn migrate_existing_sensitivities(data: &mut AppData, stats_dir: Option<&str
     }
 
     updated
+}
+
+static ID_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+pub fn unique_id(prefix: &str) -> String {
+    let millis = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis())
+        .unwrap_or(0);
+    let count = ID_COUNTER.fetch_add(1, Ordering::Relaxed);
+    let rand_val: u32 = rand::random();
+    format!("{prefix}_{millis}_{count}_{rand_val:x}")
 }
 
 pub fn has_source_file(tasks: &[Task], source_file: &str) -> bool {
@@ -326,7 +339,7 @@ pub fn has_source_file(tasks: &[Task], source_file: &str) -> bool {
 pub fn add_session_to_data(state: &State<AppState>, run: &KovaakRun) {
     let date = run.datetime.get(..10).unwrap_or("").to_string();
     let session = Session {
-        id: format!("sess_{}", timestamp_id()),
+        id: unique_id("sess"),
         date,
         sens: run.sens,
         pb: run.score,
@@ -346,7 +359,7 @@ pub fn add_session_to_data(state: &State<AppState>, run: &KovaakRun) {
     }
 
     let task = Task {
-        id: format!("task_{}", timestamp_id()),
+        id: unique_id("task"),
         name: run.scenario.clone(),
         category: DEFAULT_CATEGORY.to_string(),
         subcategory: DEFAULT_SUBCATEGORY.to_string(),
@@ -357,13 +370,6 @@ pub fn add_session_to_data(state: &State<AppState>, run: &KovaakRun) {
         data.active_task_id = Some(task.id.clone());
     }
     data.tasks.push(task);
-}
-
-fn timestamp_id() -> u128 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_millis())
-        .unwrap_or(0)
 }
 
 #[cfg(test)]
@@ -418,7 +424,7 @@ mod tests {
             playlists: Vec::new(),
         };
 
-        let changed = migrate_existing_sensitivities(&mut data, None);
+        let changed = migrate_existing_sensitivities(&mut data, None, 800.0);
         assert!(!changed, "Sensitividades em cm/360 não devem ser modificadas");
         assert_eq!(data.tasks[0].sessions[0].sens, 75.0);
         assert_eq!(data.tasks[0].sessions[1].sens, 50.0);
@@ -445,7 +451,7 @@ mod tests {
             }],
         };
 
-        let changed = migrate_existing_sensitivities(&mut data, None);
+        let changed = migrate_existing_sensitivities(&mut data, None, 800.0);
         assert!(changed, "Sensitividade legada (< 2.5) deve ser migrada");
         assert_eq!(data.tasks[0].sessions[0].sens, 68.0);
     }
@@ -469,6 +475,17 @@ mod tests {
 
         assert!(has_source_file(&tasks, "target_run.csv"));
         assert!(!has_source_file(&tasks, "other_run.csv"));
+    }
+
+    #[test]
+    fn test_unique_id_no_collision() {
+        use std::collections::HashSet;
+        let mut set = HashSet::new();
+        for _ in 0..10_000 {
+            let id = unique_id("task");
+            assert!(set.insert(id), "Colisão detectada na geração de IDs únicos");
+        }
+        assert_eq!(set.len(), 10_000);
     }
 }
 

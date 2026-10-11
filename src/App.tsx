@@ -22,7 +22,7 @@ import { Toast } from "@/components/Toast";
 import type { AppSettings, Playlist } from "@/lib/types";
 import { getSettings, saveSettings } from "@/lib/tauri-bridge";
 import { getStoredTheme, applyTheme, type AppTheme } from "@/lib/theme";
-import { getScenarioIdealSens } from "@/lib/sens-analytics";
+import { getScenarioIdealSens, calculateSensRange } from "@/lib/sens-analytics";
 
 function Dashboard() {
   const {
@@ -64,7 +64,12 @@ function Dashboard() {
   } = useSensRandomizer();
 
   const [activeTab, setActiveTab] = useState<"dashboard" | "randomizer" | "playlist">("dashboard");
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    if (typeof window !== "undefined") {
+      return window.innerWidth < 1100;
+    }
+    return false;
+  });
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [aimlabOpen, setAimlabOpen] = useState(false);
   const [theme, setTheme] = useState<AppTheme>(getStoredTheme);
@@ -76,6 +81,24 @@ function Dashboard() {
   useEffect(() => {
     applyTheme(theme);
   }, [theme]);
+
+  // Dynamically auto-collapse sidebar on smaller resolutions / snapped windows
+  useEffect(() => {
+    let timeoutId: number;
+    const handleResize = () => {
+      window.clearTimeout(timeoutId);
+      timeoutId = window.setTimeout(() => {
+        if (window.innerWidth < 1024) {
+          setSidebarCollapsed(true);
+        }
+      }, 100);
+    };
+    window.addEventListener("resize", handleResize);
+    return () => {
+      window.clearTimeout(timeoutId);
+      window.removeEventListener("resize", handleResize);
+    };
+  }, []);
 
   const handleAddToPlaylist = useCallback((taskIds: string[]) => {
     setPendingPlaylistTaskIds(taskIds);
@@ -91,18 +114,19 @@ function Dashboard() {
 
   const { t } = useI18n();
 
-  // Sincroniza sensibilidade base com o cenario ativo quando autoScenarioSens estiver habilitado
+  // Sincroniza sensibilidade ideal do cenario ativo quando autoScenarioSens estiver habilitado
   useEffect(() => {
     if (!randomizerSettings.autoScenarioSens || !activeTask) return;
     const ideal = getScenarioIdealSens(activeTask, appData.tasks);
-    if (Math.abs(randomizerSettings.baseSensCm - ideal.value) >= 0.1) {
+    const currentIdeal = randomizerSettings.scenarioIdealCm;
+    if (currentIdeal === undefined || Math.abs(currentIdeal - ideal.value) >= 0.1) {
       void syncScenarioSens(ideal.value, randomizerSettings.enabled, ideal.source);
     }
   }, [
     activeTask?.id,
     randomizerSettings.autoScenarioSens,
     randomizerSettings.enabled,
-    randomizerSettings.baseSensCm,
+    randomizerSettings.scenarioIdealCm,
     appData.tasks,
     syncScenarioSens,
   ]);
@@ -156,10 +180,18 @@ function Dashboard() {
   const handleApplySens = useCallback(
     async (sensCm: number) => {
       const rounded = Number(sensCm.toFixed(1));
+      const centerSens = randomizerSettings.autoScenarioSens
+        ? (randomizerSettings.scenarioIdealCm ?? rounded)
+        : rounded;
+      const range = calculateSensRange(centerSens, randomizerSettings.spreadPercent, rounded);
       await saveRandomizerSettings({
         ...randomizerSettings,
         rangeMode: "cm360",
         baseSensCm: rounded,
+        minCm: randomizerSettings.autoScenarioSens ? range.minCm : randomizerSettings.minCm,
+        maxCm: randomizerSettings.autoScenarioSens ? range.maxCm : randomizerSettings.maxCm,
+        minMult: randomizerSettings.autoScenarioSens ? range.minMult : randomizerSettings.minMult,
+        maxMult: randomizerSettings.autoScenarioSens ? range.maxMult : randomizerSettings.maxMult,
       });
       showToast(t("playlist.appliedSuccess", { sens: rounded }), "success");
     },
@@ -207,9 +239,10 @@ function Dashboard() {
           onNewSession={() => setSessionModalOpen(true)}
           currentTheme={theme}
           onThemeChange={setTheme}
+          onToggleSidebar={() => setSidebarCollapsed((prev) => !prev)}
         />
 
-        <main className="flex-1 p-4 sm:p-6 lg:p-7 max-w-[1550px] w-full mx-auto">
+        <main className="flex-1 p-3.5 sm:p-5 lg:p-6 max-w-[1600px] w-full mx-auto">
           <AnimatePresence mode="wait">
             <motion.div
               key={activeTab}
@@ -217,7 +250,7 @@ function Dashboard() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -4 }}
               transition={{ duration: 0.15, ease: "easeOut" }}
-              className="space-y-5"
+              className="space-y-4 sm:space-y-5"
             >
               {activeTab === "dashboard" ? (
                 <>

@@ -4,7 +4,12 @@ use chrono::NaiveDateTime;
 
 use crate::model::KovaakRun;
 
+#[allow(dead_code)]
 pub fn parse_stats_file(path: &Path) -> Option<KovaakRun> {
+    parse_stats_file_with_fallback_dpi(path, 800.0)
+}
+
+pub fn parse_stats_file_with_fallback_dpi(path: &Path, fallback_dpi: f64) -> Option<KovaakRun> {
     let file_name = path.file_name()?.to_string_lossy().to_string();
     let content = std::fs::read_to_string(path).ok()?;
 
@@ -26,7 +31,8 @@ pub fn parse_stats_file(path: &Path) -> Option<KovaakRun> {
         .unwrap_or(0.0);
     let sens_scale = find_line_value(&content, &["sensscale", "sensitivityscale", "scale"])
         .or_else(|| find_csv_string_field(&content, &["sensscale", "sensitivityscale", "scale"]));
-    let dpi = find_number(&content, &["dpi"]).unwrap_or(800.0);
+    let default_dpi = if fallback_dpi > 0.0 { fallback_dpi } else { 800.0 };
+    let dpi = find_number(&content, &["dpi"]).unwrap_or(default_dpi);
 
     let sens = convert_sens_to_cm(raw_sens, sens_scale.as_deref(), dpi);
     let fov = find_number(&content, &["fov"]).unwrap_or(103.0);
@@ -351,6 +357,17 @@ mod tests {
         let path = write_temp("1w2ts Pasu - Challenge - 2026.07.28-19.24.07 Stats.csv", content);
         let run = parse_stats_file(&path).expect("deveria parsear");
         assert_eq!(run.sens, 68.0);
+        cleanup(&path);
+    }
+
+    #[test]
+    fn parses_with_custom_fallback_dpi() {
+        // Arquivo sem linha de DPI
+        let content = "Score:,120.0\nScenario:,1w2ts Pasu\nSens Scale:,Valorant\nHoriz Sens:,0.24013\nFOV:,103.0\n";
+        let path = write_temp("1w2ts Pasu No DPI - Challenge - 2026.07.28-19.24.07 Stats.csv", content);
+        let run = parse_stats_file_with_fallback_dpi(&path, 1600.0).expect("deveria parsear");
+        // Com 1600 DPI, sens cai pela metade (68 / 2 = 34.0)
+        assert_eq!(run.sens, 34.0);
         cleanup(&path);
     }
 }

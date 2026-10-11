@@ -4,6 +4,8 @@ import fs from "node:fs";
 import path from "node:path";
 import {
   valorantToCm360,
+  cm360ToValorant,
+  cm360ToSource,
   formatSensitivity,
   calculateParabolicTrendline,
   computeSweetSpotAnalytics,
@@ -25,13 +27,35 @@ import type { Playlist, Task } from "../src/lib/types.ts";
 import { getDisplaySens, getRecommendedSens } from "../src/lib/viscose.ts";
 
 describe("sens-analytics", () => {
-  describe("valorantToCm360", () => {
+  describe("valorantToCm360 and in-game conversions", () => {
     it("converts Valorant sensitivity to cm/360 at 800 DPI", () => {
       const cm68 = valorantToCm360(0.24013, 800);
       assert.ok(Math.abs(cm68 - 68.0) < 0.1, `Expected ~68.0, got ${cm68}`);
 
       const cm50 = valorantToCm360(0.32676, 800);
       assert.ok(Math.abs(cm50 - 50.0) < 0.1, `Expected ~50.0, got ${cm50}`);
+    });
+
+    it("converts Valorant sensitivity to cm/360 at 1600 DPI", () => {
+      const cm34 = valorantToCm360(0.24013, 1600);
+      assert.ok(Math.abs(cm34 - 34.0) < 0.1, `Expected ~34.0, got ${cm34}`);
+    });
+
+    it("converts cm/360 back to Valorant sensitivity at 800 and 1600 DPI", () => {
+      const val800 = cm360ToValorant(68.0, 800);
+      assert.ok(Math.abs(val800 - 0.24) < 0.01, `Expected ~0.24, got ${val800}`);
+
+      const val1600 = cm360ToValorant(34.0, 1600);
+      assert.ok(Math.abs(val1600 - 0.24) < 0.01, `Expected ~0.24, got ${val1600}`);
+    });
+
+    it("converts cm/360 to Source sensitivity at 800 and 1600 DPI", () => {
+      // yaw = 0.022. 914.4 / (0.022 * 800 * 50) = 914.4 / 880 = 1.039
+      const src800 = cm360ToSource(50.0, 800);
+      assert.ok(Math.abs(src800 - 1.039) < 0.01, `Expected ~1.039, got ${src800}`);
+
+      const src1600 = cm360ToSource(50.0, 1600);
+      assert.ok(Math.abs(src1600 - 0.52) < 0.01, `Expected ~0.52, got ${src1600}`);
     });
 
     it("leaves already converted cm/360 values intact", () => {
@@ -1002,6 +1026,35 @@ describe("sens-analytics", () => {
       assert.equal(high.spreadPercent, 90);
       assert.equal(high.minCm, 4.0);
       assert.equal(high.maxCm, 76.0);
+    });
+
+    it("scales multipliers relative to user's physical base sensitivity in KovaaK's", () => {
+      // Base in KovaaK's = 50 cm, ideal scenario sens = 35 cm, spread = 25%
+      const range = calculateSensRange(35.0, 25, 50.0);
+      assert.equal(range.spreadPercent, 25);
+      assert.equal(range.minCm, 26.3); // 35 * 0.75 = 26.25 -> 26.3
+      assert.equal(range.maxCm, 43.8); // 35 * 1.25 = 43.75 -> 43.8
+      assert.equal(range.minMult, 1.14); // 50 / 43.8 = 1.14x
+      assert.equal(range.maxMult, 1.90); // 50 / 26.3 = 1.90x
+    });
+
+    it("scales multipliers correctly when user physical base equals center sensitivity", () => {
+      // Base in KovaaK's = 50 cm, scenario center = 50 cm, spread = 25%
+      const range = calculateSensRange(50.0, 25, 50.0);
+      assert.equal(range.spreadPercent, 25);
+      assert.equal(range.minCm, 37.5); // 50 * 0.75 = 37.5
+      assert.equal(range.maxCm, 62.5); // 50 * 1.25 = 62.5
+      assert.equal(range.minMult, 0.80); // 50 / 62.5 = 0.80x
+      assert.equal(range.maxMult, 1.33); // 50 / 37.5 = 1.33x
+    });
+
+    it("scales multipliers correctly when user physical base is slower than target", () => {
+      // Base in KovaaK's = 60 cm, scenario ideal = 30 cm, spread = 25%
+      const range = calculateSensRange(30.0, 25, 60.0);
+      assert.equal(range.minCm, 22.5); // 30 * 0.75 = 22.5
+      assert.equal(range.maxCm, 37.5); // 30 * 1.25 = 37.5
+      assert.equal(range.minMult, 1.60); // 60 / 37.5 = 1.60x
+      assert.equal(range.maxMult, 2.67); // 60 / 22.5 = 2.67x
     });
   });
 });

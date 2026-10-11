@@ -102,8 +102,8 @@ pub fn is_rawaccel_gui_running() -> bool {
     false
 }
 
-pub fn restore_base_sens(rawaccel_dir: &Path) -> Result<(), String> {
-    update_and_apply_scale(rawaccel_dir, 1.0)
+pub fn restore_base_sens(rawaccel_dir: &Path, mouse_dpi: f64) -> Result<(), String> {
+    update_and_apply_scale(rawaccel_dir, 1.0, mouse_dpi)
 }
 
 pub fn check_rawaccel_availability(configured_dir: Option<&str>) -> (bool, Option<PathBuf>, Option<String>, bool) {
@@ -151,18 +151,19 @@ pub fn generate_next_sens(settings: &RandomizerSettings, current_sens: f64) -> (
     let is_cm_mode = settings.range_mode.eq_ignore_ascii_case("cm360");
 
     let (min_cm, max_cm, min_mult, max_mult) = if settings.auto_scenario_sens && settings.spread_percent > 0.0 {
+        let center_cm = settings.scenario_ideal_cm.unwrap_or(base_cm).max(5.0);
         let pct = (settings.spread_percent / 100.0).clamp(0.01, 0.90);
-        let c_min = (base_cm * (1.0 - pct)).max(5.0);
-        let c_max = (base_cm * (1.0 + pct)).max(5.0);
-        let m_min = (1.0 - pct).max(0.1);
-        let m_max = (1.0 + pct).max(0.1);
+        let c_min = (center_cm * (1.0 - pct)).max(5.0);
+        let c_max = (center_cm * (1.0 + pct)).max(5.0);
+        let m_min = (base_cm / c_max).max(0.01);
+        let m_max = (base_cm / c_min).max(0.01);
         (c_min, c_max, m_min, m_max)
     } else {
         (
             settings.min_cm.min(settings.max_cm).max(5.0),
             settings.min_cm.max(settings.max_cm).max(5.0),
-            settings.min_mult.min(settings.max_mult).max(0.1),
-            settings.min_mult.max(settings.max_mult).max(0.1),
+            settings.min_mult.min(settings.max_mult).max(0.01),
+            settings.min_mult.max(settings.max_mult).max(0.01),
         )
     };
 
@@ -194,7 +195,7 @@ pub fn generate_next_sens(settings: &RandomizerSettings, current_sens: f64) -> (
     (rounded_cm, rounded_mult)
 }
 
-pub fn update_and_apply_scale(rawaccel_dir: &Path, scale: f64) -> Result<(), String> {
+pub fn update_and_apply_scale(rawaccel_dir: &Path, scale: f64, mouse_dpi: f64) -> Result<(), String> {
     let settings_path = rawaccel_dir.join("settings.json");
     let writer_path = rawaccel_dir.join("writer.exe");
 
@@ -211,9 +212,11 @@ pub fn update_and_apply_scale(rawaccel_dir: &Path, scale: f64) -> Result<(), Str
     let mut json: Value = serde_json::from_str(&content)
         .map_err(|e| format!("Formato de JSON inválido no settings.json: {e}"))?;
 
+    let effective_dpi = if mouse_dpi > 0.0 { mouse_dpi } else { 800.0 };
+
     if let Some(profiles) = json.get_mut("profiles").and_then(|p| p.as_array_mut()) {
         if let Some(first_profile) = profiles.get_mut(0) {
-            let output_dpi = (scale * 1000.0 * 100.0).round() / 100.0;
+            let output_dpi = (scale * effective_dpi * 100.0).round() / 100.0;
             if let Some(obj) = first_profile.as_object_mut() {
                 obj.insert("Output DPI".to_string(), serde_json::json!(output_dpi));
             }
@@ -294,7 +297,7 @@ pub fn apply_next_sens(
 
     let (next_cm, next_mult) = generate_next_sens(&settings, current_cm);
 
-    update_and_apply_scale(&target_dir, next_mult)?;
+    update_and_apply_scale(&target_dir, next_mult, settings.mouse_dpi)?;
 
     let now_iso = chrono::Local::now().to_rfc3339();
 
@@ -335,6 +338,8 @@ mod tests {
             rawaccel_dir: None,
             spread_percent: 25.0,
             auto_scenario_sens: false,
+            scenario_ideal_cm: None,
+            mouse_dpi: 800.0,
         };
 
         for _ in 0..50 {
@@ -360,6 +365,8 @@ mod tests {
             rawaccel_dir: None,
             spread_percent: 25.0,
             auto_scenario_sens: false,
+            scenario_ideal_cm: None,
+            mouse_dpi: 800.0,
         };
 
         for _ in 0..50 {
@@ -383,6 +390,8 @@ mod tests {
             rawaccel_dir: None,
             spread_percent: 25.0,
             auto_scenario_sens: true,
+            scenario_ideal_cm: None,
+            mouse_dpi: 800.0,
         };
 
         // Com base = 40.0 e spread = 25%, min_cm = 30.0 e max_cm = 50.0
@@ -391,6 +400,73 @@ mod tests {
             assert!(cm >= 30.0 && cm <= 50.0);
             assert!(mult > 0.0);
         }
+    }
+
+    #[test]
+    fn test_generate_next_sens_auto_spread_with_scenario_ideal() {
+        let settings = RandomizerSettings {
+            enabled: true,
+            base_sens_cm: 50.0,
+            range_mode: "cm360".to_string(),
+            min_cm: 10.0,
+            max_cm: 90.0,
+            min_mult: 0.5,
+            max_mult: 1.5,
+            avoid_repeats: false,
+            rawaccel_dir: None,
+            spread_percent: 25.0,
+            auto_scenario_sens: true,
+            scenario_ideal_cm: Some(35.0),
+            mouse_dpi: 800.0,
+        };
+
+        for _ in 0..50 {
+            let (cm, mult) = generate_next_sens(&settings, 50.0);
+            assert!(cm >= 26.25 && cm <= 43.75);
+            let expected_mult = (50.0 / cm * 10000.0).round() / 10000.0;
+            assert!((mult - expected_mult).abs() < 0.001);
+            assert!(mult >= 1.14 && mult <= 1.91);
+        }
+    }
+
+    #[test]
+    fn test_generate_next_sens_auto_spread_with_scenario_ideal_equal_base() {
+        let settings = RandomizerSettings {
+            enabled: true,
+            base_sens_cm: 50.0,
+            range_mode: "cm360".to_string(),
+            min_cm: 10.0,
+            max_cm: 90.0,
+            min_mult: 0.5,
+            max_mult: 1.5,
+            avoid_repeats: false,
+            rawaccel_dir: None,
+            spread_percent: 25.0,
+            auto_scenario_sens: true,
+            scenario_ideal_cm: Some(50.0),
+            mouse_dpi: 800.0,
+        };
+
+        for _ in 0..50 {
+            let (cm, mult) = generate_next_sens(&settings, 50.0);
+            assert!(cm >= 37.5 && cm <= 62.5);
+            let expected_mult = (50.0 / cm * 10000.0).round() / 10000.0;
+            assert!((mult - expected_mult).abs() < 0.001);
+            assert!(mult >= 0.80 && mult <= 1.34);
+        }
+    }
+
+    #[test]
+    fn test_output_dpi_calculation() {
+        // Testa o cálculo do Output DPI para 800 e 1600 DPI
+        let scale: f64 = 1.25;
+        let dpi_800: f64 = 800.0;
+        let out_800 = (scale * dpi_800 * 100.0).round() / 100.0;
+        assert_eq!(out_800, 1000.0);
+
+        let dpi_1600: f64 = 1600.0;
+        let out_1600 = (scale * dpi_1600 * 100.0).round() / 100.0;
+        assert_eq!(out_1600, 2000.0);
     }
 
     #[test]

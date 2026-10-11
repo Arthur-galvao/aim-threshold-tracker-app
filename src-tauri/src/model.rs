@@ -66,6 +66,10 @@ fn default_spread_percent() -> f64 {
     25.0
 }
 
+fn default_dpi() -> f64 {
+    800.0
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RandomizerSettings {
@@ -82,6 +86,10 @@ pub struct RandomizerSettings {
     pub spread_percent: f64,
     #[serde(default = "default_true")]
     pub auto_scenario_sens: bool,
+    #[serde(default)]
+    pub scenario_ideal_cm: Option<f64>,
+    #[serde(default = "default_dpi")]
+    pub mouse_dpi: f64,
 }
 
 impl Default for RandomizerSettings {
@@ -98,6 +106,8 @@ impl Default for RandomizerSettings {
             rawaccel_dir: None,
             spread_percent: 25.0,
             auto_scenario_sens: true,
+            scenario_ideal_cm: None,
+            mouse_dpi: 800.0,
         }
     }
 }
@@ -149,6 +159,8 @@ pub struct AppSettings {
     pub auto_detect_playlist: bool,
     #[serde(default = "default_true")]
     pub notify_step_advance: bool,
+    #[serde(default = "default_dpi")]
+    pub mouse_dpi: f64,
 }
 
 impl Default for AppSettings {
@@ -161,6 +173,7 @@ impl Default for AppSettings {
             close_to_tray: true,
             auto_detect_playlist: true,
             notify_step_advance: true,
+            mouse_dpi: 800.0,
         }
     }
 }

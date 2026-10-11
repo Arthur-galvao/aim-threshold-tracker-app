@@ -62,7 +62,7 @@ export function PlaylistSensCard({
   };
 
   return (
-    <div className="panel p-6 rounded-2xl border-edge-strong relative overflow-hidden space-y-4">
+    <div className="panel p-4 sm:p-6 rounded-2xl border-edge-strong relative overflow-hidden space-y-4">
       <div className="border-b border-edge pb-4">
         <h3 className="text-base font-bold text-text-main">
           {t("playlistSens.title")}
@@ -77,17 +77,17 @@ export function PlaylistSensCard({
           {t("playlistSens.empty")}
         </div>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs border-collapse">
+        <div className="overflow-x-auto custom-scrollbar">
+          <table className="w-full text-left text-xs border-collapse min-w-[640px]">
             <thead>
               <tr className="border-b border-edge text-[11px] font-semibold text-text-faint uppercase tracking-wider">
-                <th className="py-2.5 px-3">{t("playlistSens.colPlaylist")}</th>
-                <th className="py-2.5 px-3">{t("playlistSens.colRecommended")}</th>
-                <th className="py-2.5 px-3">{t("playlistSens.colComposition")}</th>
-                <th className="py-2.5 px-3">{t("playlistSens.colStats")}</th>
-                <th className="py-2.5 px-3">{t("playlistSens.colConfidence")}</th>
+                <th className="py-2.5 px-3 whitespace-nowrap">{t("playlistSens.colPlaylist")}</th>
+                <th className="py-2.5 px-3 whitespace-nowrap">{t("playlistSens.colRecommended")}</th>
+                <th className="py-2.5 px-3 whitespace-nowrap">{t("playlistSens.colComposition")}</th>
+                <th className="py-2.5 px-3 whitespace-nowrap">{t("playlistSens.colStats")}</th>
+                <th className="py-2.5 px-3 whitespace-nowrap">{t("playlistSens.colConfidence")}</th>
                 {(onViewInChart || onApplySens) && (
-                  <th className="py-2.5 px-3 text-right">
+                  <th className="py-2.5 px-3 text-right whitespace-nowrap">
                     {t("playlistSens.colActions")}
                   </th>
                 )}

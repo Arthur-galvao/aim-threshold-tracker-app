@@ -1,10 +1,34 @@
-import type { AppData, Task } from "./types";
-import { categorizeScenario } from "./viscose";
+import type { AppData, Task } from "./types.ts";
+import { categorizeScenario } from "./viscose.ts";
 
 export function cloneAppData(data: AppData): AppData {
   return typeof structuredClone === "function"
     ? structuredClone(data)
     : JSON.parse(JSON.stringify(data));
+}
+
+export function sanitizeAppData(data: AppData): boolean {
+  let changed = false;
+  const seenTaskIds = new Set<string>();
+  const seenSessionIds = new Set<string>();
+
+  for (const task of data.tasks) {
+    if (!task.id || seenTaskIds.has(task.id)) {
+      task.id = `task_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+      changed = true;
+    }
+    seenTaskIds.add(task.id);
+
+    for (const session of task.sessions) {
+      if (!session.id || seenSessionIds.has(session.id)) {
+        session.id = `sess_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+        changed = true;
+      }
+      seenSessionIds.add(session.id);
+    }
+  }
+
+  return changed;
 }
 
 export function findTaskByScenario(tasks: Task[], scenario: string): Task | undefined {

@@ -85,9 +85,9 @@ export function MetricsCards({ activeTask, allTasks }: MetricsCardsProps) {
   const recSens = idealSens ? idealSens.value : (activeTask ? getRecommendedSens(activeTask.category, activeTask.subcategory) : null);
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 xl:grid-cols-5 gap-3 sm:gap-3.5">
       {/* 1. BEST SCORE */}
-      <SpotlightCard className="p-4 flex flex-col justify-between min-h-[96px] bg-surface border border-edge hover:bg-surface-hover/40 transition-colors">
+      <SpotlightCard className="p-3.5 sm:p-4 flex flex-col justify-between min-h-[92px] sm:min-h-[96px] bg-surface border border-edge hover:bg-surface-hover/40 transition-colors lg:col-span-2 xl:col-span-1">
         <div className="flex items-center justify-between gap-2">
           <span className="text-[10px] font-mono font-medium tracking-wider text-text-faint uppercase">
             {t("metric.pb")}
@@ -96,15 +96,15 @@ export function MetricsCards({ activeTask, allTasks }: MetricsCardsProps) {
             <MiniSparkline data={recentTrend} color="var(--text-secondary)" />
           )}
         </div>
-        <div className="flex items-baseline justify-between mt-2.5">
+        <div className="flex items-baseline justify-between mt-2 sm:mt-2.5">
           {hasData && metrics.maxPB !== null ? (
             <NumberTicker
               value={metrics.maxPB}
               decimalPlaces={Number.isInteger(metrics.maxPB) ? 0 : 1}
-              className="text-3xl font-mono font-bold tracking-tight text-text-main"
+              className="text-2xl sm:text-3xl font-mono font-bold tracking-tight text-text-main"
             />
           ) : (
-            <span className="text-3xl font-mono font-bold tracking-tight text-text-main">
+            <span className="text-2xl sm:text-3xl font-mono font-bold tracking-tight text-text-main">
               —
             </span>
           )}
@@ -123,7 +123,7 @@ export function MetricsCards({ activeTask, allTasks }: MetricsCardsProps) {
       </SpotlightCard>
 
       {/* 2. TARGET THRESHOLD */}
-      <SpotlightCard className="p-4 flex flex-col justify-between min-h-[96px] bg-surface border border-edge hover:border-edge-strong transition-colors">
+      <SpotlightCard className="p-3.5 sm:p-4 flex flex-col justify-between min-h-[92px] sm:min-h-[96px] bg-surface border border-edge hover:border-edge-strong transition-colors lg:col-span-2 xl:col-span-1">
         <div className="flex items-center justify-between gap-2">
           <span className="text-[10px] font-mono font-medium tracking-wider text-score uppercase">
             {t("metric.threshold")}
@@ -134,15 +134,15 @@ export function MetricsCards({ activeTask, allTasks }: MetricsCardsProps) {
             </span>
           )}
         </div>
-        <div className="flex items-baseline justify-between mt-2.5">
+        <div className="flex items-baseline justify-between mt-2 sm:mt-2.5">
           {hasData && metrics.targetThreshold !== null ? (
             <NumberTicker
               value={metrics.targetThreshold}
               decimalPlaces={Number.isInteger(metrics.targetThreshold) ? 0 : 1}
-              className="text-3xl font-mono font-bold tracking-tight text-score"
+              className="text-2xl sm:text-3xl font-mono font-bold tracking-tight text-score"
             />
           ) : (
-            <span className="text-3xl font-mono font-bold tracking-tight text-score">
+            <span className="text-2xl sm:text-3xl font-mono font-bold tracking-tight text-score">
               —
             </span>
           )}
@@ -163,7 +163,7 @@ export function MetricsCards({ activeTask, allTasks }: MetricsCardsProps) {
       </SpotlightCard>
 
       {/* 3. CONSISTENCY */}
-      <SpotlightCard className="p-4 flex flex-col justify-between min-h-[96px] bg-surface border border-edge hover:bg-surface-hover/40 transition-colors">
+      <SpotlightCard className="p-3.5 sm:p-4 flex flex-col justify-between min-h-[92px] sm:min-h-[96px] bg-surface border border-edge hover:bg-surface-hover/40 transition-colors lg:col-span-2 xl:col-span-1">
         <div className="flex items-center justify-between gap-2">
           <span className="text-[10px] font-mono font-medium tracking-wider text-text-faint uppercase">
             {t("metric.consistency")}
@@ -174,22 +174,22 @@ export function MetricsCards({ activeTask, allTasks }: MetricsCardsProps) {
             </span>
           )}
         </div>
-        <div className="flex items-baseline justify-between mt-2.5">
-          <span className="text-3xl font-mono font-bold tracking-tight text-text-main">
+        <div className="flex items-baseline justify-between mt-2 sm:mt-2.5">
+          <span className="text-2xl sm:text-3xl font-mono font-bold tracking-tight text-text-main">
             {hasData ? consistencyDisplay : "—"}
           </span>
         </div>
       </SpotlightCard>
 
       {/* 4. MOUSE SENSITIVITY */}
-      <SpotlightCard className="p-4 flex flex-col justify-between min-h-[96px] bg-surface border border-edge hover:bg-surface-hover/40 transition-colors">
-        <div className="flex items-center justify-between gap-2">
+      <SpotlightCard className="p-3.5 sm:p-4 flex flex-col justify-between min-h-[92px] sm:min-h-[96px] bg-surface border border-edge hover:bg-surface-hover/40 transition-colors lg:col-span-3 xl:col-span-1">
+        <div className="flex items-center justify-between gap-1 sm:gap-2 flex-wrap">
           <span className="text-[10px] font-mono font-medium tracking-wider text-text-faint uppercase">
             {t("metric.sens")}
           </span>
           {idealSens && (
             <span
-              className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-surface border border-edge text-text-secondary flex items-center gap-1"
+              className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-surface border border-edge text-text-secondary flex items-center gap-1 shrink-0"
               title={idealSens.source === "empirical" ? t("randomizer.idealSensSourceEmpirical") : t("randomizer.idealSensSourceViscose")}
             >
               <span>{t("metric.targetSens")} {recSens}cm</span>
@@ -199,8 +199,8 @@ export function MetricsCards({ activeTask, allTasks }: MetricsCardsProps) {
             </span>
           )}
         </div>
-        <div className="flex items-baseline justify-between mt-2.5">
-          <span className="text-3xl font-mono font-bold tracking-tight text-text-main">
+        <div className="flex items-baseline justify-between mt-2 sm:mt-2.5">
+          <span className="text-2xl sm:text-3xl font-mono font-bold tracking-tight text-text-main">
             {hasData && metrics.lastSens !== null
               ? `${formatSensitivity(metrics.lastSens, "")}`
               : "—"}
@@ -212,7 +212,7 @@ export function MetricsCards({ activeTask, allTasks }: MetricsCardsProps) {
       </SpotlightCard>
 
       {/* 5. TOTAL SESSIONS */}
-      <SpotlightCard className="p-4 flex flex-col justify-between min-h-[96px] bg-surface border border-edge hover:bg-surface-hover/40 transition-colors">
+      <SpotlightCard className="p-3.5 sm:p-4 flex flex-col justify-between min-h-[92px] sm:min-h-[96px] bg-surface border border-edge hover:bg-surface-hover/40 transition-colors sm:col-span-2 lg:col-span-3 xl:col-span-1">
         <div className="flex items-center justify-between gap-2">
           <span className="text-[10px] font-mono font-medium tracking-wider text-text-faint uppercase">
             {t("hist.title")}
@@ -223,11 +223,11 @@ export function MetricsCards({ activeTask, allTasks }: MetricsCardsProps) {
             </span>
           )}
         </div>
-        <div className="flex items-baseline justify-between mt-2.5">
+        <div className="flex items-baseline justify-between mt-2 sm:mt-2.5">
           <NumberTicker
             value={activeTask?.sessions.length ?? 0}
             decimalPlaces={0}
-            className="text-3xl font-mono font-bold tracking-tight text-text-main"
+            className="text-2xl sm:text-3xl font-mono font-bold tracking-tight text-text-main"
           />
           <span className="text-xs font-mono text-text-faint">
             {t("scenarioList.sessions")}

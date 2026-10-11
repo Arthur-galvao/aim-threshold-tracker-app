@@ -76,6 +76,8 @@ export function SettingsModal({
   const [closeToTray, setCloseToTray] = useState(propCloseToTray ?? true);
   const [autoDetectPlaylist, setAutoDetectPlaylist] = useState(propAutoDetectPlaylist ?? true);
   const [notifyStepAdvance, setNotifyStepAdvance] = useState(propNotifyStepAdvance ?? true);
+  const [mouseDpi, setMouseDpi] = useState(800);
+  const [dpiInputText, setDpiInputText] = useState("800");
   const { t } = useI18n();
 
   useEffect(() => {
@@ -98,24 +100,33 @@ export function SettingsModal({
       setNotifyStepAdvance(propNotifyStepAdvance);
     }
 
-    if (
-      propCloseToTray === undefined ||
-      propAutoDetectPlaylist === undefined ||
-      propNotifyStepAdvance === undefined
-    ) {
-      void getSettings().then((s) => {
-        if (propCloseToTray === undefined && s.close_to_tray !== undefined) {
-          setCloseToTray(s.close_to_tray);
-        }
-        if (propAutoDetectPlaylist === undefined && s.auto_detect_playlist !== undefined) {
-          setAutoDetectPlaylist(s.auto_detect_playlist);
-        }
-        if (propNotifyStepAdvance === undefined && s.notify_step_advance !== undefined) {
-          setNotifyStepAdvance(s.notify_step_advance);
-        }
-      });
-    }
+    void getSettings().then((s) => {
+      if (s.mouse_dpi !== undefined) {
+        setMouseDpi(s.mouse_dpi);
+        setDpiInputText(String(s.mouse_dpi));
+      }
+      if (propCloseToTray === undefined && s.close_to_tray !== undefined) {
+        setCloseToTray(s.close_to_tray);
+      }
+      if (propAutoDetectPlaylist === undefined && s.auto_detect_playlist !== undefined) {
+        setAutoDetectPlaylist(s.auto_detect_playlist);
+      }
+      if (propNotifyStepAdvance === undefined && s.notify_step_advance !== undefined) {
+        setNotifyStepAdvance(s.notify_step_advance);
+      }
+    });
   }, [open, propCloseToTray, propAutoDetectPlaylist, propNotifyStepAdvance]);
+
+  const handleDpiChange = async (val: number) => {
+    setMouseDpi(val);
+    setDpiInputText(String(val));
+    if (onUpdateAppSettings) {
+      await onUpdateAppSettings({ mouse_dpi: val });
+    } else {
+      const current = await getSettings();
+      await saveSettings({ ...current, mouse_dpi: val });
+    }
+  };
 
   const handleToggleCloseToTray = async (val: boolean) => {
     setCloseToTray(val);
@@ -232,7 +243,7 @@ export function SettingsModal({
         </form>
 
         {/* Folder Detection Buttons */}
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           <Button
             variant="secondary"
             size="md"
@@ -330,7 +341,7 @@ export function SettingsModal({
             </Button>
           </div>
 
-          <div className="grid grid-cols-2 gap-2 pt-1">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
             <Button
               variant="secondary"
               size="md"
@@ -470,6 +481,76 @@ export function SettingsModal({
           </div>
         </div>
 
+        {/* Mouse Hardware & DPI Section */}
+        <div className="space-y-3 pt-3 border-t border-edge">
+          <div>
+            <h4 className="text-[10px] font-mono tracking-widest uppercase font-bold uppercase tracking-wider text-text-main">
+              {t("settings.mouseHardware")}
+            </h4>
+          </div>
+
+          <div className="p-3 rounded-md border border-edge bg-surface-subtle/40 space-y-2.5">
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex-1 min-w-0 pr-2">
+                <span className="block text-[10px] font-mono tracking-widest uppercase font-semibold text-text-main">
+                  {t("settings.mouseDpi")}
+                </span>
+                <p className="text-[11px] text-text-muted leading-snug mt-0.5">
+                  {t("settings.mouseDpiDesc")}
+                </p>
+              </div>
+              <span className="text-xs font-mono font-bold text-accent px-2 py-0.5 rounded bg-accent/10 border border-accent/20 whitespace-nowrap">
+                {mouseDpi} DPI
+              </span>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-1.5 pt-1">
+              {[400, 800, 1600, 3200].map((preset) => (
+                <button
+                  key={preset}
+                  type="button"
+                  onClick={() => void handleDpiChange(preset)}
+                  className={`px-2.5 py-1 rounded text-[11px] font-mono font-semibold transition-colors ${
+                    mouseDpi === preset
+                      ? "bg-accent text-white"
+                      : "bg-surface border border-edge text-text-secondary hover:text-text-main hover:bg-surface-hover"
+                  }`}
+                >
+                  {preset}
+                </button>
+              ))}
+
+              <div className="flex items-center ml-auto">
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={dpiInputText}
+                  onChange={(e) => {
+                    const clean = e.target.value.replace(/[^0-9]/g, "");
+                    setDpiInputText(clean);
+                  }}
+                  onBlur={() => {
+                    const parsed = parseInt(dpiInputText, 10);
+                    if (!isNaN(parsed) && parsed >= 100 && parsed <= 32000) {
+                      void handleDpiChange(parsed);
+                    } else {
+                      setDpiInputText(String(mouseDpi));
+                    }
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      (e.target as HTMLInputElement).blur();
+                    }
+                  }}
+                  className="w-20 minimal-input py-1 px-2 text-[11px] font-mono font-medium text-right"
+                  aria-label={t("settings.mouseDpi")}
+                />
+                <span className="ml-1 text-[10px] font-mono text-text-muted uppercase">DPI</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
         {/* Visual Theme Selection */}
         {onThemeChange && (
           <div className="space-y-3 pt-3 border-t border-edge">
@@ -483,7 +564,7 @@ export function SettingsModal({
               </p>
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {APP_THEMES.map((th) => {
                 const isSelected = th.id === currentTheme;
                 return (
@@ -532,7 +613,7 @@ export function SettingsModal({
             </p>
           </div>
 
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {onExport && (
               <Button
                 variant="secondary"

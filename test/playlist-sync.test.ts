@@ -563,5 +563,57 @@ describe("playlist-sync and detection", () => {
       assert.equal(tasks[1].category, "Control Tracking");
     });
   });
+
+  describe("sanitizeAppData deduplication", () => {
+    it("deduplicates identical task and session IDs", async () => {
+      const { sanitizeAppData } = await import("../src/lib/threshold.ts");
+
+      const mockData = {
+        activeTaskId: "task_dupe",
+        tasks: [
+          {
+            id: "task_dupe",
+            name: "eth 1w2tes Micro",
+            category: "Click Timing",
+            subcategory: "Precision",
+            sessions: [
+              {
+                id: "sess_dupe",
+                date: "2026-10-10",
+                sens: 50,
+                pb: 128,
+                threshold: 120,
+              },
+            ],
+          },
+          {
+            id: "task_dupe",
+            name: "psalmTS Viscose Click Easier",
+            category: "Click Timing",
+            subcategory: "Precision",
+            sessions: [
+              {
+                id: "sess_dupe",
+                date: "2026-10-10",
+                sens: 50,
+                pb: 67,
+                threshold: 60,
+              },
+            ],
+          },
+        ],
+        playlists: [],
+      };
+
+      const changed = sanitizeAppData(mockData);
+      assert.equal(changed, true);
+      assert.notEqual(mockData.tasks[0].id, mockData.tasks[1].id);
+      assert.notEqual(mockData.tasks[0].sessions[0].id, mockData.tasks[1].sessions[0].id);
+      assert.equal(mockData.tasks[0].id, "task_dupe");
+      assert.match(mockData.tasks[1].id, /^task_/);
+      assert.equal(mockData.tasks[0].sessions[0].id, "sess_dupe");
+      assert.match(mockData.tasks[1].sessions[0].id, /^sess_/);
+    });
+  });
 });
 

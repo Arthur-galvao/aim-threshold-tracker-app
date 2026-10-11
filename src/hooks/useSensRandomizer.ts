@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { useApp } from "@/hooks/useAppData";
 import { useI18n } from "@/lib/i18n";
+import { calculateSensRange } from "@/lib/sens-analytics";
 
 export interface RandomizerSettings {
   enabled: boolean;
@@ -16,6 +17,8 @@ export interface RandomizerSettings {
   rawaccelDir: string | null;
   spreadPercent: number;
   autoScenarioSens: boolean;
+  scenarioIdealCm?: number;
+  mouseDpi: number;
 }
 
 export interface RandomizerState {
@@ -41,6 +44,8 @@ const DEFAULT_SETTINGS: RandomizerSettings = {
   rawaccelDir: null,
   spreadPercent: 25.0,
   autoScenarioSens: true,
+  scenarioIdealCm: undefined,
+  mouseDpi: 800,
 };
 
 const DEFAULT_STATE: RandomizerState = {
@@ -153,8 +158,18 @@ export function useSensRandomizer() {
   const syncScenarioSens = useCallback(
     async (targetSens: number, reRollNow = false, idealSource?: "empirical" | "viscose") => {
       const rounded = Number(targetSens.toFixed(1));
-      if (settings.baseSensCm === rounded && !reRollNow) return;
-      const nextSettings = { ...settings, baseSensCm: rounded };
+      if (settings.scenarioIdealCm === rounded && !reRollNow) return;
+
+      const baseSens = settings.baseSensCm > 0 ? settings.baseSensCm : 50;
+      const range = calculateSensRange(rounded, settings.spreadPercent, baseSens);
+      const nextSettings: RandomizerSettings = {
+        ...settings,
+        scenarioIdealCm: rounded,
+        minCm: range.minCm,
+        maxCm: range.maxCm,
+        minMult: range.minMult,
+        maxMult: range.maxMult,
+      };
       await saveSettings(nextSettings, true);
       const sourceLabel = idealSource === "empirical"
         ? t("randomizer.idealSensSourceEmpirical")

@@ -196,8 +196,8 @@ export function SensRandomizerChart({
   }, [isLight, isNormalized, t]);
 
   return (
-    <div className="p-6 rounded-xl bg-[#12141e]/60 space-y-4">
-      <div className="flex flex-col xl:flex-row items-start xl:items-center justify-between gap-4 border-b border-edge pb-4">
+    <div className="p-4 sm:p-6 rounded-xl bg-[#12141e]/60 space-y-4">
+      <div className="flex flex-col xl:flex-row items-start xl:items-center justify-between gap-3 sm:gap-4 border-b border-edge pb-4">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap mb-1">
             <h3 className="text-[13px] font-mono font-semibold tracking-wider text-text-main uppercase">
@@ -215,13 +215,13 @@ export function SensRandomizerChart({
         </div>
 
         {/* Scope Selector Controls */}
-        <div className="flex flex-wrap items-center gap-2 shrink-0">
+        <div className="flex flex-wrap items-center gap-2 w-full xl:w-auto">
           {/* Mode Tabs */}
-          <div className="flex items-center gap-1 p-1 bg-surface-subtle rounded-lg border border-edge">
+          <div className="grid grid-cols-2 sm:flex sm:items-center gap-1 p-1 bg-surface-subtle rounded-lg border border-edge w-full sm:w-auto">
             <button
               type="button"
               onClick={() => handleModeChange("current")}
-              className={`py-1 px-2.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
+              className={`py-1 px-2.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all text-center ${
                 currentFilter.mode === "current"
                   ? "bg-surface text-text-main shadow-sm border border-edge-strong"
                   : "text-text-secondary hover:text-text-main"
@@ -232,7 +232,7 @@ export function SensRandomizerChart({
             <button
               type="button"
               onClick={() => handleModeChange("playlist")}
-              className={`py-1 px-2.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
+              className={`py-1 px-2.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all text-center ${
                 currentFilter.mode === "playlist"
                   ? "bg-surface text-text-main shadow-sm border border-edge-strong"
                   : "text-text-secondary hover:text-text-main"
@@ -243,7 +243,7 @@ export function SensRandomizerChart({
             <button
               type="button"
               onClick={() => handleModeChange("category")}
-              className={`py-1 px-2.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
+              className={`py-1 px-2.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all text-center ${
                 currentFilter.mode === "category"
                   ? "bg-surface text-text-main shadow-sm border border-edge-strong"
                   : "text-text-secondary hover:text-text-main"
@@ -254,7 +254,7 @@ export function SensRandomizerChart({
             <button
               type="button"
               onClick={() => handleModeChange("all")}
-              className={`py-1 px-2.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
+              className={`py-1 px-2.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all text-center ${
                 currentFilter.mode === "all"
                   ? "bg-surface text-text-main shadow-sm border border-edge-strong"
                   : "text-text-secondary hover:text-text-main"
@@ -275,7 +275,7 @@ export function SensRandomizerChart({
                   playlistId: e.target.value,
                 })
               }
-              className="py-1 px-2.5 rounded-lg text-xs font-medium bg-surface border border-edge text-text-main focus:outline-none focus:border-blue-500"
+              className="py-1 px-2.5 rounded-lg text-xs font-medium bg-surface border border-edge text-text-main focus:outline-none focus:border-blue-500 w-full sm:w-auto"
             >
               {playlists.length === 0 ? (
                 <option value="">{t("randomizer.noPlaylistsAvailable")}</option>
@@ -300,7 +300,7 @@ export function SensRandomizerChart({
                   categoryKey: e.target.value,
                 })
               }
-              className="py-1 px-2.5 rounded-lg text-xs font-medium bg-surface border border-edge text-text-main focus:outline-none focus:border-blue-500"
+              className="py-1 px-2.5 rounded-lg text-xs font-medium bg-surface border border-edge text-text-main focus:outline-none focus:border-blue-500 w-full sm:w-auto"
             >
               {categories.length === 0 ? (
                 <option value="">{t("randomizer.noCategoriesAvailable")}</option>
@@ -316,7 +316,7 @@ export function SensRandomizerChart({
         </div>
       </div>
 
-      <div className="h-80 w-full relative">
+      <div className="h-64 sm:h-72 lg:h-80 w-full relative">
         {relevantSessions.length === 0 ? (
           <div className="h-full w-full flex flex-col items-center justify-center text-center p-6">
             <div className="w-12 h-12 rounded-full bg-surface-subtle border border-edge flex items-center justify-center text-text-faint mb-3">

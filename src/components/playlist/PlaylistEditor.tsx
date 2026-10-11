@@ -352,11 +352,11 @@ export function PlaylistEditor({
       </div>
 
       {/* Add more scenarios dropdown */}
-      <div className="pt-2 border-t border-edge flex items-center gap-2">
+      <div className="pt-2 border-t border-edge flex flex-col sm:flex-row sm:items-center gap-2">
         <select
           value={selectedTaskToAdd}
           onChange={(e) => setSelectedTaskToAdd(e.target.value)}
-          className="minimal-input text-xs py-1.5 flex-1 cursor-pointer font-medium"
+          className="minimal-input text-xs py-1.5 flex-1 cursor-pointer font-medium w-full sm:w-auto"
         >
           <option value="">{t("playlist.addScenarios")}...</option>
           {tasks.map((task) => (
@@ -369,7 +369,7 @@ export function PlaylistEditor({
           type="button"
           onClick={() => handleAddItem(selectedTaskToAdd)}
           disabled={!selectedTaskToAdd}
-          className="minimal-btn-secondary px-3 py-1.5 text-xs font-medium border-edge rounded-xl disabled:opacity-40 disabled:cursor-not-allowed"
+          className="minimal-btn-secondary px-3 py-1.5 text-xs font-medium border-edge rounded-xl disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
         >
           + {t("playlist.addScenarios")}
         </button>

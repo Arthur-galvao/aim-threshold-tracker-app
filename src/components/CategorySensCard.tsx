@@ -154,7 +154,7 @@ export function CategorySensCard({
   };
 
   return (
-    <div className="panel p-6 rounded-2xl border-edge-strong relative overflow-hidden space-y-4">
+    <div className="panel p-4 sm:p-6 rounded-2xl border-edge-strong relative overflow-hidden space-y-4">
       <div className="border-b border-edge pb-4">
         <h3 className="text-base font-bold text-text-main">
           {t("categorySens.title")}
@@ -169,17 +169,17 @@ export function CategorySensCard({
           {t("categorySens.empty")}
         </div>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs border-collapse">
+        <div className="overflow-x-auto custom-scrollbar">
+          <table className="w-full text-left text-xs border-collapse min-w-[640px]">
             <thead>
               <tr className="border-b border-edge text-[11px] font-semibold text-text-faint uppercase tracking-wider">
-                <th className="py-2.5 px-3">{t("categorySens.colCategory")}</th>
-                <th className="py-2.5 px-3">{t("categorySens.colRecommended")}</th>
-                <th className="py-2.5 px-3">{t("categorySens.colViscose")}</th>
-                <th className="py-2.5 px-3">{t("categorySens.colStats")}</th>
-                <th className="py-2.5 px-3">{t("categorySens.colConfidence")}</th>
+                <th className="py-2.5 px-3 whitespace-nowrap">{t("categorySens.colCategory")}</th>
+                <th className="py-2.5 px-3 whitespace-nowrap">{t("categorySens.colRecommended")}</th>
+                <th className="py-2.5 px-3 whitespace-nowrap">{t("categorySens.colViscose")}</th>
+                <th className="py-2.5 px-3 whitespace-nowrap">{t("categorySens.colStats")}</th>
+                <th className="py-2.5 px-3 whitespace-nowrap">{t("categorySens.colConfidence")}</th>
                 {(onViewInChart || onApplySens) && (
-                  <th className="py-2.5 px-3 text-right">
+                  <th className="py-2.5 px-3 text-right whitespace-nowrap">
                     {t("playlistSens.colActions")}
                   </th>
                 )}

@@ -106,11 +106,30 @@ export function valorantToCm360(sens: number, dpi: number = 800): number {
 }
 
 /**
+ * Converte cm/360 físico para a sensibilidade angular equivalente no Valorant para um dado DPI.
+ */
+export function cm360ToValorant(cm: number, dpi: number = 800): number {
+  if (cm <= 0 || dpi <= 0) return 0;
+  const yaw = 0.07;
+  // cm = (360 * 2.54) / (yaw * dpi * sens) => sens = (360 * 2.54) / (yaw * dpi * cm)
+  return Number(((360 * 2.54) / (yaw * dpi * cm)).toFixed(3));
+}
+
+/**
+ * Converte cm/360 físico para a sensibilidade angular equivalente em jogos Source/Apex/CS para um dado DPI.
+ */
+export function cm360ToSource(cm: number, dpi: number = 800): number {
+  if (cm <= 0 || dpi <= 0) return 0;
+  const yaw = 0.022;
+  return Number(((360 * 2.54) / (yaw * dpi * cm)).toFixed(3));
+}
+
+/**
  * Formata um valor de sensibilidade para exibicao amigavel com unidade (padrao: cm).
  */
-export function formatSensitivity(sens: number, unit: string = "cm"): string {
+export function formatSensitivity(sens: number, unit: string = "cm", dpi: number = 800): string {
   if (!sens || sens <= 0) return "-";
-  const effectiveSens = valorantToCm360(sens);
+  const effectiveSens = valorantToCm360(sens, dpi);
   const rounded = Number(effectiveSens.toFixed(1));
   const formattedNumber = rounded % 1 === 0 ? rounded.toFixed(0) : rounded.toFixed(1);
   return unit ? `${formattedNumber} ${unit}` : formattedNumber;
@@ -792,7 +811,8 @@ export interface ScenarioIdealSens {
  */
 export function getScenarioIdealSens(
   task: Task | null | undefined,
-  allTasks?: Task[]
+  allTasks?: Task[],
+  userDpi: number = 800
 ): ScenarioIdealSens {
   const category = task?.category || "Click Timing";
   const subcategory = task?.subcategory || "Precision";
@@ -816,7 +836,7 @@ export function getScenarioIdealSens(
   // Coleta runs elegiveis do cenario
   const taskRuns: RunDataPoint[] = [];
   for (const sess of task.sessions) {
-    const cm = valorantToCm360(sess.sens);
+    const cm = valorantToCm360(sess.sens, userDpi);
     if (cm >= 5 && sess.pb > 0) {
       taskRuns.push({
         sens: Number(cm.toFixed(1)),
@@ -850,7 +870,7 @@ export function getScenarioIdealSens(
     for (const t of allTasks) {
       if (t.category === category && t.subcategory === subcategory) {
         for (const sess of t.sessions) {
-          const cm = valorantToCm360(sess.sens);
+          const cm = valorantToCm360(sess.sens, userDpi);
           if (cm >= 5 && sess.pb > 0) {
             groupRuns.push({
               sens: Number(cm.toFixed(1)),
@@ -892,17 +912,30 @@ export function getScenarioIdealSens(
 
 /**
  * Calcula os limites do randomizador com base no spread percentual customizavel (padrao 25%).
+ * Caso userBaseSensCm seja informado e divirja da sensibilidade central, os multiplicadores
+ * sao dimensionados a partir da sensibilidade base fisica do usuario no KovaaK's.
  */
 export function calculateSensRange(
-  baseSensCm: number,
-  spreadPercent: number = 25
+  centerSensCm: number,
+  spreadPercent: number = 25,
+  userBaseSensCm?: number
 ): { minCm: number; maxCm: number; minMult: number; maxMult: number; spreadPercent: number } {
   const spread = Math.max(1, Math.min(90, spreadPercent));
   const pct = spread / 100;
-  const minCm = Number((baseSensCm * (1 - pct)).toFixed(1));
-  const maxCm = Number((baseSensCm * (1 + pct)).toFixed(1));
-  const minMult = Number((1 - pct).toFixed(2));
-  const maxMult = Number((1 + pct).toFixed(2));
+  const minCm = Number((centerSensCm * (1 - pct)).toFixed(1));
+  const maxCm = Number((centerSensCm * (1 + pct)).toFixed(1));
+
+  let minMult: number;
+  let maxMult: number;
+
+  if (userBaseSensCm !== undefined && userBaseSensCm > 0) {
+    minMult = Number((userBaseSensCm / maxCm).toFixed(2));
+    maxMult = Number((userBaseSensCm / minCm).toFixed(2));
+  } else {
+    minMult = Number((1 - pct).toFixed(2));
+    maxMult = Number((1 + pct).toFixed(2));
+  }
+
   return { minCm, maxCm, minMult, maxMult, spreadPercent: spread };
 }
 
