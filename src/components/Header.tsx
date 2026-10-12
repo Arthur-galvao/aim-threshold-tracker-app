@@ -39,7 +39,7 @@ export function Header({
     <header className="sticky top-0 z-30 bg-base/95 backdrop-blur-md border-b border-edge transition-colors duration-150">
       <div className="w-full px-2.5 sm:px-6 py-2 sm:py-2.5 min-h-[50px] sm:min-h-[54px] flex items-center justify-between gap-2 sm:gap-4">
         {/* Left: Sidebar Toggle, App Title and Pill Tabs */}
-        <div className="flex items-center gap-1.5 sm:gap-3 md:gap-5 min-w-0">
+        <div className="flex items-center gap-1.5 sm:gap-3 md:gap-5 shrink-0 min-w-0">
           {onToggleSidebar && (
             <Tooltip content={t("scenarioList.title")}>
               <button
@@ -59,11 +59,11 @@ export function Header({
             </div>
             <div className="flex items-center gap-2 min-w-0">
               <span className="text-[12px] sm:text-[13px] font-mono font-bold tracking-wider text-text-main truncate">
-                <span className="hidden sm:inline">AIM THRESHOLD TRACKER</span>
-                <span className="hidden xs:inline sm:hidden">ATT</span>
+                <span className="hidden xl:inline">AIM THRESHOLD TRACKER</span>
+                <span className="xl:hidden">ATT</span>
               </span>
               <span className="hidden sm:inline-block text-[10px] font-mono font-medium px-1.5 py-0.2 rounded bg-surface-subtle border border-edge text-text-faint">
-                v1.7.1
+                v1.7.2
               </span>
             </div>
           </div>
@@ -104,7 +104,7 @@ export function Header({
         <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
           {/* Live Watcher Telemetry Status */}
           <Tooltip content={watcherStatus?.active ? t("header.watcherActive") : t("header.watcherInactive")}>
-            <div className="hidden xl:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-subtle border border-edge text-[11px] font-mono text-text-secondary select-none">
+            <div className="hidden 2xl:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-subtle border border-edge text-[11px] font-mono text-text-secondary select-none">
               <span
                 className={cn(
                   "w-1.5 h-1.5 rounded-full",
@@ -123,10 +123,10 @@ export function Header({
                 size="sm"
                 variant="secondary"
                 onClick={onNewSession}
-                className="h-8 px-2 sm:px-3 text-[11px] font-mono rounded-lg bg-surface hover:bg-surface-hover border border-edge text-text-main flex items-center gap-1.5 cursor-pointer shadow-xs"
+                className="h-8 px-2 sm:px-2.5 2xl:px-3 text-[11px] font-mono rounded-lg bg-surface hover:bg-surface-hover border border-edge text-text-main flex items-center gap-1.5 cursor-pointer shadow-xs shrink-0"
               >
                 <NotePencil size={13} weight="bold" className="text-text-secondary" />
-                <span className="hidden sm:inline">+ {t("session.title")}</span>
+                <span className="hidden 2xl:inline">+ {t("session.title")}</span>
               </Button>
             </Tooltip>
           )}
