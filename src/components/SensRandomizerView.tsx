@@ -179,7 +179,10 @@ export function SensRandomizerView({
   }, [scopeFilter, activeTask, allTasks, playlists, availableCategories]);
 
   const analysis = useMemo(() => {
-    return computeSweetSpotAnalytics(relevantSessions);
+    return computeSweetSpotAnalytics(relevantSessions, {
+      minEligibleRuns: 1,
+      shrinkageK: 1,
+    });
   }, [relevantSessions]);
 
   const handleApplySens = useCallback(

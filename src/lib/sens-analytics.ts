@@ -217,16 +217,22 @@ export function calculateParabolicTrendline(
   return trendPoints;
 }
 
+export interface SweetSpotOptions {
+  shrinkageK?: number;
+  minEligibleRuns?: number;
+}
+
 /**
  * Executa analise estatistica de Sweet Spot sobre sessoes de treino:
  * 1. Agrupamento por sensibilidade especifica (arredondada para 1 casa decimal).
- * 2. Encolhimento Bayesiano empirico (k=3) para mitigar distorcoes de amostra pequena.
+ * 2. Encolhimento Bayesiano empirico (k configuravel, padrao 3) para mitigar distorcoes de amostra pequena.
  * 3. Variancia amostral com correcao de Bessel (n-1).
  * 4. Atribuicao de confianca estatistica (Alta, Media, Baixa, Insuficiente).
  * 5. Selecao da melhor sensibilidade baseada no score ponderado Bayesiano.
  */
 export function computeSweetSpotAnalytics(
-  runs: RunDataPoint[]
+  runs: RunDataPoint[],
+  options: SweetSpotOptions = {}
 ): SweetSpotAnalysis | null {
   if (!runs || runs.length === 0) {
     return null;
@@ -250,7 +256,7 @@ export function computeSweetSpotAnalytics(
   }
 
   const buckets: BucketStat[] = [];
-  const k = 3; // peso do prior global no encolhimento bayesiano
+  const k = typeof options.shrinkageK === "number" ? options.shrinkageK : 3; // peso do prior global no encolhimento bayesiano
 
   for (const [sensKey, scores] of bucketMap.entries()) {
     const count = scores.length;
@@ -303,7 +309,13 @@ export function computeSweetSpotAnalytics(
 
   const maxCountInAnyBucket = Math.max(...buckets.map((b) => b.count), 0);
   const minEligibleRuns =
-    maxCountInAnyBucket >= 5 ? 3 : maxCountInAnyBucket >= 3 ? 2 : 1;
+    typeof options.minEligibleRuns === "number"
+      ? options.minEligibleRuns
+      : maxCountInAnyBucket >= 5
+      ? 3
+      : maxCountInAnyBucket >= 3
+      ? 2
+      : 1;
 
   const eligibleBuckets = buckets.filter((b) => b.count >= minEligibleRuns);
 
@@ -452,6 +464,7 @@ export function fitParabolaCoefficients(
 export interface HierarchicalOptions {
   groupRuns?: RunDataPoint[];
   shrinkageK?: number;
+  minEligibleRuns?: number;
   recencyHalfLifeDays?: number;
   now?: number;
 }
@@ -477,7 +490,10 @@ export function predictOptimalSensitivity(
 
   const evaluateSingleSet = (dataPoints: RunDataPoint[]): SensPrediction | null => {
     if (!dataPoints || dataPoints.length === 0) return null;
-    const sweetSpot = computeSweetSpotAnalytics(dataPoints);
+    const sweetSpot = computeSweetSpotAnalytics(dataPoints, {
+      minEligibleRuns: options.minEligibleRuns,
+      shrinkageK: options.shrinkageK,
+    });
     const empiricalBest = sweetSpot?.bestBucket?.sens ?? dataPoints[0].sens;
 
     const points = dataPoints.map((r) => ({

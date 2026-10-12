@@ -19,7 +19,7 @@ dependencies = [
 
 [[package]]
 name = "aim-threshold-tracker"
-version = "1.7.2"
+version = "1.7.3"
 dependencies = [
  "chrono",
  "csv",

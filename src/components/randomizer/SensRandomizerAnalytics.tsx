@@ -52,7 +52,10 @@ export function SensRandomizerAnalytics({
   };
 
   const prediction = useMemo(() => {
-    return predictOptimalSensitivity(relevantSessions, selectedProfile);
+    return predictOptimalSensitivity(relevantSessions, selectedProfile, {
+      minEligibleRuns: 1,
+      shrinkageK: 1,
+    });
   }, [relevantSessions, selectedProfile]);
 
   const bestBucket = analysis?.bestBucket ?? null;

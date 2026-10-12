@@ -180,6 +180,50 @@ describe("sens-analytics", () => {
       assert.equal(single.consistency, null);
       assert.equal(single.confidenceLevel, "insufficient");
     });
+
+    it("allows single-run sensitivities to be fully eligible and selected as bestBucket when minEligibleRuns: 1 is passed", () => {
+      // 52 cm had 3 older plays with score 80
+      // 38.4 cm had 1 randomized play with score 120 (clearly superior score)
+      const runs = [
+        { sens: 52.0, score: 80 },
+        { sens: 52.0, score: 80 },
+        { sens: 52.0, score: 80 },
+        { sens: 38.4, score: 120 },
+      ];
+
+      const analysis = computeSweetSpotAnalytics(runs, { minEligibleRuns: 1, shrinkageK: 1 });
+      assert.ok(analysis !== null);
+      assert.equal(analysis.totalRuns, 4);
+
+      // 38.4 cm should NOT be discarded despite having only 1 run
+      assert.ok(analysis.bestBucket !== null);
+      assert.equal(analysis.bestBucket.sens, 38.4);
+      assert.equal(analysis.bestBucket.count, 1);
+      assert.equal(analysis.bestBucket.rangeLabel, "38.4 cm");
+      assert.equal(analysis.minEligibleRuns, 1);
+    });
+
+    it("preserves exact individual decimal sensitivities without grouping into bins", () => {
+      const runs = [
+        { sens: 41.2, score: 100 },
+        { sens: 41.3, score: 102 },
+        { sens: 41.4, score: 105 },
+        { sens: 52.0, score: 90 },
+      ];
+
+      const analysis = computeSweetSpotAnalytics(runs, { minEligibleRuns: 1 });
+      assert.ok(analysis !== null);
+      assert.equal(analysis.buckets.length, 4);
+
+      // Verify each decimal remains its own distinct bucket
+      const sensValues = analysis.buckets.map((b) => b.sens).sort((a, b) => a - b);
+      assert.deepEqual(sensValues, [41.2, 41.3, 41.4, 52.0]);
+
+      for (const bucket of analysis.buckets) {
+        assert.ok(!bucket.rangeLabel.includes("-"));
+        assert.equal(bucket.min, bucket.max);
+      }
+    });
   });
 
   describe("predictOptimalSensitivity", () => {
