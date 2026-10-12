@@ -14,6 +14,7 @@ import { SpotlightCard } from "@/components/ui/SpotlightCard";
 interface MetricsCardsProps {
   activeTask: Task | null;
   allTasks?: Task[];
+  mouseDpi?: number;
 }
 
 function MiniSparkline({
@@ -58,8 +59,9 @@ function MiniSparkline({
   );
 }
 
-export function MetricsCards({ activeTask, allTasks }: MetricsCardsProps) {
+export function MetricsCards({ activeTask, allTasks = [], mouseDpi }: MetricsCardsProps) {
   const { t } = useI18n();
+  const dpi = mouseDpi || 800;
   const metrics = computeTaskMetrics(activeTask);
   const deltas = computeMetricDeltas(activeTask);
   const recentTrend = extractRecentTrend(activeTask, 6);
@@ -79,8 +81,8 @@ export function MetricsCards({ activeTask, allTasks }: MetricsCardsProps) {
 
   const todayProgressPct =
     todaySummary && todayTarget && todayTarget > 0
-      ? Math.min(100, Math.round((todaySummary.best / todayTarget) * 100))
-      : 0;
+    ? Math.min(100, Math.round((todaySummary.best / todayTarget) * 100))
+    : 0;
 
   const hitRateBadge =
     metrics.hitRate !== null
@@ -96,7 +98,7 @@ export function MetricsCards({ activeTask, allTasks }: MetricsCardsProps) {
       ? ((metrics.targetThreshold / metrics.maxPB) * 100).toFixed(1)
       : null;
 
-  const idealSens = activeTask ? getScenarioIdealSens(activeTask, allTasks) : null;
+  const idealSens = activeTask ? getScenarioIdealSens(activeTask, allTasks, dpi) : null;
   const recSens = idealSens
     ? idealSens.value
     : activeTask
@@ -307,7 +309,7 @@ export function MetricsCards({ activeTask, allTasks }: MetricsCardsProps) {
         <div className="flex items-baseline justify-between mt-2 sm:mt-2.5">
           <span className="text-2xl sm:text-3xl font-mono font-bold tracking-tight text-text-main">
             {hasData && metrics.lastSens !== null
-              ? `${formatSensitivity(metrics.lastSens, "")}`
+              ? `${formatSensitivity(metrics.lastSens, dpi, "")}`
               : "—"}
             {hasData && metrics.lastSens !== null && (
               <span className="text-xs font-normal text-text-faint ml-1">cm</span>

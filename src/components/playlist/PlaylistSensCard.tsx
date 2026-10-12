@@ -10,21 +10,26 @@ import {
 interface PlaylistSensCardProps {
   playlists: Playlist[];
   tasks: Task[];
-  onApplySens?: (sensCm: number) => Promise<void>;
+  mouseDpi?: number;
+  onApplySens?: (sensCm: number, targetScenarios?: string[]) => Promise<void>;
   onViewInChart?: (playlistId: string) => void;
 }
 
 export function PlaylistSensCard({
   playlists,
   tasks,
+  mouseDpi,
   onApplySens,
   onViewInChart,
 }: PlaylistSensCardProps) {
   const { t } = useI18n();
+  const dpi = mouseDpi || 800;
+
+  const taskMap = useMemo(() => new Map(tasks.map((t) => [t.id, t])), [tasks]);
 
   const playlistStatsList = useMemo<PlaylistSensStats[]>(() => {
-    return playlists.map((pl) => computePlaylistSensStats(pl, tasks));
-  }, [playlists, tasks]);
+    return playlists.map((pl) => computePlaylistSensStats(pl, tasks, "equilibrado", dpi));
+  }, [playlists, tasks, dpi]);
 
   const renderConfidenceBadge = (
     confidence: "high" | "medium" | "low" | "insufficient"
@@ -116,7 +121,7 @@ export function PlaylistSensCard({
                     <td className="py-3 px-3">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-mono font-bold text-sm text-text-main">
-                          {formatSensitivity(stats.displaySens.value)}
+                          {formatSensitivity(stats.displaySens.value, dpi)}
                         </span>
                         {isPredicted ? (
                           <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
@@ -146,7 +151,7 @@ export function PlaylistSensCard({
                                 {slice.subcategory}
                               </span>{" "}
                               <span className="font-mono">
-                                {formatSensitivity(slice.displaySens.value)}
+                                {formatSensitivity(slice.displaySens.value, dpi)}
                               </span>
                             </span>
                           ))}
@@ -183,7 +188,13 @@ export function PlaylistSensCard({
                           {onApplySens && (
                             <button
                               type="button"
-                              onClick={() => void onApplySens(stats.displaySens.value)}
+                              onClick={() => {
+                                const pl = playlists.find((p) => p.id === stats.playlistId);
+                                const scenarioNames = pl
+                                  ? (pl.items.map((i) => taskMap.get(i.taskId)?.name).filter(Boolean) as string[])
+                                  : [];
+                                void onApplySens(stats.displaySens.value, scenarioNames);
+                              }}
                               className="px-2.5 py-1 text-[11px] font-semibold rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-colors whitespace-nowrap"
                             >
                               {t("playlistSens.applySens")}

@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 
 pub const DEFAULT_CATEGORY: &str = "Click Timing";
@@ -70,6 +71,10 @@ fn default_dpi() -> f64 {
     800.0
 }
 
+fn default_predictor_profile() -> String {
+    "equilibrado".to_string()
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RandomizerSettings {
@@ -90,6 +95,10 @@ pub struct RandomizerSettings {
     pub scenario_ideal_cm: Option<f64>,
     #[serde(default = "default_dpi")]
     pub mouse_dpi: f64,
+    #[serde(default)]
+    pub center_overrides: HashMap<String, f64>,
+    #[serde(default = "default_predictor_profile")]
+    pub predictor_profile: String,
 }
 
 impl Default for RandomizerSettings {
@@ -108,6 +117,8 @@ impl Default for RandomizerSettings {
             auto_scenario_sens: true,
             scenario_ideal_cm: None,
             mouse_dpi: 800.0,
+            center_overrides: HashMap::new(),
+            predictor_profile: "equilibrado".to_string(),
         }
     }
 }
@@ -124,6 +135,8 @@ pub struct RandomizerState {
     pub error_message: Option<String>,
     #[serde(default)]
     pub rawaccel_gui_running: bool,
+    #[serde(default)]
+    pub last_roll_reason: Option<String>,
 }
 
 impl Default for RandomizerState {
@@ -137,6 +150,7 @@ impl Default for RandomizerState {
             last_updated: None,
             error_message: None,
             rawaccel_gui_running: false,
+            last_roll_reason: None,
         }
     }
 }

@@ -5,8 +5,9 @@ mod randomizer;
 mod storage;
 mod watcher;
 mod aimlab;
+pub mod sampler;
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::Mutex;
 
 use tauri::menu::{MenuBuilder, MenuItemBuilder, PredefinedMenuItem};
@@ -21,6 +22,10 @@ pub struct AppState {
     pub watcher: Mutex<Option<watcher::WatcherHandle>>,
     pub emitted: Mutex<HashSet<String>>,
     pub randomizer_state: Mutex<RandomizerState>,
+    pub sampler: Mutex<sampler::SamplerState>,
+    pub roll_lock: Mutex<()>,
+    pub scenario_centers: Mutex<HashMap<String, f64>>,
+    pub upcoming_scenario: Mutex<Option<String>>,
 }
 
 #[tauri::command]
@@ -238,6 +243,16 @@ fn save_randomizer_settings(
     state: State<'_, AppState>,
     settings: RandomizerSettings,
 ) -> Result<RandomizerState, String> {
+    if settings.base_sens_cm < 10.0 || settings.base_sens_cm > 200.0 {
+        return Err("Sensibilidade base deve estar entre 10 e 200 cm/360".to_string());
+    }
+    if settings.spread_percent < 1.0 || settings.spread_percent > 90.0 {
+        return Err("Variação (spread) deve estar entre 1% e 90%".to_string());
+    }
+    if settings.mouse_dpi < 100.0 || settings.mouse_dpi > 32000.0 {
+        return Err("DPI do mouse deve estar entre 100 e 32000".to_string());
+    }
+
     let (was_enabled, prev_dpi) = {
         let s = state.settings.lock().unwrap();
         (s.randomizer.enabled, s.randomizer.mouse_dpi)
@@ -262,10 +277,16 @@ fn save_randomizer_settings(
     }
 
     if !was_enabled && is_enabled && avail {
-        return randomizer::apply_next_sens(&app, None, None);
+        return randomizer::apply_next_sens(
+            &app,
+            randomizer::RollContext {
+                finished_scenario: None,
+                reason: "toggle".into(),
+            },
+        );
     } else if was_enabled && !is_enabled && avail {
         if let Some(ref dir) = found_dir {
-            let _ = randomizer::restore_base_sens(dir, settings.mouse_dpi);
+            let _ = randomizer::restore_base_sens(&app, dir);
         }
         let now_iso = chrono::Local::now().to_rfc3339();
         let base_cm = if settings.base_sens_cm > 0.0 { settings.base_sens_cm } else { 40.0 };
@@ -303,8 +324,86 @@ fn get_randomizer_state(state: State<'_, AppState>) -> Result<RandomizerState, S
 }
 
 #[tauri::command]
+fn preview_sens_range(settings: RandomizerSettings, center_cm: Option<f64>) -> Result<randomizer::RangePreview, String> {
+    Ok(randomizer::preview_sens_range_calc(&settings, center_cm))
+}
+
+#[tauri::command]
+fn set_scenario_centers(
+    state: State<'_, AppState>,
+    centers: HashMap<String, f64>,
+) -> Result<(), String> {
+    let mut normalized = HashMap::with_capacity(centers.len());
+    for (k, v) in centers {
+        normalized.insert(k.trim().to_lowercase(), v);
+    }
+    *state.scenario_centers.lock().unwrap() = normalized;
+    Ok(())
+}
+
+#[tauri::command]
+fn set_upcoming_scenario(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    name: Option<String>,
+    reroll: bool,
+) -> Result<RandomizerState, String> {
+    let norm_name = name.map(|n| n.trim().to_string());
+    *state.upcoming_scenario.lock().unwrap() = norm_name.clone();
+
+    if reroll {
+        let (enabled, base_cm, scenario_ideal, center_overrides, rawaccel_dir) = {
+            let s = state.settings.lock().unwrap();
+            (
+                s.randomizer.enabled,
+                s.randomizer.base_sens_cm,
+                s.randomizer.scenario_ideal_cm,
+                s.randomizer.center_overrides.clone(),
+                s.randomizer.rawaccel_dir.clone(),
+            )
+        };
+
+        let (avail, _, _, _) = randomizer::check_rawaccel_availability(rawaccel_dir.as_deref());
+        let last_center = state.sampler.lock().unwrap().last_roll_center_cm;
+
+        if enabled && avail {
+            if let Some(last) = last_center {
+                let new_center = norm_name.as_ref().and_then(|scen| {
+                    let norm = scen.to_lowercase();
+                    center_overrides.get(&norm).copied()
+                        .or_else(|| state.scenario_centers.lock().unwrap().get(&norm).copied())
+                }).or(scenario_ideal).unwrap_or(if base_cm > 0.0 { base_cm } else { 40.0 });
+
+                if new_center > 0.0 && last > 0.0 {
+                    let ratio = new_center / last;
+                    let log_drift = ratio.ln().abs();
+                    let threshold = 1.03_f64.ln();
+                    if log_drift > threshold {
+                        return randomizer::apply_next_sens(
+                            &app,
+                            randomizer::RollContext {
+                                finished_scenario: None,
+                                reason: "reroll".into(),
+                            },
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(state.randomizer_state.lock().unwrap().clone())
+}
+
+#[tauri::command]
 fn trigger_randomize_now(app: AppHandle) -> Result<RandomizerState, String> {
-    randomizer::apply_next_sens(&app, None, None)
+    randomizer::apply_next_sens(
+        &app,
+        randomizer::RollContext {
+            finished_scenario: None,
+            reason: "manual".into(),
+        },
+    )
 }
 
 #[tauri::command]
@@ -372,6 +471,7 @@ pub fn run() {
                 last_run_score: None,
                 last_updated: None,
                 error_message: err_msg,
+                last_roll_reason: None,
             };
 
             let is_randomizer_enabled = settings.randomizer.enabled;
@@ -382,11 +482,33 @@ pub fn run() {
                 watcher: Mutex::new(None),
                 emitted: Mutex::new(HashSet::new()),
                 randomizer_state: Mutex::new(initial_r_state),
+                sampler: Mutex::new(sampler::SamplerState::default()),
+                roll_lock: Mutex::new(()),
+                scenario_centers: Mutex::new(HashMap::new()),
+                upcoming_scenario: Mutex::new(None),
             });
 
             if is_randomizer_enabled && avail {
                 let handle = app.handle().clone();
-                let _ = randomizer::apply_next_sens(&handle, None, None);
+                let _ = randomizer::apply_next_sens(
+                    &handle,
+                    randomizer::RollContext {
+                        finished_scenario: None,
+                        reason: "toggle".into(),
+                    },
+                );
+            } else if !is_randomizer_enabled && avail {
+                if let Some(ref dir) = found_dir {
+                    if let Some(backup) = storage::load_rawaccel_backup(app.handle()) {
+                        if let Ok(content) = std::fs::read_to_string(dir.join("settings.json")) {
+                            if let Ok((_, live_scale, _)) = randomizer::parse_rawaccel_live_values(&content) {
+                                if live_scale.is_some() && live_scale == backup.last_written_scale && live_scale != backup.scale_whole {
+                                    let _ = randomizer::restore_from_backup(app.handle(), dir);
+                                }
+                            }
+                        }
+                    }
+                }
             }
 
             let open_item = MenuItemBuilder::with_id("open", "Abrir Aim Threshold Tracker").build(app)?;
@@ -483,14 +605,22 @@ pub fn run() {
             get_randomizer_settings,
             save_randomizer_settings,
             get_randomizer_state,
+            preview_sens_range,
+            set_scenario_centers,
+            set_upcoming_scenario,
             trigger_randomize_now,
             detect_rawaccel_path,
             test_rawaccel_writer,
             aimlab::sync_aimlab_sqlite,
             aimlab::import_aimlab_csv,
         ])
-        .run(tauri::generate_context!())
-        .expect("erro ao executar o aplicativo Tauri");
+        .build(tauri::generate_context!())
+        .expect("erro ao construir o aplicativo Tauri")
+        .run(|app, event| {
+            if let tauri::RunEvent::Exit = event {
+                randomizer::restore_on_exit(app);
+            }
+        });
 }
 
 

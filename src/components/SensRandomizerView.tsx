@@ -5,10 +5,10 @@ import { useI18n } from "@/lib/i18n";
 import { useSensRandomizer } from "@/hooks/useSensRandomizer";
 import {
   computeSweetSpotAnalytics,
-  valorantToCm360,
-  calculateSensRange,
   type RunDataPoint,
 } from "@/lib/sens-analytics";
+import { DEFAULT_CATEGORY, DEFAULT_SUBCATEGORY } from "@/lib/viscose";
+import { buildRunPoints } from "@/lib/run-points";
 import { SensRandomizerControls } from "./randomizer/SensRandomizerControls";
 import {
   SensRandomizerChart,
@@ -56,8 +56,8 @@ export function SensRandomizerView({
     >();
 
     for (const task of allTasks) {
-      const cat = task.category || "Click Timing";
-      const subcat = task.subcategory || "Precision";
+      const cat = task.category || DEFAULT_CATEGORY;
+      const subcat = task.subcategory || DEFAULT_SUBCATEGORY;
       const key = `${cat}__${subcat}`;
       const existing = map.get(key);
       if (existing) {
@@ -133,76 +133,72 @@ export function SensRandomizerView({
         const activeCatKey =
           scopeFilter.categoryKey || availableCategories[0]?.key;
         tasksToAnalyze = allTasks.filter((task) => {
-          const cat = task.category || "Click Timing";
-          const subcat = task.subcategory || "Precision";
+          const cat = task.category || DEFAULT_CATEGORY;
+          const subcat = task.subcategory || DEFAULT_SUBCATEGORY;
           return `${cat}__${subcat}` === activeCatKey;
         });
         break;
       }
     }
 
-    const taskPbs = new Map<string, number>();
-    for (const task of tasksToAnalyze) {
-      let maxScore = 0;
-      for (const sess of task.sessions) {
-        if (sess.pb > maxScore) maxScore = sess.pb;
-      }
-      taskPbs.set(task.name, maxScore);
-    }
+    const runPoints = buildRunPoints(tasksToAnalyze, { dpi: settings.mouseDpi });
 
-    const list: RunDataPoint[] = [];
-
-    for (const task of tasksToAnalyze) {
-      const taskPb = taskPbs.get(task.name) || 0;
-      for (const sess of task.sessions) {
-        const sensCm = valorantToCm360(sess.sens);
-
-        if (sensCm >= 5 && sess.pb > 0) {
-          const rawScore = sess.pb;
-          const normScore = taskPb > 0 ? (rawScore / taskPb) * 100 : 100;
-          const effectiveScore = isNormalized ? normScore : rawScore;
-
-          list.push({
-            scenario: task.name,
-            sens: Number(sensCm.toFixed(1)),
-            rawScore,
-            normScore,
-            score: effectiveScore,
-            threshold: sess.threshold,
-            date: sess.date,
-          });
-        }
-      }
-    }
-
-    return list;
-  }, [scopeFilter, activeTask, allTasks, playlists, availableCategories]);
+    return runPoints.map((p) => ({
+      scenario: p.scenario,
+      sens: p.sens,
+      rawScore: p.score,
+      normScore: p.rel,
+      score: isNormalized ? p.rel : p.score,
+      threshold: p.threshold,
+      date: p.date,
+    }));
+  }, [scopeFilter, activeTask, allTasks, playlists, availableCategories, settings.mouseDpi]);
 
   const analysis = useMemo(() => {
-    return computeSweetSpotAnalytics(relevantSessions, {
-      minEligibleRuns: 1,
-      shrinkageK: 1,
-    });
+    return computeSweetSpotAnalytics(relevantSessions);
   }, [relevantSessions]);
 
+  const groupRuns = useMemo<RunDataPoint[] | undefined>(() => {
+    if (scopeFilter.mode !== "current" || !activeTask) return undefined;
+    const cat = activeTask.category || DEFAULT_CATEGORY;
+    const subcat = activeTask.subcategory || DEFAULT_SUBCATEGORY;
+    const categoryTasks = allTasks.filter(
+      (t) =>
+        (t.category || DEFAULT_CATEGORY) === cat &&
+        (t.subcategory || DEFAULT_SUBCATEGORY) === subcat
+    );
+    const runPoints = buildRunPoints(categoryTasks, { dpi: settings.mouseDpi });
+    return runPoints.map((p) => ({
+      scenario: p.scenario,
+      sens: p.sens,
+      rawScore: p.score,
+      normScore: p.rel,
+      score: p.rel,
+      threshold: p.threshold,
+      date: p.date,
+    }));
+  }, [scopeFilter.mode, activeTask, allTasks, settings.mouseDpi]);
+
   const handleApplySens = useCallback(
-    async (sensCm: number) => {
+    async (sensCm: number, targetScenarios?: string[]) => {
       const rounded = Number(sensCm.toFixed(1));
-      const centerSens = settings.autoScenarioSens
-        ? (settings.scenarioIdealCm ?? rounded)
-        : rounded;
-      const range = calculateSensRange(centerSens, settings.spreadPercent, rounded);
+      const overrides = { ...(settings.centerOverrides || {}) };
+      if (targetScenarios && targetScenarios.length > 0) {
+        for (const name of targetScenarios) {
+          if (name && name.trim()) {
+            overrides[name.trim().toLowerCase()] = rounded;
+          }
+        }
+      } else if (activeTask?.name) {
+        overrides[activeTask.name.trim().toLowerCase()] = rounded;
+      }
       await saveSettings({
         ...settings,
-        rangeMode: "cm360",
-        baseSensCm: rounded,
-        minCm: settings.autoScenarioSens ? range.minCm : settings.minCm,
-        maxCm: settings.autoScenarioSens ? range.maxCm : settings.maxCm,
-        minMult: settings.autoScenarioSens ? range.minMult : settings.minMult,
-        maxMult: settings.autoScenarioSens ? range.maxMult : settings.maxMult,
+        scenarioIdealCm: rounded,
+        centerOverrides: overrides,
       });
     },
-    [saveSettings, settings]
+    [activeTask?.name, saveSettings, settings]
   );
 
   const handleViewPlaylistInChart = useCallback((playlistId: string) => {
@@ -237,11 +233,14 @@ export function SensRandomizerView({
         categories={availableCategories}
         scopeTitle={scopeTitle}
         theme={theme}
+        activeMinCm={settings.minCm}
+        activeMaxCm={settings.maxCm}
       />
 
       <SensRandomizerAnalytics
         analysis={analysis}
         relevantSessions={relevantSessions}
+        groupRuns={groupRuns}
         scopeAllTasks={scopeFilter.mode !== "current"}
         onApplySens={handleApplySens}
       />
@@ -249,12 +248,14 @@ export function SensRandomizerView({
       <PlaylistSensCard
         playlists={playlists}
         tasks={allTasks}
+        mouseDpi={settings.mouseDpi}
         onApplySens={handleApplySens}
         onViewInChart={handleViewPlaylistInChart}
       />
 
       <CategorySensCard
         tasks={allTasks}
+        mouseDpi={settings.mouseDpi}
         onApplySens={handleApplySens}
         onViewInChart={handleViewCategoryInChart}
       />

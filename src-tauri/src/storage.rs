@@ -64,6 +64,26 @@ pub fn save_settings(app: &AppHandle, settings: &AppSettings) -> Result<(), Stri
     write_json(&dir.join("settings.json"), settings)
 }
 
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct RawAccelBackup {
+    pub output_dpi: Option<f64>,
+    pub scale_whole: Option<f64>,
+    pub scale_vert: Option<f64>,
+    pub last_written_output_dpi: Option<f64>,
+    pub last_written_scale: Option<f64>,
+    pub saved_at: String,
+}
+
+pub fn load_rawaccel_backup(app: &AppHandle) -> Option<RawAccelBackup> {
+    data_dir(app).ok().and_then(|d| read_json(d.join("rawaccel_backup.json")).ok())
+}
+
+pub fn save_rawaccel_backup(app: &AppHandle, backup: &RawAccelBackup) -> Result<(), String> {
+    let dir = data_dir(app)?;
+    write_json(&dir.join("rawaccel_backup.json"), backup)
+}
+
 fn read_json<T: serde::de::DeserializeOwned>(path: PathBuf) -> Result<T, String> {
     let text = fs::read_to_string(&path).map_err(|e| e.to_string())?;
     serde_json::from_str(&text).map_err(|e| e.to_string())

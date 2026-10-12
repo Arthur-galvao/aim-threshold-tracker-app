@@ -1,8 +1,26 @@
 import { useState, useEffect, useMemo } from "react";
-import { useI18n } from "@/lib/i18n";
+import { useI18n, type Key } from "@/lib/i18n";
 import type { RandomizerSettings, RandomizerState } from "@/hooks/useSensRandomizer";
 import type { Task } from "@/lib/types";
-import { calculateSensRange, getScenarioIdealSens, cm360ToValorant, cm360ToSource } from "@/lib/sens-analytics";
+import {
+  getScenarioIdealSens,
+  cm360ToValorant,
+  cm360ToSource,
+  predictOptimalSensitivity,
+  suggestRecenter,
+} from "@/lib/sens-analytics";
+import { buildRunPoints } from "@/lib/run-points";
+import { useRangePreview } from "@/hooks/useRangePreview";
+import {
+  initDraft,
+  syncDraftWithSettings,
+  updateDraftField,
+  resetDraftTouched,
+  validateDraft,
+  isDraftDirty,
+  draftToSettings,
+  type RandomizerDraft,
+} from "@/lib/randomizer-draft";
 
 interface SensRandomizerControlsProps {
   settings: RandomizerSettings;
@@ -33,91 +51,205 @@ export function SensRandomizerControls({
 }: SensRandomizerControlsProps) {
   const { t } = useI18n();
 
-  const [form, setForm] = useState({
-    baseSens: String(settings.baseSensCm || 50),
-    minCm: String(settings.minCm || 20),
-    maxCm: String(settings.maxCm || 90),
-    minMult: String(settings.minMult || 0.75),
-    maxMult: String(settings.maxMult || 1.35),
-    rangeMode: (settings.rangeMode === "multiplier" ? "multiplier" : "cm360") as "cm360" | "multiplier",
-    avoidRepeats: settings.avoidRepeats ?? true,
-    spreadPercent: settings.spreadPercent ?? 25.0,
-    autoScenarioSens: settings.autoScenarioSens ?? true,
-    mouseDpi: settings.mouseDpi || 800,
-  });
-  const [dpiInputText, setDpiInputText] = useState(String(settings.mouseDpi || 800));
+  const [draft, setDraft] = useState<RandomizerDraft>(() => initDraft(settings));
 
   useEffect(() => {
-    setForm({
-      baseSens: String(settings.baseSensCm || 50),
-      minCm: String(settings.minCm || 20),
-      maxCm: String(settings.maxCm || 90),
-      minMult: String(settings.minMult || 0.75),
-      maxMult: String(settings.maxMult || 1.35),
-      rangeMode: settings.rangeMode === "multiplier" ? "multiplier" : "cm360",
-      avoidRepeats: settings.avoidRepeats ?? true,
-      spreadPercent: settings.spreadPercent ?? 25.0,
-      autoScenarioSens: settings.autoScenarioSens ?? true,
-      mouseDpi: settings.mouseDpi || 800,
-    });
-    setDpiInputText(String(settings.mouseDpi || 800));
+    setDraft((prev) => syncDraftWithSettings(prev, settings));
   }, [settings]);
 
-  const parsedBase = parseFloat(form.baseSens) || settings.baseSensCm || 50;
-  const parsedMinCm = parseFloat(form.minCm) || settings.minCm || 20;
-  const parsedMaxCm = parseFloat(form.maxCm) || settings.maxCm || 90;
-  const parsedMinMult = parseFloat(form.minMult) || settings.minMult || 0.75;
-  const parsedMaxMult = parseFloat(form.maxMult) || settings.maxMult || 1.35;
+  const validationErrors = useMemo(() => validateDraft(draft), [draft]);
+  const isDirty = useMemo(() => isDraftDirty(draft, settings), [draft, settings]);
+  const canSave = isDirty && validationErrors.length === 0;
+
+  const getFieldError = (field: string) => {
+    const err = validationErrors.find((e) => e.field === field);
+    return err ? t(err.messageKey as Key) : null;
+  };
+
+  const parsedBase = Number(draft.baseSens) || settings.baseSensCm || 50;
+  const parsedMinCm = Number(draft.minCm) || settings.minCm || 20;
+  const parsedMaxCm = Number(draft.maxCm) || settings.maxCm || 90;
+  const parsedMinMult = Number(draft.minMult) || settings.minMult || 0.75;
+  const parsedMaxMult = Number(draft.maxMult) || settings.maxMult || 1.35;
+  const parsedDpi = Math.round(Number(draft.mouseDpi)) || settings.mouseDpi || 800;
 
   const idealSens = useMemo(() => {
-    return getScenarioIdealSens(activeTask, allTasks, form.mouseDpi);
-  }, [activeTask, allTasks, form.mouseDpi]);
+    return getScenarioIdealSens(activeTask, allTasks, parsedDpi);
+  }, [activeTask, allTasks, parsedDpi]);
 
-  const effectiveCenterSens = form.autoScenarioSens && idealSens ? idealSens.value : parsedBase;
-  const calculatedRange = useMemo(() => {
-    return calculateSensRange(effectiveCenterSens, form.spreadPercent, parsedBase);
-  }, [effectiveCenterSens, form.spreadPercent, parsedBase]);
+  const settingsForPreview = useMemo<RandomizerSettings>(() => ({
+    ...settings,
+    baseSensCm: parsedBase,
+    rangeMode: draft.rangeMode,
+    minCm: parsedMinCm,
+    maxCm: parsedMaxCm,
+    minMult: parsedMinMult,
+    maxMult: parsedMaxMult,
+    spreadPercent: draft.spreadPercent,
+    autoScenarioSens: draft.autoScenarioSens,
+    mouseDpi: parsedDpi,
+  }), [settings, parsedBase, draft.rangeMode, parsedMinCm, parsedMaxCm, parsedMinMult, parsedMaxMult, draft.spreadPercent, draft.autoScenarioSens, parsedDpi]);
+
+  const previewRange = useRangePreview(
+    settingsForPreview,
+    draft.autoScenarioSens && idealSens ? idealSens.value : null
+  );
+
+  const calculatedRange = useMemo(() => ({
+    minCm: previewRange?.minCm ?? (settings.minCm || 20),
+    maxCm: previewRange?.maxCm ?? (settings.maxCm || 90),
+    minMult: previewRange?.minMult ?? (settings.minMult || 0.75),
+    maxMult: previewRange?.maxMult ?? (settings.maxMult || 1.35),
+    gridCm: previewRange?.gridCm ?? [],
+  }), [previewRange, settings.minCm, settings.maxCm, settings.minMult, settings.maxMult]);
 
   const inGameValorant = useMemo(() => {
-    return cm360ToValorant(parsedBase, form.mouseDpi);
-  }, [parsedBase, form.mouseDpi]);
+    return cm360ToValorant(parsedBase, parsedDpi);
+  }, [parsedBase, parsedDpi]);
 
   const inGameSource = useMemo(() => {
-    return cm360ToSource(parsedBase, form.mouseDpi);
-  }, [parsedBase, form.mouseDpi]);
+    return cm360ToSource(parsedBase, parsedDpi);
+  }, [parsedBase, parsedDpi]);
 
-  const handleSave = async (override?: Partial<typeof form>) => {
-    const nextForm = { ...form, ...override };
-    const pBase = parseFloat(nextForm.baseSens) || settings.baseSensCm || 50;
-    const pMinCm = parseFloat(nextForm.minCm) || settings.minCm || 20;
-    const pMaxCm = parseFloat(nextForm.maxCm) || settings.maxCm || 90;
-    const pMinMult = parseFloat(nextForm.minMult) || settings.minMult || 0.75;
-    const pMaxMult = parseFloat(nextForm.maxMult) || settings.maxMult || 1.35;
-    const centerSens = nextForm.autoScenarioSens && idealSens ? idealSens.value : pBase;
-    const range = calculateSensRange(centerSens, nextForm.spreadPercent, pBase);
+  const handleSave = async () => {
+    if (!canSave) return;
+    const nextSettings = draftToSettings(draft, settings);
+    if (draft.autoScenarioSens && idealSens) {
+      nextSettings.scenarioIdealCm = idealSens.value;
+    }
+    await onSaveSettings(nextSettings);
+    setDraft((prev) => resetDraftTouched(prev));
+  };
 
+  const handleToggleAutoScenario = async (checked: boolean) => {
+    setDraft((prev) => {
+      const next = updateDraftField(prev, "autoScenarioSens", checked);
+      next.touched.delete("autoScenarioSens");
+      return next;
+    });
     await onSaveSettings({
       ...settings,
-      rangeMode: nextForm.rangeMode,
-      avoidRepeats: nextForm.avoidRepeats,
-      baseSensCm: pBase,
-      spreadPercent: nextForm.spreadPercent,
-      autoScenarioSens: nextForm.autoScenarioSens,
-      mouseDpi: nextForm.mouseDpi,
-      scenarioIdealCm: nextForm.autoScenarioSens && idealSens ? idealSens.value : undefined,
-      minCm: nextForm.autoScenarioSens ? range.minCm : pMinCm,
-      maxCm: nextForm.autoScenarioSens ? range.maxCm : pMaxCm,
-      minMult: nextForm.autoScenarioSens ? range.minMult : pMinMult,
-      maxMult: nextForm.autoScenarioSens ? range.maxMult : pMaxMult,
+      autoScenarioSens: checked,
+      scenarioIdealCm: checked && idealSens ? idealSens.value : undefined,
     });
+    if (checked && settings.enabled && rawaccelAvailable) {
+      await onTriggerRandomize();
+    }
+  };
+
+  const handleSelectDpiPreset = async (preset: number) => {
+    setDraft((prev) => {
+      const next = updateDraftField(prev, "mouseDpi", String(preset));
+      next.touched.delete("mouseDpi");
+      return next;
+    });
+    await onSaveSettings({ ...settings, mouseDpi: preset });
+  };
+
+  const handleSelectSpreadPreset = async (preset: number) => {
+    setDraft((prev) => {
+      const next = updateDraftField(prev, "spreadPercent", preset);
+      next.touched.delete("spreadPercent");
+      return next;
+    });
+    await onSaveSettings({ ...settings, spreadPercent: preset });
+  };
+
+  const handleSelectRangeMode = async (mode: "cm360" | "multiplier") => {
+    setDraft((prev) => {
+      const next = updateDraftField(prev, "rangeMode", mode);
+      next.touched.delete("rangeMode");
+      return next;
+    });
+    await onSaveSettings({ ...settings, rangeMode: mode });
+  };
+
+  const handleToggleAvoidRepeats = async (checked: boolean) => {
+    setDraft((prev) => {
+      const next = updateDraftField(prev, "avoidRepeats", checked);
+      next.touched.delete("avoidRepeats");
+      return next;
+    });
+    await onSaveSettings({ ...settings, avoidRepeats: checked });
   };
 
   const multDeltaPercent = useMemo(() => {
     return (randomizerState.activeMult - 1.0) * 100;
   }, [randomizerState.activeMult]);
 
-  const updateField = (key: keyof typeof form, val: any) => {
-    setForm((prev) => ({ ...prev, [key]: val }));
+  const localPrediction = useMemo(() => {
+    if (!activeTask || !activeTask.sessions || activeTask.sessions.length === 0) return null;
+    const runPoints = buildRunPoints([activeTask], { dpi: parsedDpi });
+    const runs = runPoints.map((p) => ({
+      sens: p.sens,
+      score: p.score,
+      rawScore: p.score,
+      normScore: p.rel,
+      date: p.date,
+      scenario: p.scenario,
+      threshold: p.threshold,
+    }));
+    return predictOptimalSensitivity(runs);
+  }, [activeTask, parsedDpi]);
+
+  const currentCenterCm = useMemo(() => {
+    if (draft.rangeMode === "multiplier") {
+      const minM = parsedMinMult > 0 ? parsedMinMult : 0.75;
+      const maxM = parsedMaxMult > minM ? parsedMaxMult : 1.35;
+      return parsedBase * Math.sqrt(minM * maxM);
+    }
+    const minC = parsedMinCm > 0 ? parsedMinCm : 20;
+    const maxC = parsedMaxCm > minC ? parsedMaxCm : 90;
+    return Math.sqrt(minC * maxC);
+  }, [draft.rangeMode, parsedBase, parsedMinMult, parsedMaxMult, parsedMinCm, parsedMaxCm]);
+
+  const [dismissedSuggestionCm, setDismissedSuggestionCm] = useState<number | null>(null);
+
+  const recenterSuggestion = useMemo(() => {
+    return suggestRecenter(localPrediction, currentCenterCm);
+  }, [localPrediction, currentCenterCm]);
+
+  const handleApplyRecenter = async () => {
+    if (!recenterSuggestion) return;
+    const suggested = recenterSuggestion.suggestedCm;
+    if (draft.rangeMode === "multiplier") {
+      const currentMin = parsedMinMult > 0 ? parsedMinMult : 0.75;
+      const currentMax = parsedMaxMult > currentMin ? parsedMaxMult : 1.35;
+      const r = Math.sqrt(currentMax / currentMin);
+      const centerMult = suggested / (parsedBase || 50);
+      const nextMinMult = Number((centerMult / r).toFixed(2));
+      const nextMaxMult = Number((centerMult * r).toFixed(2));
+      setDraft((prev) => {
+        let d = updateDraftField(prev, "minMult", String(nextMinMult));
+        d = updateDraftField(d, "maxMult", String(nextMaxMult));
+        d.touched.delete("minMult");
+        d.touched.delete("maxMult");
+        return d;
+      });
+      await onSaveSettings({
+        ...settings,
+        minMult: nextMinMult,
+        maxMult: nextMaxMult,
+      });
+    } else {
+      const currentMin = parsedMinCm > 0 ? parsedMinCm : 20;
+      const currentMax = parsedMaxCm > currentMin ? parsedMaxCm : 90;
+      const r = Math.sqrt(currentMax / currentMin);
+      const nextMinCm = Number((suggested / r).toFixed(1));
+      const nextMaxCm = Number((suggested * r).toFixed(1));
+      setDraft((prev) => {
+        let d = updateDraftField(prev, "minCm", String(nextMinCm));
+        d = updateDraftField(d, "maxCm", String(nextMaxCm));
+        d.touched.delete("minCm");
+        d.touched.delete("maxCm");
+        return d;
+      });
+      await onSaveSettings({
+        ...settings,
+        minCm: nextMinCm,
+        maxCm: nextMaxCm,
+      });
+    }
   };
 
   return (
@@ -182,6 +314,36 @@ export function SensRandomizerControls({
           </button>
         </div>
       </div>
+
+      {/* Recenter Suggestion Banner (Manual mode only) */}
+      {!draft.autoScenarioSens && recenterSuggestion && dismissedSuggestionCm !== recenterSuggestion.suggestedCm && (
+        <div className="p-3.5 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-300 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-sm">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-blue-400 flex-shrink-0" />
+            <span>
+              {t("randomizer.recenterSuggestion")}:{" "}
+              <strong className="text-blue-200">{recenterSuggestion.suggestedCm.toFixed(1)} cm</strong>{" "}
+              <span className="text-blue-400/80">({t("randomizer.recenterCurrent")}: {recenterSuggestion.currentCm.toFixed(1)} cm)</span>
+            </span>
+          </div>
+          <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+            <button
+              type="button"
+              onClick={() => setDismissedSuggestionCm(recenterSuggestion.suggestedCm)}
+              className="px-2.5 py-1 text-[11px] font-medium text-text-faint hover:text-text-secondary rounded-lg transition-colors"
+            >
+              {t("randomizer.dismiss")}
+            </button>
+            <button
+              type="button"
+              onClick={handleApplyRecenter}
+              className="px-3 py-1 text-[11px] font-bold bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors shadow-sm"
+            >
+              {t("randomizer.applySens")}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Raw Accel GUI Running Warning Banner */}
       {randomizerState.rawaccelGuiRunning && (
@@ -268,15 +430,8 @@ export function SensRandomizerControls({
               <input
                 id="autoScenarioSensCheck"
                 type="checkbox"
-                checked={form.autoScenarioSens}
-                onChange={async (e) => {
-                  const checked = e.target.checked;
-                  updateField("autoScenarioSens", checked);
-                  await handleSave({ autoScenarioSens: checked });
-                  if (checked && settings.enabled && rawaccelAvailable) {
-                    await onTriggerRandomize();
-                  }
-                }}
+                checked={draft.autoScenarioSens}
+                onChange={(e) => void handleToggleAutoScenario(e.target.checked)}
                 className="w-4 h-4 rounded border-edge-strong bg-surface text-accent cursor-pointer accent-blue-500 shrink-0"
               />
             </label>
@@ -289,7 +444,7 @@ export function SensRandomizerControls({
                 {t("randomizer.mouseDpi")}
               </label>
               <span className="text-[10px] text-accent font-mono font-bold">
-                {form.mouseDpi} DPI
+                {parsedDpi} DPI
               </span>
             </div>
             <div className="flex flex-wrap items-center gap-1.5">
@@ -297,13 +452,9 @@ export function SensRandomizerControls({
                 <button
                   key={preset}
                   type="button"
-                  onClick={() => {
-                    setDpiInputText(String(preset));
-                    updateField("mouseDpi", preset);
-                    void handleSave({ mouseDpi: preset });
-                  }}
+                  onClick={() => void handleSelectDpiPreset(preset)}
                   className={`px-2.5 py-1 rounded text-[11px] font-mono font-semibold transition-colors ${
-                    form.mouseDpi === preset
+                    parsedDpi === preset && draft.mouseDpi === String(preset)
                       ? "bg-accent text-white"
                       : "bg-surface border border-edge text-text-secondary hover:text-text-main hover:bg-surface-hover"
                   }`}
@@ -315,24 +466,10 @@ export function SensRandomizerControls({
                 <input
                   type="text"
                   inputMode="numeric"
-                  value={dpiInputText}
+                  value={draft.mouseDpi}
                   onChange={(e) => {
                     const clean = e.target.value.replace(/[^0-9]/g, "");
-                    setDpiInputText(clean);
-                    const val = parseInt(clean, 10);
-                    if (!isNaN(val) && val >= 100 && val <= 32000) {
-                      updateField("mouseDpi", val);
-                    }
-                  }}
-                  onBlur={() => {
-                    const parsed = parseInt(dpiInputText, 10);
-                    if (!isNaN(parsed) && parsed >= 100 && parsed <= 32000) {
-                      updateField("mouseDpi", parsed);
-                      void handleSave({ mouseDpi: parsed });
-                    } else {
-                      setDpiInputText(String(form.mouseDpi));
-                      void handleSave({ mouseDpi: form.mouseDpi });
-                    }
+                    setDraft((prev) => updateDraftField(prev, "mouseDpi", clean));
                   }}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
@@ -345,6 +482,11 @@ export function SensRandomizerControls({
                 <span className="ml-1 text-[10px] font-mono text-text-muted uppercase">DPI</span>
               </div>
             </div>
+            {getFieldError("mouseDpi") && (
+              <span className="text-[11px] text-rose-400 mt-1 block font-medium">
+                {getFieldError("mouseDpi")}
+              </span>
+            )}
           </div>
 
           {/* Base Sens Input */}
@@ -362,16 +504,11 @@ export function SensRandomizerControls({
                 id="baseSensInput"
                 type="text"
                 inputMode="decimal"
-                value={form.baseSens}
+                value={draft.baseSens}
                 onChange={(e) => {
                   const val = e.target.value.replace(",", ".");
                   if (val === "" || /^\d*\.?\d*$/.test(val)) {
-                    updateField("baseSens", val);
-                  }
-                }}
-                onBlur={() => {
-                  if (!form.baseSens.trim() || isNaN(parseFloat(form.baseSens))) {
-                    updateField("baseSens", String(settings.baseSensCm || 50));
+                    setDraft((prev) => updateDraftField(prev, "baseSens", val));
                   }
                 }}
                 className="minimal-input text-xs font-mono font-medium pl-3 pr-16 py-2 tabular-nums"
@@ -380,6 +517,11 @@ export function SensRandomizerControls({
                 cm/360
               </span>
             </div>
+            {getFieldError("baseSens") && (
+              <span className="text-[11px] text-rose-400 mt-1 block font-medium">
+                {getFieldError("baseSens")}
+              </span>
+            )}
 
             {/* In-Game Equivalent Preview */}
             <div className="flex items-center justify-between text-[11px] px-2.5 py-1.5 rounded-lg bg-surface border border-edge font-mono text-text-secondary">
@@ -410,7 +552,7 @@ export function SensRandomizerControls({
               </div>
               <div className="flex items-center gap-1">
                 <span className="text-xs font-mono font-bold text-text-main">
-                  ±{form.spreadPercent}%
+                  ±{draft.spreadPercent}%
                 </span>
               </div>
             </div>
@@ -423,14 +565,19 @@ export function SensRandomizerControls({
                 min={5}
                 max={75}
                 step={1}
-                value={form.spreadPercent}
+                value={draft.spreadPercent}
                 onChange={(e) => {
                   const val = Number(e.target.value);
-                  updateField("spreadPercent", val);
+                  setDraft((prev) => updateDraftField(prev, "spreadPercent", val));
                 }}
                 className="w-full accent-blue-500 cursor-pointer h-1.5 bg-surface rounded-lg border border-edge"
               />
             </div>
+            {getFieldError("spreadPercent") && (
+              <span className="text-[11px] text-rose-400 mt-1 block font-medium">
+                {getFieldError("spreadPercent")}
+              </span>
+            )}
 
             {/* Quick Presets */}
             <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
@@ -438,9 +585,9 @@ export function SensRandomizerControls({
                 <button
                   key={preset}
                   type="button"
-                  onClick={() => updateField("spreadPercent", preset)}
+                  onClick={() => void handleSelectSpreadPreset(preset)}
                   className={`text-[10px] font-mono font-semibold px-2 py-0.5 rounded-full border transition-all ${
-                    form.spreadPercent === preset
+                    draft.spreadPercent === preset
                       ? "bg-score-soft text-score border-score/30"
                       : "bg-surface hover:bg-surface-hover text-text-secondary border-edge"
                   }`}
@@ -454,7 +601,7 @@ export function SensRandomizerControls({
             <div className="pt-1 border-t border-edge flex items-center justify-between text-[11px] flex-wrap gap-1">
               <span className="text-text-faint">{t("randomizer.spreadCalculatedRange")}</span>
               <span className="font-mono font-semibold text-text-main whitespace-nowrap">
-                {form.rangeMode === "cm360"
+                {draft.rangeMode === "cm360"
                   ? `${calculatedRange.minCm.toFixed(1)} cm - ${calculatedRange.maxCm.toFixed(1)} cm`
                   : `${calculatedRange.minMult.toFixed(2)}x - ${calculatedRange.maxMult.toFixed(2)}x`}
               </span>
@@ -469,9 +616,9 @@ export function SensRandomizerControls({
             <div className="grid grid-cols-2 gap-1 p-1 bg-surface-subtle rounded-xl border border-edge">
               <button
                 type="button"
-                onClick={() => updateField("rangeMode", "cm360")}
+                onClick={() => void handleSelectRangeMode("cm360")}
                 className={`py-1.5 px-3 rounded-lg text-xs font-semibold transition-all ${
-                  form.rangeMode === "cm360"
+                  draft.rangeMode === "cm360"
                     ? "bg-surface text-text-main shadow-sm border border-edge-strong"
                     : "text-text-secondary hover:text-text-main"
                 }`}
@@ -480,9 +627,9 @@ export function SensRandomizerControls({
               </button>
               <button
                 type="button"
-                onClick={() => updateField("rangeMode", "multiplier")}
+                onClick={() => void handleSelectRangeMode("multiplier")}
                 className={`py-1.5 px-3 rounded-lg text-xs font-semibold transition-all ${
-                  form.rangeMode === "multiplier"
+                  draft.rangeMode === "multiplier"
                     ? "bg-surface text-text-main shadow-sm border border-edge-strong"
                     : "text-text-secondary hover:text-text-main"
                 }`}
@@ -493,91 +640,101 @@ export function SensRandomizerControls({
           </div>
 
           {/* Range Inputs */}
-          {form.rangeMode === "cm360" ? (
-            <div className="grid grid-cols-2 gap-2.5">
-              <div>
-                <label htmlFor="minCmInput" className="block text-[11px] font-semibold uppercase tracking-wider text-text-faint mb-1">
-                  {t("randomizer.min")} (cm)
-                </label>
-                <input
-                  id="minCmInput"
-                  type="text"
-                  inputMode="decimal"
-                  value={form.autoScenarioSens ? String(calculatedRange.minCm) : form.minCm}
-                  disabled={form.autoScenarioSens}
-                  onChange={(e) => {
-                    const val = e.target.value.replace(",", ".");
-                    if (val === "" || /^\d*\.?\d*$/.test(val)) updateField("minCm", val);
-                  }}
-                  onBlur={() => {
-                    if (!form.minCm.trim() || isNaN(parseFloat(form.minCm))) updateField("minCm", String(settings.minCm || 20));
-                  }}
-                  className="minimal-input text-xs font-mono font-medium px-3 py-2 tabular-nums disabled:opacity-60 disabled:cursor-not-allowed"
-                />
+          {draft.rangeMode === "cm360" ? (
+            <div className="space-y-1">
+              <div className="grid grid-cols-2 gap-2.5">
+                <div>
+                  <label htmlFor="minCmInput" className="block text-[11px] font-semibold uppercase tracking-wider text-text-faint mb-1">
+                    {t("randomizer.min")} (cm)
+                  </label>
+                  <input
+                    id="minCmInput"
+                    type="text"
+                    inputMode="decimal"
+                    value={draft.autoScenarioSens ? String(calculatedRange.minCm) : draft.minCm}
+                    disabled={draft.autoScenarioSens}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(",", ".");
+                      if (val === "" || /^\d*\.?\d*$/.test(val)) {
+                        setDraft((prev) => updateDraftField(prev, "minCm", val));
+                      }
+                    }}
+                    className="minimal-input text-xs font-mono font-medium px-3 py-2 tabular-nums disabled:opacity-60 disabled:cursor-not-allowed"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="maxCmInput" className="block text-[11px] font-semibold uppercase tracking-wider text-text-faint mb-1">
+                    {t("randomizer.max")} (cm)
+                  </label>
+                  <input
+                    id="maxCmInput"
+                    type="text"
+                    inputMode="decimal"
+                    value={draft.autoScenarioSens ? String(calculatedRange.maxCm) : draft.maxCm}
+                    disabled={draft.autoScenarioSens}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(",", ".");
+                      if (val === "" || /^\d*\.?\d*$/.test(val)) {
+                        setDraft((prev) => updateDraftField(prev, "maxCm", val));
+                      }
+                    }}
+                    className="minimal-input text-xs font-mono font-medium px-3 py-2 tabular-nums disabled:opacity-60 disabled:cursor-not-allowed"
+                  />
+                </div>
               </div>
-              <div>
-                <label htmlFor="maxCmInput" className="block text-[11px] font-semibold uppercase tracking-wider text-text-faint mb-1">
-                  {t("randomizer.max")} (cm)
-                </label>
-                <input
-                  id="maxCmInput"
-                  type="text"
-                  inputMode="decimal"
-                  value={form.autoScenarioSens ? String(calculatedRange.maxCm) : form.maxCm}
-                  disabled={form.autoScenarioSens}
-                  onChange={(e) => {
-                    const val = e.target.value.replace(",", ".");
-                    if (val === "" || /^\d*\.?\d*$/.test(val)) updateField("maxCm", val);
-                  }}
-                  onBlur={() => {
-                    if (!form.maxCm.trim() || isNaN(parseFloat(form.maxCm))) updateField("maxCm", String(settings.maxCm || 90));
-                  }}
-                  className="minimal-input text-xs font-mono font-medium px-3 py-2 tabular-nums disabled:opacity-60 disabled:cursor-not-allowed"
-                />
-              </div>
+              {(getFieldError("minCm") || getFieldError("maxCm")) && (
+                <span className="text-[11px] text-rose-400 mt-1 block font-medium">
+                  {getFieldError("minCm") || getFieldError("maxCm")}
+                </span>
+              )}
             </div>
           ) : (
-            <div className="grid grid-cols-2 gap-2.5">
-              <div>
-                <label htmlFor="minMultInput" className="block text-[11px] font-semibold uppercase tracking-wider text-text-faint mb-1">
-                  {t("randomizer.min")} (x)
-                </label>
-                <input
-                  id="minMultInput"
-                  type="text"
-                  inputMode="decimal"
-                  value={form.autoScenarioSens ? String(calculatedRange.minMult) : form.minMult}
-                  disabled={form.autoScenarioSens}
-                  onChange={(e) => {
-                    const val = e.target.value.replace(",", ".");
-                    if (val === "" || /^\d*\.?\d*$/.test(val)) updateField("minMult", val);
-                  }}
-                  onBlur={() => {
-                    if (!form.minMult.trim() || isNaN(parseFloat(form.minMult))) updateField("minMult", String(settings.minMult || 0.75));
-                  }}
-                  className="minimal-input text-xs font-mono font-medium px-3 py-2 tabular-nums disabled:opacity-60 disabled:cursor-not-allowed"
-                />
+            <div className="space-y-1">
+              <div className="grid grid-cols-2 gap-2.5">
+                <div>
+                  <label htmlFor="minMultInput" className="block text-[11px] font-semibold uppercase tracking-wider text-text-faint mb-1">
+                    {t("randomizer.min")} (x)
+                  </label>
+                  <input
+                    id="minMultInput"
+                    type="text"
+                    inputMode="decimal"
+                    value={draft.autoScenarioSens ? String(calculatedRange.minMult) : draft.minMult}
+                    disabled={draft.autoScenarioSens}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(",", ".");
+                      if (val === "" || /^\d*\.?\d*$/.test(val)) {
+                        setDraft((prev) => updateDraftField(prev, "minMult", val));
+                      }
+                    }}
+                    className="minimal-input text-xs font-mono font-medium px-3 py-2 tabular-nums disabled:opacity-60 disabled:cursor-not-allowed"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="maxMultInput" className="block text-[11px] font-semibold uppercase tracking-wider text-text-faint mb-1">
+                    {t("randomizer.max")} (x)
+                  </label>
+                  <input
+                    id="maxMultInput"
+                    type="text"
+                    inputMode="decimal"
+                    value={draft.autoScenarioSens ? String(calculatedRange.maxMult) : draft.maxMult}
+                    disabled={draft.autoScenarioSens}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(",", ".");
+                      if (val === "" || /^\d*\.?\d*$/.test(val)) {
+                        setDraft((prev) => updateDraftField(prev, "maxMult", val));
+                      }
+                    }}
+                    className="minimal-input text-xs font-mono font-medium px-3 py-2 tabular-nums disabled:opacity-60 disabled:cursor-not-allowed"
+                  />
+                </div>
               </div>
-              <div>
-                <label htmlFor="maxMultInput" className="block text-[11px] font-semibold uppercase tracking-wider text-text-faint mb-1">
-                  {t("randomizer.max")} (x)
-                </label>
-                <input
-                  id="maxMultInput"
-                  type="text"
-                  inputMode="decimal"
-                  value={form.autoScenarioSens ? String(calculatedRange.maxMult) : form.maxMult}
-                  disabled={form.autoScenarioSens}
-                  onChange={(e) => {
-                    const val = e.target.value.replace(",", ".");
-                    if (val === "" || /^\d*\.?\d*$/.test(val)) updateField("maxMult", val);
-                  }}
-                  onBlur={() => {
-                    if (!form.maxMult.trim() || isNaN(parseFloat(form.maxMult))) updateField("maxMult", String(settings.maxMult || 1.35));
-                  }}
-                  className="minimal-input text-xs font-mono font-medium px-3 py-2 tabular-nums disabled:opacity-60 disabled:cursor-not-allowed"
-                />
-              </div>
+              {(getFieldError("minMult") || getFieldError("maxMult")) && (
+                <span className="text-[11px] text-rose-400 mt-1 block font-medium">
+                  {getFieldError("minMult") || getFieldError("maxMult")}
+                </span>
+              )}
             </div>
           )}
 
@@ -585,11 +742,35 @@ export function SensRandomizerControls({
           <div className="px-3 py-1.5 rounded-lg bg-surface-subtle/70 border border-edge flex items-center justify-between text-[11px] flex-wrap gap-1">
             <span className="text-text-faint font-medium">{t("randomizer.configuredRange")}</span>
             <span className="text-text-main font-mono font-semibold whitespace-nowrap">
-              {form.rangeMode === "cm360"
-                ? `${(form.autoScenarioSens ? calculatedRange.minCm : parsedMinCm).toFixed(1)} cm - ${(form.autoScenarioSens ? calculatedRange.maxCm : parsedMaxCm).toFixed(1)} cm`
-                : `${(form.autoScenarioSens ? calculatedRange.minMult : parsedMinMult).toFixed(2)}x - ${(form.autoScenarioSens ? calculatedRange.maxMult : parsedMaxMult).toFixed(2)}x`}
+              {draft.rangeMode === "cm360"
+                ? `${(draft.autoScenarioSens ? calculatedRange.minCm : parsedMinCm).toFixed(1)} cm - ${(draft.autoScenarioSens ? calculatedRange.maxCm : parsedMaxCm).toFixed(1)} cm`
+                : `${(draft.autoScenarioSens ? calculatedRange.minMult : parsedMinMult).toFixed(2)}x - ${(draft.autoScenarioSens ? calculatedRange.maxMult : parsedMaxMult).toFixed(2)}x`}
             </span>
           </div>
+
+          {/* Grid Points Real Preview Chips */}
+          {calculatedRange.gridCm.length > 0 && (
+            <div className="p-2.5 rounded-xl border border-edge bg-surface-subtle/40 space-y-2">
+              <div className="flex items-center justify-between text-[11px]">
+                <span className="font-semibold text-text-faint uppercase tracking-wider">
+                  {t("randomizer.gridPoints")} ({calculatedRange.gridCm.length})
+                </span>
+                <span className="text-[10px] text-text-faint font-mono">
+                  {calculatedRange.gridCm[0].toFixed(1)} - {calculatedRange.gridCm[calculatedRange.gridCm.length - 1].toFixed(1)} cm
+                </span>
+              </div>
+              <div className="flex items-center gap-1 flex-wrap max-h-24 overflow-y-auto">
+                {calculatedRange.gridCm.map((cm, idx) => (
+                  <span
+                    key={idx}
+                    className="px-1.5 py-0.5 rounded text-[10px] font-mono font-medium bg-surface border border-edge text-text-secondary"
+                  >
+                    {cm.toFixed(1)}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Avoid Repeats Checkbox */}
           <label
@@ -599,8 +780,8 @@ export function SensRandomizerControls({
             <input
               id="avoidRepeatsCheck"
               type="checkbox"
-              checked={form.avoidRepeats}
-              onChange={(e) => updateField("avoidRepeats", e.target.checked)}
+              checked={draft.avoidRepeats}
+              onChange={(e) => void handleToggleAvoidRepeats(e.target.checked)}
               className="w-3.5 h-3.5 rounded border-edge-strong bg-surface text-accent cursor-pointer accent-blue-500"
             />
             <span className="font-medium text-text-main">
@@ -608,27 +789,44 @@ export function SensRandomizerControls({
             </span>
           </label>
 
-          {/* Save Button */}
-          <button
-            type="button"
-            onClick={() => void handleSave()}
-            className="w-full py-2 px-4 minimal-btn text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer shadow-sm hover:opacity-90 active:scale-[0.99] transition-all"
-          >
-            <svg
-              className="w-3.5 h-3.5"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
+          {/* Save Button & Unsaved Changes Indicator */}
+          <div className="space-y-2">
+            {isDirty && (
+              <div className="flex items-center justify-between px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs">
+                <div className="flex items-center gap-1.5 font-medium">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                  <span>{t("randomizer.unsavedChanges")}</span>
+                </div>
+                {validationErrors.length > 0 && (
+                  <span className="text-[10px] text-rose-300 font-mono">
+                    {validationErrors.length} {validationErrors.length === 1 ? "erro" : "erros"}
+                  </span>
+                )}
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={() => void handleSave()}
+              disabled={!canSave}
+              className="w-full py-2 px-4 minimal-btn text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer shadow-sm hover:opacity-90 active:scale-[0.99] transition-all disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none"
             >
-              <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
-              <polyline points="17 21 17 13 7 13 7 21" />
-              <polyline points="7 3 7 8 15 8" />
-            </svg>
-            <span>{t("randomizer.saveSettings")}</span>
-          </button>
+              <svg
+                className="w-3.5 h-3.5"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+                <polyline points="17 21 17 13 7 13 7 21" />
+                <polyline points="7 3 7 8 15 8" />
+              </svg>
+              <span>{t("randomizer.saveSettings")}</span>
+            </button>
+          </div>
         </div>
 
         {/* Right Column: Telemetry & Status */}

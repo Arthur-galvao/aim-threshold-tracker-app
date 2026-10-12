@@ -1,5 +1,6 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useI18n } from "@/lib/i18n";
+import { useSensRandomizer } from "@/hooks/useSensRandomizer";
 import {
   predictOptimalSensitivity,
   PREDICTOR_PROFILES,
@@ -12,51 +13,61 @@ import {
 interface SensRandomizerAnalyticsProps {
   analysis: SweetSpotAnalysis | null;
   relevantSessions: RunDataPoint[];
+  groupRuns?: RunDataPoint[];
   scopeAllTasks: boolean;
   onApplySens: (sensCm: number) => Promise<void>;
 }
 
+const VALID_PROFILES: PredictorProfile[] = [
+  "equilibrado",
+  "neutro",
+  "teorico",
+  "consistencia",
+];
+
 export function SensRandomizerAnalytics({
   analysis,
   relevantSessions,
+  groupRuns,
   scopeAllTasks,
   onApplySens,
 }: SensRandomizerAnalyticsProps) {
   const { t } = useI18n();
+  const { settings, saveSettings } = useSensRandomizer();
 
   const recentRuns = useMemo(() => {
     return [...relevantSessions].slice(-10).reverse();
   }, [relevantSessions]);
 
-  const [selectedProfile, setSelectedProfile] = useState<PredictorProfile>(() => {
-    if (typeof localStorage !== "undefined") {
-      const saved = localStorage.getItem("att-predictor-profile");
-      if (
-        saved &&
-        (saved === "equilibrado" ||
-          saved === "neutro" ||
-          saved === "teorico" ||
-          saved === "consistencia")
-      ) {
-        return saved as PredictorProfile;
+  const selectedProfile: PredictorProfile =
+    settings.predictorProfile &&
+    VALID_PROFILES.includes(settings.predictorProfile as PredictorProfile)
+      ? (settings.predictorProfile as PredictorProfile)
+      : "equilibrado";
+
+  const migrationRanRef = useRef(false);
+  useEffect(() => {
+    if (migrationRanRef.current || typeof localStorage === "undefined") return;
+    migrationRanRef.current = true;
+    const saved = localStorage.getItem("att-predictor-profile");
+    if (!saved) return;
+    if (VALID_PROFILES.includes(saved as PredictorProfile)) {
+      if (!settings.predictorProfile || settings.predictorProfile === "equilibrado") {
+        void saveSettings({ ...settings, predictorProfile: saved }, true);
       }
     }
-    return "equilibrado";
-  });
+    localStorage.removeItem("att-predictor-profile");
+  }, [settings, saveSettings]);
 
   const handleSelectProfile = (profile: PredictorProfile) => {
-    setSelectedProfile(profile);
-    if (typeof localStorage !== "undefined") {
-      localStorage.setItem("att-predictor-profile", profile);
-    }
+    void saveSettings({ ...settings, predictorProfile: profile }, true);
   };
 
   const prediction = useMemo(() => {
     return predictOptimalSensitivity(relevantSessions, selectedProfile, {
-      minEligibleRuns: 1,
-      shrinkageK: 1,
+      groupRuns,
     });
-  }, [relevantSessions, selectedProfile]);
+  }, [relevantSessions, selectedProfile, groupRuns]);
 
   const bestBucket = analysis?.bestBucket ?? null;
 
@@ -133,7 +144,7 @@ export function SensRandomizerAnalytics({
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mt-5">
             <div className="p-4 rounded-xl bg-surface-subtle border border-edge">
               <span className="text-[11px] font-semibold uppercase tracking-wider text-text-faint block">
-                {t("randomizer.optimalRange")}
+                {t("randomizer.optimalSens")}
               </span>
               <span className="text-2xl font-mono font-bold text-text-main mt-1 block">
                 {bestBucket.label}
@@ -293,6 +304,63 @@ export function SensRandomizerAnalytics({
             </div>
           </div>
 
+          {/* Confidence & CI Bar */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 rounded-xl bg-surface-subtle border border-edge text-xs">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-[11px] font-semibold text-text-faint uppercase tracking-wider">
+                {t("randomizer.colConfidence")}:
+              </span>
+              {prediction.confidence === "high" && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                  {t("randomizer.confidenceHigh")}
+                </span>
+              )}
+              {prediction.confidence === "medium" && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                  <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />
+                  {t("randomizer.confidenceMedium")}
+                </span>
+              )}
+              {prediction.confidence === "low" && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                  {t("randomizer.confidenceLow")}
+                </span>
+              )}
+              {prediction.confidence === "insufficient" && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-surface-subtle text-text-faint border border-edge">
+                  <span className="w-1.5 h-1.5 rounded-full bg-text-faint" />
+                  {t("randomizer.confInsufficient")}
+                </span>
+              )}
+            </div>
+
+            {prediction.ci && prediction.ci.low != null && prediction.ci.high != null && (
+              <div className="text-[11px] font-mono text-purple-400">
+                <span className="text-text-faint font-sans mr-1">{t("randomizer.confidenceInterval")}:</span>
+                <strong>{prediction.ci.low.toFixed(1)}</strong> {t("randomizer.rangeTo")} <strong>{prediction.ci.high.toFixed(1)}</strong> cm
+              </div>
+            )}
+          </div>
+
+          {/* Uncertainty Reasons (when low or insufficient) */}
+          {(prediction.confidence === "low" || prediction.confidence === "insufficient") &&
+            prediction.reasons &&
+            prediction.reasons.length > 0 && (
+              <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-300 space-y-1">
+                <div className="font-semibold text-[11px] flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                  <span>{t("randomizer.reasonsTitle")}</span>
+                </div>
+                <ul className="list-disc list-inside space-y-0.5 text-[11px] text-amber-200/90 pl-1">
+                  {prediction.reasons.map((rKey, idx) => (
+                    <li key={idx}>{t(rKey as any)}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
           {/* Test Disclaimer Notice */}
           <div className="p-3 rounded-xl bg-surface-subtle/80 border border-edge text-[11px] text-text-faint leading-relaxed flex items-start gap-2">
             <svg
@@ -338,7 +406,7 @@ export function SensRandomizerAnalytics({
             <table className="w-full text-left text-xs min-w-[660px]">
               <thead>
                 <tr className="border-b border-edge text-[11px] font-bold uppercase tracking-wider text-text-faint">
-                  <th className="pb-3 pl-3">{t("randomizer.colRange")}</th>
+                  <th className="pb-3 pl-3">{t("randomizer.colSens")}</th>
                   <th className="pb-3 px-3">{t("randomizer.colRuns")}</th>
                   <th className="pb-3 px-3">{t("randomizer.colBayesScore")}</th>
                   <th className="pb-3 px-3">{t("randomizer.colRawAvg")}</th>
@@ -392,7 +460,7 @@ export function SensRandomizerAnalytics({
                           onClick={() => onApplySens(b.sens)}
                           className="text-[11px] font-semibold text-text-secondary hover:text-text-main hover:underline"
                         >
-                          {t("randomizer.useMidpoint")}
+                          {t("randomizer.applySens")}
                         </button>
                       </td>
                     </tr>

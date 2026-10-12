@@ -1,9 +1,8 @@
-import { useCallback, useEffect, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { useApp } from "@/hooks/useAppData";
 import { useI18n } from "@/lib/i18n";
-import { calculateSensRange } from "@/lib/sens-analytics";
 
 export interface RandomizerSettings {
   enabled: boolean;
@@ -19,6 +18,8 @@ export interface RandomizerSettings {
   autoScenarioSens: boolean;
   scenarioIdealCm?: number;
   mouseDpi: number;
+  centerOverrides?: Record<string, number>;
+  predictorProfile?: string;
 }
 
 export interface RandomizerState {
@@ -30,6 +31,7 @@ export interface RandomizerState {
   lastUpdated: string | null;
   errorMessage: string | null;
   rawaccelGuiRunning?: boolean;
+  lastRollReason?: string | null;
 }
 
 const DEFAULT_SETTINGS: RandomizerSettings = {
@@ -46,6 +48,7 @@ const DEFAULT_SETTINGS: RandomizerSettings = {
   autoScenarioSens: true,
   scenarioIdealCm: undefined,
   mouseDpi: 800,
+  predictorProfile: "equilibrado",
 };
 
 const DEFAULT_STATE: RandomizerState = {
@@ -57,9 +60,27 @@ const DEFAULT_STATE: RandomizerState = {
   lastUpdated: null,
   errorMessage: null,
   rawaccelGuiRunning: false,
+  lastRollReason: null,
 };
 
-export function useSensRandomizer() {
+export interface RandomizerContextValue {
+  settings: RandomizerSettings;
+  randomizerState: RandomizerState;
+  rawaccelAvailable: boolean;
+  loading: boolean;
+  testing: boolean;
+  saveSettings: (newSettings: RandomizerSettings, silent?: boolean) => Promise<void>;
+  toggleEnabled: () => Promise<void>;
+  triggerRandomize: () => Promise<void>;
+  syncScenarioSens: (targetSens: number, reRollNow?: boolean, idealSource?: "empirical" | "viscose") => Promise<void>;
+  detectPath: () => Promise<string | null>;
+  testWriter: (customPath?: string) => Promise<string>;
+  refreshState: () => Promise<void>;
+}
+
+const RandomizerContext = createContext<RandomizerContextValue | null>(null);
+
+export function RandomizerProvider({ children }: { children: React.ReactNode }) {
   const [settings, setSettings] = useState<RandomizerSettings>(DEFAULT_SETTINGS);
   const [randomizerState, setRandomizerState] = useState<RandomizerState>(DEFAULT_STATE);
   const [loading, setLoading] = useState(true);
@@ -67,6 +88,13 @@ export function useSensRandomizer() {
 
   const { showToast } = useApp();
   const { t } = useI18n();
+
+  const showToastRef = useRef(showToast);
+  showToastRef.current = showToast;
+  const tRef = useRef(t);
+  tRef.current = t;
+
+  const lastErrorToastRef = useRef<{ msg: string; time: number }>({ msg: "", time: 0 });
 
   const refreshState = useCallback(async () => {
     try {
@@ -84,39 +112,67 @@ export function useSensRandomizer() {
   }, []);
 
   useEffect(() => {
-    refreshState();
+    void refreshState();
 
-    let unlistenSens: (() => void) | undefined;
-    let unlistenSettings: (() => void) | undefined;
+    let cancelled = false;
+    const unlistens: Array<() => void> = [];
 
-    listen<RandomizerState>("sens_updated", (event) => {
-      setRandomizerState(event.payload);
-      if (event.payload.activeMult === 1.0 && event.payload.lastRunScenario === null) {
-        showToast(t("toast.sensRestored"), "info");
+    const sub = async <T,>(name: string, cb: (p: T) => void) => {
+      const un = await listen<T>(name, (e) => cb(e.payload));
+      if (cancelled) {
+        un();
       } else {
-        showToast(
-          t("toast.sensUpdated", {
-            sens: event.payload.activeSensCm.toFixed(2),
-            mult: event.payload.activeMult.toFixed(2),
+        unlistens.push(un);
+      }
+    };
+
+    void sub<RandomizerState>("sens_updated", (payload) => {
+      setRandomizerState(payload);
+      if (!payload.available) return;
+
+      if (payload.lastRollReason === "restore") {
+        showToastRef.current(tRef.current("toast.sensRestored"), "info");
+      } else if (
+        payload.lastRollReason === "manual" ||
+        payload.lastRollReason === "toggle" ||
+        payload.lastRollReason === "reroll"
+      ) {
+        showToastRef.current(
+          tRef.current("toast.sensUpdated", {
+            sens: payload.activeSensCm.toFixed(2),
+            mult: payload.activeMult.toFixed(2),
           }),
           "info"
         );
       }
-    }).then((fn) => {
-      unlistenSens = fn;
     });
 
-    listen<RandomizerSettings>("randomizer_settings_updated", (event) => {
-      setSettings(event.payload);
-    }).then((fn) => {
-      unlistenSettings = fn;
+    void sub<RandomizerState>("randomizer_state_patched", (payload) => {
+      setRandomizerState(payload);
+    });
+
+    void sub<{ message: string }>("randomizer_error", (payload) => {
+      const now = Date.now();
+      if (lastErrorToastRef.current.msg === payload.message && now - lastErrorToastRef.current.time < 10000) {
+        return;
+      }
+      lastErrorToastRef.current = { msg: payload.message, time: now };
+      showToastRef.current(tRef.current("toast.randomizerError", { error: payload.message }), "error");
+    });
+
+    void sub<RandomizerSettings>("randomizer_settings_updated", (payload) => {
+      setSettings(payload);
+    });
+
+    void sub<{ file: string; error: string }>("run_import_failed", (payload) => {
+      showToastRef.current(tRef.current("toast.runImportFailed", { file: payload.file }), "error");
     });
 
     return () => {
-      if (unlistenSens) unlistenSens();
-      if (unlistenSettings) unlistenSettings();
+      cancelled = true;
+      unlistens.forEach((u) => u());
     };
-  }, [refreshState, showToast, t]);
+  }, [refreshState]);
 
   const saveSettings = useCallback(
     async (newSettings: RandomizerSettings, silent = false) => {
@@ -125,13 +181,13 @@ export function useSensRandomizer() {
         setSettings(newSettings);
         setRandomizerState(updatedState);
         if (!silent) {
-          showToast(t("randomizer.saveSettings"), "success");
+          showToastRef.current(tRef.current("randomizer.saveSettings"), "success");
         }
       } catch (err) {
-        showToast(String(err), "error");
+        showToastRef.current(String(err), "error");
       }
     },
-    [showToast, t]
+    []
   );
 
   const toggleEnabled = useCallback(async () => {
@@ -143,43 +199,37 @@ export function useSensRandomizer() {
     try {
       const newState = await invoke<RandomizerState>("trigger_randomize_now");
       setRandomizerState(newState);
-      showToast(
-        t("toast.sensUpdated", {
+      showToastRef.current(
+        tRef.current("toast.sensUpdated", {
           sens: newState.activeSensCm.toFixed(2),
           mult: newState.activeMult.toFixed(2),
         }),
         "success"
       );
     } catch (err) {
-      showToast(String(err), "error");
+      showToastRef.current(String(err), "error");
     }
-  }, [showToast, t]);
+  }, []);
 
   const syncScenarioSens = useCallback(
     async (targetSens: number, reRollNow = false, idealSource?: "empirical" | "viscose") => {
       const rounded = Number(targetSens.toFixed(1));
       if (settings.scenarioIdealCm === rounded && !reRollNow) return;
 
-      const baseSens = settings.baseSensCm > 0 ? settings.baseSensCm : 50;
-      const range = calculateSensRange(rounded, settings.spreadPercent, baseSens);
       const nextSettings: RandomizerSettings = {
         ...settings,
         scenarioIdealCm: rounded,
-        minCm: range.minCm,
-        maxCm: range.maxCm,
-        minMult: range.minMult,
-        maxMult: range.maxMult,
       };
       await saveSettings(nextSettings, true);
       const sourceLabel = idealSource === "empirical"
-        ? t("randomizer.idealSensSourceEmpirical")
-        : t("randomizer.idealSensSourceViscose");
-      showToast(`${t("randomizer.idealSensToast")}: ${rounded} cm (${sourceLabel})`, "info");
+        ? tRef.current("randomizer.idealSensSourceEmpirical")
+        : tRef.current("randomizer.idealSensSourceViscose");
+      showToastRef.current(`${tRef.current("randomizer.idealSensToast")}: ${rounded} cm (${sourceLabel})`, "info");
       if (reRollNow && settings.enabled && randomizerState.available) {
         await triggerRandomize();
       }
     },
-    [settings, saveSettings, triggerRandomize, randomizerState.available, showToast, t]
+    [settings, saveSettings, triggerRandomize, randomizerState.available]
   );
 
   const detectPath = useCallback(async (): Promise<string | null> => {
@@ -188,17 +238,17 @@ export function useSensRandomizer() {
       if (path) {
         const next = { ...settings, rawaccelDir: path };
         await saveSettings(next);
-        showToast(t("toast.pathDetected", { path }), "success");
+        showToastRef.current(tRef.current("toast.pathDetected", { path }), "success");
         return path;
       } else {
-        showToast(t("randomizer.notReady"), "error");
+        showToastRef.current(tRef.current("randomizer.notReady"), "error");
         return null;
       }
     } catch (err) {
-      showToast(String(err), "error");
+      showToastRef.current(String(err), "error");
       return null;
     }
-  }, [settings, saveSettings, showToast, t]);
+  }, [settings, saveSettings]);
 
   const testWriter = useCallback(
     async (customPath?: string) => {
@@ -207,21 +257,21 @@ export function useSensRandomizer() {
         const res = await invoke<string>("test_rawaccel_writer", {
           path: customPath || settings.rawaccelDir || null,
         });
-        showToast(t("toast.rawaccelTested"), "success");
+        showToastRef.current(tRef.current("toast.rawaccelTested"), "success");
         const updatedState = await invoke<RandomizerState>("check_rawaccel_available");
         setRandomizerState(updatedState);
         return res;
       } catch (err) {
-        showToast(t("toast.rawaccelFailed", { error: String(err) }), "error");
+        showToastRef.current(tRef.current("toast.rawaccelFailed", { error: String(err) }), "error");
         throw err;
       } finally {
         setTesting(false);
       }
     },
-    [settings.rawaccelDir, showToast, t]
+    [settings.rawaccelDir]
   );
 
-  return {
+  const value = useMemo<RandomizerContextValue>(() => ({
     settings,
     randomizerState,
     rawaccelAvailable: randomizerState.available,
@@ -234,5 +284,27 @@ export function useSensRandomizer() {
     detectPath,
     testWriter,
     refreshState,
-  };
+  }), [
+    settings,
+    randomizerState,
+    loading,
+    testing,
+    saveSettings,
+    toggleEnabled,
+    triggerRandomize,
+    syncScenarioSens,
+    detectPath,
+    testWriter,
+    refreshState,
+  ]);
+
+  return React.createElement(RandomizerContext.Provider, { value }, children);
+}
+
+export function useSensRandomizer(): RandomizerContextValue {
+  const ctx = useContext(RandomizerContext);
+  if (!ctx) {
+    throw new Error("useSensRandomizer must be used within a RandomizerProvider");
+  }
+  return ctx;
 }

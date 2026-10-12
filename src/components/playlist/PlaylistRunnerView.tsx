@@ -14,6 +14,7 @@ interface PlaylistRunnerViewProps {
   runner: PlaylistRunnerState;
   playlists: Playlist[];
   tasks: Task[];
+  mouseDpi?: number;
   onOpenManager: () => void;
   onSyncGames?: () => Promise<void>;
   onApplySens?: (sensCm: number) => Promise<void>;
@@ -29,11 +30,13 @@ export function PlaylistRunnerView({
   runner,
   playlists,
   tasks,
+  mouseDpi,
   onOpenManager,
   onSyncGames,
   onApplySens,
 }: PlaylistRunnerViewProps) {
   const { t } = useI18n();
+  const dpi = mouseDpi || 800;
   const [isSyncing, setIsSyncing] = useState(false);
 
   const taskMap = useMemo(() => new Map(tasks.map((t) => [t.id, t])), [tasks]);
@@ -41,18 +44,18 @@ export function PlaylistRunnerView({
   const playlistStatsMap = useMemo(() => {
     const map = new Map<string, PlaylistSensStats>();
     for (const pl of playlists) {
-      map.set(pl.id, computePlaylistSensStats(pl, tasks));
+      map.set(pl.id, computePlaylistSensStats(pl, tasks, "equilibrado", dpi));
     }
     return map;
-  }, [playlists, tasks]);
+  }, [playlists, tasks, dpi]);
 
   const activePlaylistStats = useMemo(() => {
     if (!runner.activePlaylist) return null;
     return (
       playlistStatsMap.get(runner.activePlaylist.id) ??
-      computePlaylistSensStats(runner.activePlaylist, tasks)
+      computePlaylistSensStats(runner.activePlaylist, tasks, "equilibrado", dpi)
     );
-  }, [runner.activePlaylist, playlistStatsMap, tasks]);
+  }, [runner.activePlaylist, playlistStatsMap, tasks, dpi]);
 
   const handleSync = async () => {
     if (!onSyncGames || isSyncing) return;
@@ -69,7 +72,7 @@ export function PlaylistRunnerView({
   const isLastStep = activePlaylist
     ? currentStepIndex === activePlaylist.items.length - 1
     : false;
-  const idealSens = currentTask ? getScenarioIdealSens(currentTask, tasks) : null;
+  const idealSens = currentTask ? getScenarioIdealSens(currentTask, tasks, dpi) : null;
   const recSens = idealSens ? idealSens.value : (currentTask ? getRecommendedSens(currentTask.category, currentTask.subcategory) : null);
   const isPlaylistPredicted = activePlaylistStats?.displaySens.source === "predicted";
 
@@ -197,7 +200,7 @@ export function PlaylistRunnerView({
                           {t("playlist.recommendedSens")}:
                         </span>
                         <span className="font-mono font-bold text-[11px] text-text-main">
-                          {formatSensitivity(stats.displaySens.value)}
+                          {formatSensitivity(stats.displaySens.value, dpi)}
                         </span>
                         {isPredicted ? (
                           <span className="text-[9px] px-1 rounded-sm font-semibold bg-emerald/10 text-emerald border border-emerald/20">
@@ -445,7 +448,7 @@ export function PlaylistRunnerView({
                     <div className="inline-flex items-center gap-1.5 pl-1.5 border-l border-edge">
                       <span className="text-text-secondary">{t("runner.playlistSens")}:</span>
                       <span className="px-1.5 rounded-sm bg-purple-500/10 text-purple-300 border border-purple-500/20 font-bold">
-                        {formatSensitivity(activePlaylistStats.displaySens.value)}
+                        {formatSensitivity(activePlaylistStats.displaySens.value, dpi)}
                       </span>
                       {isPlaylistPredicted ? (
                         <span className="text-[9px] px-1 rounded-sm font-semibold bg-emerald/10 text-emerald border border-emerald/20">

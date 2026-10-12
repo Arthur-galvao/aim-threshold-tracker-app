@@ -10,6 +10,7 @@ use serde_json::Value;
 use tauri::{AppHandle, Emitter, Manager, State};
 
 use crate::model::{RandomizerSettings, RandomizerState};
+use crate::sampler::{draw_index, grid_bounds, lattice_cm, SamplerState, MIN_CM};
 use crate::AppState;
 
 pub fn get_candidate_paths(configured_dir: Option<&str>) -> Vec<PathBuf> {
@@ -102,9 +103,6 @@ pub fn is_rawaccel_gui_running() -> bool {
     false
 }
 
-pub fn restore_base_sens(rawaccel_dir: &Path, mouse_dpi: f64) -> Result<(), String> {
-    update_and_apply_scale(rawaccel_dir, 1.0, mouse_dpi)
-}
 
 pub fn check_rawaccel_availability(configured_dir: Option<&str>) -> (bool, Option<PathBuf>, Option<String>, bool) {
     let found_dir = detect_rawaccel_dir(configured_dir);
@@ -140,107 +138,230 @@ pub fn check_rawaccel_availability(configured_dir: Option<&str>) -> (bool, Optio
     }
 }
 
-pub fn generate_next_sens(settings: &RandomizerSettings, current_sens: f64) -> (f64, f64) {
-    let mut rng = rand::thread_rng();
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RangePreview {
+    pub min_cm: f64,
+    pub max_cm: f64,
+    pub min_mult: f64,
+    pub max_mult: f64,
+    pub grid_cm: Vec<f64>,
+}
+
+pub fn resolve_range_cm(s: &RandomizerSettings, center_override: Option<f64>) -> (f64, f64) {
+    let base = if s.base_sens_cm > 0.0 { s.base_sens_cm } else { 40.0 };
+    if s.auto_scenario_sens {
+        let center = center_override.or(s.scenario_ideal_cm).unwrap_or(base).max(MIN_CM);
+        let p = (s.spread_percent / 100.0).clamp(0.01, 0.90);
+        ((center / (1.0 + p)).max(MIN_CM), center * (1.0 + p))
+    } else if s.range_mode.eq_ignore_ascii_case("multiplier") {
+        let (a, b) = (s.min_mult.min(s.max_mult).max(0.01), s.min_mult.max(s.max_mult).max(0.01));
+        ((base / b).max(MIN_CM), base / a)
+    } else {
+        (s.min_cm.min(s.max_cm).max(MIN_CM), s.min_cm.max(s.max_cm).max(MIN_CM))
+    }
+}
+
+pub fn preview_sens_range_calc(s: &RandomizerSettings, center_cm: Option<f64>) -> RangePreview {
+    let base = if s.base_sens_cm > 0.0 { s.base_sens_cm } else { 40.0 };
+    let (min_cm, max_cm) = resolve_range_cm(s, center_cm);
+    let (lo, hi) = grid_bounds(min_cm, max_cm);
+    let grid_cm: Vec<f64> = (lo..=hi).map(lattice_cm).collect();
+    let min_mult = ((base / max_cm) * 10000.0).round() / 10000.0;
+    let max_mult = ((base / min_cm) * 10000.0).round() / 10000.0;
+    RangePreview {
+        min_cm: (min_cm * 100.0).round() / 100.0,
+        max_cm: (max_cm * 100.0).round() / 100.0,
+        min_mult,
+        max_mult,
+        grid_cm,
+    }
+}
+
+pub fn generate_next_sens<R: Rng>(
+    settings: &RandomizerSettings,
+    center_override: Option<f64>,
+    st: &mut SamplerState,
+    rng: &mut R,
+) -> (f64, f64) {
     let base_cm = if settings.base_sens_cm > 0.0 {
         settings.base_sens_cm
     } else {
         40.0
     };
-
-    let is_cm_mode = settings.range_mode.eq_ignore_ascii_case("cm360");
-
-    let (min_cm, max_cm, min_mult, max_mult) = if settings.auto_scenario_sens && settings.spread_percent > 0.0 {
-        let center_cm = settings.scenario_ideal_cm.unwrap_or(base_cm).max(5.0);
-        let pct = (settings.spread_percent / 100.0).clamp(0.01, 0.90);
-        let c_min = (center_cm * (1.0 - pct)).max(5.0);
-        let c_max = (center_cm * (1.0 + pct)).max(5.0);
-        let m_min = (base_cm / c_max).max(0.01);
-        let m_max = (base_cm / c_min).max(0.01);
-        (c_min, c_max, m_min, m_max)
-    } else {
-        (
-            settings.min_cm.min(settings.max_cm).max(5.0),
-            settings.min_cm.max(settings.max_cm).max(5.0),
-            settings.min_mult.min(settings.max_mult).max(0.01),
-            settings.min_mult.max(settings.max_mult).max(0.01),
-        )
-    };
-
-    let mut target_cm = current_sens;
-    let mut target_mult = 1.0;
-
-    for _ in 0..15 {
-        if is_cm_mode {
-            target_cm = rng.gen_range(min_cm..=max_cm);
-            target_mult = base_cm / target_cm;
+    let (min_cm, max_cm) = resolve_range_cm(settings, center_override);
+    let (lo, hi) = grid_bounds(min_cm, max_cm);
+    let min_gap = if settings.avoid_repeats {
+        if hi - lo + 1 >= 6 {
+            2
         } else {
-            target_mult = rng.gen_range(min_mult..=max_mult);
-            target_cm = base_cm / target_mult;
+            1
         }
+    } else {
+        0
+    };
+    let k = draw_index(st, lo, hi, min_gap, rng);
+    let cm = lattice_cm(k);
+    let mult = ((base_cm / cm) * 10000.0).round() / 10000.0;
+    (cm, mult)
+}
 
-        if !settings.avoid_repeats || current_sens <= 0.0 {
-            break;
-        }
+use crate::storage::{self, RawAccelBackup};
 
-        let delta_ratio = ((target_cm - current_sens).abs()) / current_sens;
-        if delta_ratio >= 0.05 {
-            break;
+pub fn atomic_write(path: &Path, content: &str) -> Result<(), String> {
+    let tmp_path = path.with_extension("tmp");
+    fs::write(&tmp_path, content)
+        .map_err(|e| format!("Falha ao escrever arquivo temporário: {e}"))?;
+    fs::rename(&tmp_path, path)
+        .map_err(|e| format!("Falha ao substituir arquivo final: {e}"))?;
+    Ok(())
+}
+
+pub type RawaccelLiveValues = (Option<f64>, Option<f64>, Option<f64>);
+
+pub fn parse_rawaccel_live_values(json_content: &str) -> Result<RawaccelLiveValues, String> {
+    let json: Value = serde_json::from_str(json_content)
+        .map_err(|e| format!("JSON do RawAccel inválido: {e}"))?;
+    let first_profile = json
+        .get("profiles")
+        .and_then(|p| p.as_array())
+        .and_then(|arr| arr.first())
+        .ok_or_else(|| "Nenhum profile encontrado no settings.json do RawAccel".to_string())?;
+
+    let out_dpi = first_profile.get("Output DPI").and_then(|v| v.as_f64());
+    let scale_whole = first_profile
+        .get("Whole or horizontal accel parameters")
+        .and_then(|w| w.get("scale"))
+        .and_then(|v| v.as_f64());
+    let scale_vert = first_profile
+        .get("Vertical accel parameters")
+        .and_then(|v| v.get("scale"))
+        .and_then(|v| v.as_f64());
+
+    Ok((out_dpi, scale_whole, scale_vert))
+}
+
+pub fn apply_scale_to_rawaccel_json(json_content: &str, scale: f64) -> Result<String, String> {
+    let mut json: Value = serde_json::from_str(json_content)
+        .map_err(|e| format!("JSON do RawAccel inválido: {e}"))?;
+
+    let profiles = json
+        .get_mut("profiles")
+        .and_then(|p| p.as_array_mut())
+        .ok_or_else(|| "Campo 'profiles' inválido no settings.json".to_string())?;
+
+    let first_profile = profiles
+        .get_mut(0)
+        .ok_or_else(|| "Nenhum profile no settings.json".to_string())?;
+
+    if let Some(whole_params) = first_profile
+        .get_mut("Whole or horizontal accel parameters")
+        .and_then(|w| w.as_object_mut())
+    {
+        whole_params.insert("scale".to_string(), serde_json::json!(scale));
+    }
+    if let Some(vert_params) = first_profile
+        .get_mut("Vertical accel parameters")
+        .and_then(|v| v.as_object_mut())
+    {
+        vert_params.insert("scale".to_string(), serde_json::json!(scale));
+    }
+
+    serde_json::to_string_pretty(&json)
+        .map_err(|e| format!("Falha ao serializar settings.json: {e}"))
+}
+
+pub fn restore_rawaccel_json_from_backup(json_content: &str, backup: &RawAccelBackup) -> Result<String, String> {
+    let mut json: Value = serde_json::from_str(json_content)
+        .map_err(|e| format!("JSON do RawAccel inválido: {e}"))?;
+
+    let profiles = json
+        .get_mut("profiles")
+        .and_then(|p| p.as_array_mut())
+        .ok_or_else(|| "Campo 'profiles' inválido no settings.json".to_string())?;
+
+    let first_profile = profiles
+        .get_mut(0)
+        .ok_or_else(|| "Nenhum profile no settings.json".to_string())?;
+
+    if let Some(out_dpi) = backup.output_dpi {
+        if let Some(obj) = first_profile.as_object_mut() {
+            obj.insert("Output DPI".to_string(), serde_json::json!(out_dpi));
         }
     }
 
-    let rounded_cm = (target_cm * 100.0).round() / 100.0;
-    let rounded_mult = (target_mult * 10000.0).round() / 10000.0;
+    if let Some(scale_whole) = backup.scale_whole {
+        if let Some(whole_params) = first_profile
+            .get_mut("Whole or horizontal accel parameters")
+            .and_then(|w| w.as_object_mut())
+        {
+            whole_params.insert("scale".to_string(), serde_json::json!(scale_whole));
+        }
+    }
 
-    (rounded_cm, rounded_mult)
+    if let Some(scale_vert) = backup.scale_vert {
+        if let Some(vert_params) = first_profile
+            .get_mut("Vertical accel parameters")
+            .and_then(|v| v.as_object_mut())
+        {
+            vert_params.insert("scale".to_string(), serde_json::json!(scale_vert));
+        }
+    }
+
+    serde_json::to_string_pretty(&json)
+        .map_err(|e| format!("Falha ao serializar settings.json: {e}"))
 }
 
-pub fn update_and_apply_scale(rawaccel_dir: &Path, scale: f64, mouse_dpi: f64) -> Result<(), String> {
+pub fn ensure_rawaccel_backup(app: &AppHandle, rawaccel_dir: &Path) -> Result<RawAccelBackup, String> {
     let settings_path = rawaccel_dir.join("settings.json");
-    let writer_path = rawaccel_dir.join("writer.exe");
-
     if !settings_path.exists() {
         return Err(format!("settings.json não encontrado em {}", rawaccel_dir.display()));
     }
-    if !writer_path.exists() {
-        return Err(format!("writer.exe não encontrado em {}", rawaccel_dir.display()));
-    }
-
     let content = fs::read_to_string(&settings_path)
         .map_err(|e| format!("Falha ao ler settings.json: {e}"))?;
 
-    let mut json: Value = serde_json::from_str(&content)
-        .map_err(|e| format!("Formato de JSON inválido no settings.json: {e}"))?;
+    let (live_out_dpi, live_scale_whole, live_scale_vert) = parse_rawaccel_live_values(&content)?;
+    let now_iso = chrono::Local::now().to_rfc3339();
 
-    let effective_dpi = if mouse_dpi > 0.0 { mouse_dpi } else { 800.0 };
-
-    if let Some(profiles) = json.get_mut("profiles").and_then(|p| p.as_array_mut()) {
-        if let Some(first_profile) = profiles.get_mut(0) {
-            let output_dpi = (scale * effective_dpi * 100.0).round() / 100.0;
-            if let Some(obj) = first_profile.as_object_mut() {
-                obj.insert("Output DPI".to_string(), serde_json::json!(output_dpi));
+    let backup_opt = storage::load_rawaccel_backup(app);
+    match backup_opt {
+        None => {
+            let att_backup_path = rawaccel_dir.join("settings.json.att-backup");
+            if !att_backup_path.exists() {
+                let _ = fs::copy(&settings_path, &att_backup_path);
             }
-
-            if let Some(whole_params) = first_profile
-                .get_mut("Whole or horizontal accel parameters")
-                .and_then(|w| w.as_object_mut())
-            {
-                whole_params.insert("scale".to_string(), serde_json::json!(scale));
+            let backup = RawAccelBackup {
+                output_dpi: live_out_dpi,
+                scale_whole: live_scale_whole,
+                scale_vert: live_scale_vert,
+                last_written_output_dpi: live_out_dpi,
+                last_written_scale: live_scale_whole,
+                saved_at: now_iso,
+            };
+            storage::save_rawaccel_backup(app, &backup)?;
+            Ok(backup)
+        }
+        Some(mut existing) => {
+            let edited_externally = live_scale_whole.is_some()
+                && live_scale_whole != existing.last_written_scale
+                && live_scale_whole != existing.scale_whole;
+            if edited_externally {
+                existing.output_dpi = live_out_dpi;
+                existing.scale_whole = live_scale_whole;
+                existing.scale_vert = live_scale_vert;
+                existing.saved_at = now_iso;
+                storage::save_rawaccel_backup(app, &existing)?;
             }
-            if let Some(vert_params) = first_profile
-                .get_mut("Vertical accel parameters")
-                .and_then(|v| v.as_object_mut())
-            {
-                vert_params.insert("scale".to_string(), serde_json::json!(scale));
-            }
+            Ok(existing)
         }
     }
+}
 
-    let updated_content = serde_json::to_string_pretty(&json)
-        .map_err(|e| format!("Falha ao serializar settings.json: {e}"))?;
-
-    fs::write(&settings_path, updated_content)
-        .map_err(|e| format!("Falha ao escrever settings.json: {e}"))?;
+pub fn run_writer(rawaccel_dir: &Path) -> Result<(), String> {
+    let writer_path = rawaccel_dir.join("writer.exe");
+    if !writer_path.exists() {
+        return Err(format!("writer.exe não encontrado em {}", rawaccel_dir.display()));
+    }
 
     #[cfg(windows)]
     let mut cmd = Command::new(&writer_path);
@@ -267,18 +388,84 @@ pub fn update_and_apply_scale(rawaccel_dir: &Path, scale: f64, mouse_dpi: f64) -
     Ok(())
 }
 
+pub fn update_and_apply_scale(rawaccel_dir: &Path, scale: f64, _mouse_dpi: f64) -> Result<(), String> {
+    let settings_path = rawaccel_dir.join("settings.json");
+    if !settings_path.exists() {
+        return Err(format!("settings.json não encontrado em {}", rawaccel_dir.display()));
+    }
+
+    let content = fs::read_to_string(&settings_path)
+        .map_err(|e| format!("Falha ao ler settings.json: {e}"))?;
+
+    let updated_content = apply_scale_to_rawaccel_json(&content, scale)?;
+    atomic_write(&settings_path, &updated_content)?;
+    run_writer(rawaccel_dir)
+}
+
+pub fn restore_from_backup(app: &AppHandle, rawaccel_dir: &Path) -> Result<(), String> {
+    let settings_path = rawaccel_dir.join("settings.json");
+    if !settings_path.exists() {
+        return Err(format!("settings.json não encontrado em {}", rawaccel_dir.display()));
+    }
+
+    let content = fs::read_to_string(&settings_path)
+        .map_err(|e| format!("Falha ao ler settings.json: {e}"))?;
+
+    let updated_content = match storage::load_rawaccel_backup(app) {
+        Some(backup) => restore_rawaccel_json_from_backup(&content, &backup)?,
+        None => {
+            eprintln!("[RawAccel] Backup não encontrado; aplicando scale 1.0 como fallback");
+            apply_scale_to_rawaccel_json(&content, 1.0)?
+        }
+    };
+
+    atomic_write(&settings_path, &updated_content)?;
+    run_writer(rawaccel_dir)
+}
+
+pub fn restore_base_sens(app: &AppHandle, rawaccel_dir: &Path) -> Result<(), String> {
+    restore_from_backup(app, rawaccel_dir)
+}
+
+pub fn restore_on_exit(app: &AppHandle) {
+    let state: State<AppState> = app.state();
+    let (enabled, rawaccel_dir) = {
+        let s = state.settings.lock().unwrap();
+        (s.randomizer.enabled, s.randomizer.rawaccel_dir.clone())
+    };
+    if enabled {
+        if let Some(dir) = detect_rawaccel_dir(rawaccel_dir.as_deref()) {
+            let _ = restore_from_backup(app, &dir);
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct RollContext {
+    pub finished_scenario: Option<String>,
+    pub reason: String,
+}
+
+pub fn record_last_run(app: &AppHandle, scenario: &str, score: f64) {
+    let state: State<AppState> = app.state();
+    let updated = {
+        let mut r_state = state.randomizer_state.lock().unwrap();
+        r_state.last_run_scenario = Some(scenario.to_string());
+        r_state.last_run_score = Some(score);
+        r_state.clone()
+    };
+    let _ = app.emit("sens_updated", &updated);
+    let _ = app.emit("randomizer_state_patched", &updated);
+}
+
 pub fn apply_next_sens(
     app: &AppHandle,
-    last_scenario: Option<String>,
-    last_score: Option<f64>,
+    ctx: RollContext,
 ) -> Result<RandomizerState, String> {
     let state: State<AppState> = app.state();
+    let _roll_guard = state.roll_lock.lock().unwrap();
 
-    let (settings, current_cm) = {
-        let s = state.settings.lock().unwrap();
-        let current = state.randomizer_state.lock().unwrap().active_sens_cm;
-        (s.randomizer.clone(), current)
-    };
+    let settings = state.settings.lock().unwrap().randomizer.clone();
 
     let (available, found_dir, err_msg, gui_running) = check_rawaccel_availability(settings.rawaccel_dir.as_deref());
 
@@ -287,17 +474,39 @@ pub fn apply_next_sens(
         r_state.available = false;
         r_state.rawaccel_gui_running = gui_running;
         r_state.error_message = err_msg.clone();
-        let clone = r_state.clone();
         drop(r_state);
-        let _ = app.emit("sens_updated", &clone);
+        let _ = app.emit("randomizer_error", serde_json::json!({ "message": err_msg }));
         return Err(err_msg.unwrap_or_else(|| "RawAccel indisponível".into()));
     }
 
     let target_dir = found_dir.ok_or_else(|| "Diretório do RawAccel indefinido".to_string())?;
 
-    let (next_cm, next_mult) = generate_next_sens(&settings, current_cm);
+    let mut backup = ensure_rawaccel_backup(app, &target_dir)?;
+
+    let target_scenario = {
+        let upcoming = state.upcoming_scenario.lock().unwrap().clone();
+        upcoming.or_else(|| ctx.finished_scenario.clone())
+    };
+
+    let effective_center = target_scenario.as_ref().and_then(|scen| {
+        let norm = scen.trim().to_lowercase();
+        settings.center_overrides.get(&norm).copied()
+            .or_else(|| state.scenario_centers.lock().unwrap().get(&norm).copied())
+    }).or(settings.scenario_ideal_cm);
+
+    let (next_cm, next_mult) = {
+        let mut sampler = state.sampler.lock().unwrap();
+        let mut rng = rand::thread_rng();
+        let (cm, mult) = generate_next_sens(&settings, effective_center, &mut sampler, &mut rng);
+        let actual_center = effective_center.unwrap_or(if settings.base_sens_cm > 0.0 { settings.base_sens_cm } else { 40.0 });
+        sampler.last_roll_center_cm = Some(actual_center);
+        (cm, mult)
+    };
 
     update_and_apply_scale(&target_dir, next_mult, settings.mouse_dpi)?;
+
+    backup.last_written_scale = Some(next_mult);
+    let _ = storage::save_rawaccel_backup(app, &backup);
 
     let now_iso = chrono::Local::now().to_rfc3339();
 
@@ -307,8 +516,8 @@ pub fn apply_next_sens(
         r_state.rawaccel_gui_running = gui_running;
         r_state.active_sens_cm = next_cm;
         r_state.active_mult = next_mult;
-        r_state.last_run_scenario = last_scenario;
-        r_state.last_run_score = last_score;
+        r_state.last_run_scenario = ctx.finished_scenario.or(r_state.last_run_scenario.clone());
+        r_state.last_roll_reason = Some(ctx.reason);
         r_state.last_updated = Some(now_iso);
         r_state.error_message = err_msg;
         r_state.clone()
@@ -323,142 +532,118 @@ pub fn apply_next_sens(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rand::rngs::StdRng;
+    use rand::SeedableRng;
 
     #[test]
-    fn test_generate_next_sens_cm_mode() {
+    fn test_resolve_range_cm_auto_spread() {
         let settings = RandomizerSettings {
-            enabled: true,
-            base_sens_cm: 50.0,
+            base_sens_cm: 40.0,
+            spread_percent: 25.0,
+            auto_scenario_sens: true,
+            scenario_ideal_cm: Some(40.0),
+            ..RandomizerSettings::default()
+        };
+
+        let (min_cm, max_cm) = resolve_range_cm(&settings, None);
+        assert!((min_cm - 32.0).abs() < 1e-4, "min_cm was {}, expected 32.0", min_cm);
+        assert!((max_cm - 50.0).abs() < 1e-4, "max_cm was {}, expected 50.0", max_cm);
+
+        // Override tem precedência
+        let (min_ov, max_ov) = resolve_range_cm(&settings, Some(50.0));
+        assert!((min_ov - 40.0).abs() < 1e-4, "min_ov was {}, expected 40.0", min_ov);
+        assert!((max_ov - 62.5).abs() < 1e-4, "max_ov was {}, expected 62.5", max_ov);
+    }
+
+    #[test]
+    fn test_resolve_range_cm_manual_modes() {
+        let cm_settings = RandomizerSettings {
+            base_sens_cm: 40.0,
             range_mode: "cm360".to_string(),
             min_cm: 30.0,
             max_cm: 60.0,
-            min_mult: 0.7,
-            max_mult: 1.3,
-            avoid_repeats: true,
-            rawaccel_dir: None,
-            spread_percent: 25.0,
             auto_scenario_sens: false,
-            scenario_ideal_cm: None,
-            mouse_dpi: 800.0,
+            ..RandomizerSettings::default()
         };
+        let (min_cm, max_cm) = resolve_range_cm(&cm_settings, None);
+        assert_eq!(min_cm, 30.0);
+        assert_eq!(max_cm, 60.0);
 
-        for _ in 0..50 {
-            let (cm, mult) = generate_next_sens(&settings, 50.0);
-            assert!(cm >= 30.0 && cm <= 60.0);
-            assert!(mult > 0.0);
-            let expected_mult = (50.0 / cm * 10000.0).round() / 10000.0;
-            assert!((mult - expected_mult).abs() < 0.001);
-        }
-    }
-
-    #[test]
-    fn test_generate_next_sens_mult_mode() {
-        let settings = RandomizerSettings {
-            enabled: true,
+        let mult_settings = RandomizerSettings {
             base_sens_cm: 40.0,
             range_mode: "multiplier".to_string(),
-            min_cm: 20.0,
-            max_cm: 80.0,
             min_mult: 0.8,
-            max_mult: 1.2,
-            avoid_repeats: false,
-            rawaccel_dir: None,
-            spread_percent: 25.0,
+            max_mult: 1.25,
             auto_scenario_sens: false,
-            scenario_ideal_cm: None,
-            mouse_dpi: 800.0,
+            ..RandomizerSettings::default()
         };
+        let (m_min, m_max) = resolve_range_cm(&mult_settings, None);
+        assert!((m_min - 32.0).abs() < 1e-4);
+        assert!((m_max - 50.0).abs() < 1e-4);
 
-        for _ in 0..50 {
-            let (cm, mult) = generate_next_sens(&settings, 40.0);
-            assert!(mult >= 0.8 && mult <= 1.2);
-            assert!(cm > 0.0);
-        }
+        // Inversão normalizada e piso de 5 cm
+        let floor_settings = RandomizerSettings {
+            range_mode: "cm360".to_string(),
+            min_cm: 10.0,
+            max_cm: 2.0,
+            auto_scenario_sens: false,
+            ..RandomizerSettings::default()
+        };
+        let (f_min, f_max) = resolve_range_cm(&floor_settings, None);
+        assert_eq!(f_min, 5.0);
+        assert_eq!(f_max, 10.0);
     }
 
     #[test]
-    fn test_generate_next_sens_auto_spread() {
+    fn test_preview_sens_range_calc() {
         let settings = RandomizerSettings {
-            enabled: true,
             base_sens_cm: 40.0,
-            range_mode: "cm360".to_string(),
-            min_cm: 10.0,
-            max_cm: 90.0,
-            min_mult: 0.5,
-            max_mult: 1.5,
-            avoid_repeats: false,
-            rawaccel_dir: None,
             spread_percent: 25.0,
             auto_scenario_sens: true,
-            scenario_ideal_cm: None,
-            mouse_dpi: 800.0,
+            scenario_ideal_cm: Some(40.0),
+            ..RandomizerSettings::default()
         };
 
-        // Com base = 40.0 e spread = 25%, min_cm = 30.0 e max_cm = 50.0
-        for _ in 0..50 {
-            let (cm, mult) = generate_next_sens(&settings, 40.0);
-            assert!(cm >= 30.0 && cm <= 50.0);
-            assert!(mult > 0.0);
-        }
+        let preview = preview_sens_range_calc(&settings, None);
+        assert_eq!(preview.min_cm, 32.0);
+        assert_eq!(preview.max_cm, 50.0);
+        assert!(preview.grid_cm.len() >= 3);
+        assert_eq!(preview.min_mult, 0.8);
+        assert_eq!(preview.max_mult, 1.25);
     }
 
     #[test]
-    fn test_generate_next_sens_auto_spread_with_scenario_ideal() {
+    fn test_generate_next_sens_deterministic_sampler() {
         let settings = RandomizerSettings {
-            enabled: true,
             base_sens_cm: 50.0,
-            range_mode: "cm360".to_string(),
-            min_cm: 10.0,
-            max_cm: 90.0,
-            min_mult: 0.5,
-            max_mult: 1.5,
-            avoid_repeats: false,
-            rawaccel_dir: None,
-            spread_percent: 25.0,
-            auto_scenario_sens: true,
-            scenario_ideal_cm: Some(35.0),
-            mouse_dpi: 800.0,
-        };
-
-        for _ in 0..50 {
-            let (cm, mult) = generate_next_sens(&settings, 50.0);
-            assert!(cm >= 26.25 && cm <= 43.75);
-            let expected_mult = (50.0 / cm * 10000.0).round() / 10000.0;
-            assert!((mult - expected_mult).abs() < 0.001);
-            assert!(mult >= 1.14 && mult <= 1.91);
-        }
-    }
-
-    #[test]
-    fn test_generate_next_sens_auto_spread_with_scenario_ideal_equal_base() {
-        let settings = RandomizerSettings {
-            enabled: true,
-            base_sens_cm: 50.0,
-            range_mode: "cm360".to_string(),
-            min_cm: 10.0,
-            max_cm: 90.0,
-            min_mult: 0.5,
-            max_mult: 1.5,
-            avoid_repeats: false,
-            rawaccel_dir: None,
             spread_percent: 25.0,
             auto_scenario_sens: true,
             scenario_ideal_cm: Some(50.0),
-            mouse_dpi: 800.0,
+            avoid_repeats: true,
+            ..RandomizerSettings::default()
         };
 
+        let mut st = SamplerState::default();
+        let mut rng = StdRng::seed_from_u64(42);
+
+        let preview = preview_sens_range_calc(&settings, None);
+        let min_grid = preview.grid_cm.first().copied().unwrap();
+        let max_grid = preview.grid_cm.last().copied().unwrap();
+
         for _ in 0..50 {
-            let (cm, mult) = generate_next_sens(&settings, 50.0);
-            assert!(cm >= 37.5 && cm <= 62.5);
+            let (cm, mult) = generate_next_sens(&settings, None, &mut st, &mut rng);
+            assert!(
+                cm >= min_grid - 0.01 && cm <= max_grid + 0.01,
+                "cm {} not in grid range [{}, {}]",
+                cm, min_grid, max_grid
+            );
             let expected_mult = (50.0 / cm * 10000.0).round() / 10000.0;
-            assert!((mult - expected_mult).abs() < 0.001);
-            assert!(mult >= 0.80 && mult <= 1.34);
+            assert_eq!(mult, expected_mult);
         }
     }
 
     #[test]
     fn test_output_dpi_calculation() {
-        // Testa o cálculo do Output DPI para 800 e 1600 DPI
         let scale: f64 = 1.25;
         let dpi_800: f64 = 800.0;
         let out_800 = (scale * dpi_800 * 100.0).round() / 100.0;
@@ -473,5 +658,169 @@ mod tests {
     fn test_is_valid_rawaccel_dir_nonexistent() {
         let fake_dir = Path::new("C:\\nonexistent_dir_12345");
         assert!(!is_valid_rawaccel_dir(fake_dir));
+    }
+
+    #[test]
+    fn test_parse_rawaccel_live_values_full_and_partial() {
+        let full_json = r#"{
+            "profiles": [
+                {
+                    "Output DPI": 1200.0,
+                    "Whole or horizontal accel parameters": {
+                        "scale": 1.5
+                    },
+                    "Vertical accel parameters": {
+                        "scale": 1.2
+                    }
+                }
+            ]
+        }"#;
+        let (dpi, whole, vert) = parse_rawaccel_live_values(full_json).expect("should parse");
+        assert_eq!(dpi, Some(1200.0));
+        assert_eq!(whole, Some(1.5));
+        assert_eq!(vert, Some(1.2));
+
+        let partial_json = r#"{
+            "profiles": [
+                {
+                    "Output DPI": 800.0,
+                    "Other Field": 42
+                }
+            ]
+        }"#;
+        let (p_dpi, p_whole, p_vert) = parse_rawaccel_live_values(partial_json).expect("should parse");
+        assert_eq!(p_dpi, Some(800.0));
+        assert_eq!(p_whole, None);
+        assert_eq!(p_vert, None);
+
+        let invalid_json = "not valid json {";
+        assert!(parse_rawaccel_live_values(invalid_json).is_err());
+    }
+
+    #[test]
+    fn test_apply_scale_to_rawaccel_json_preserves_output_dpi() {
+        let raw_json = r#"{
+            "profiles": [
+                {
+                    "Output DPI": 1600.0,
+                    "Whole or horizontal accel parameters": {
+                        "scale": 1.0
+                    },
+                    "Vertical accel parameters": {
+                        "scale": 1.0
+                    },
+                    "Acceleration": 0.05
+                }
+            ]
+        }"#;
+
+        let transformed = apply_scale_to_rawaccel_json(raw_json, 1.35).expect("apply scale ok");
+        let v: serde_json::Value = serde_json::from_str(&transformed).unwrap();
+        let prof = &v["profiles"][0];
+
+        // Output DPI and Acceleration are untouched
+        assert_eq!(prof["Output DPI"].as_f64(), Some(1600.0));
+        assert_eq!(prof["Acceleration"].as_f64(), Some(0.05));
+
+        // Whole and Vertical are updated
+        assert_eq!(prof["Whole or horizontal accel parameters"]["scale"].as_f64(), Some(1.35));
+        assert_eq!(prof["Vertical accel parameters"]["scale"].as_f64(), Some(1.35));
+    }
+
+    #[test]
+    fn test_restore_rawaccel_json_from_backup() {
+        let backup = RawAccelBackup {
+            output_dpi: Some(800.0),
+            scale_whole: Some(1.0),
+            scale_vert: Some(0.9),
+            last_written_output_dpi: Some(800.0),
+            last_written_scale: Some(1.5),
+            saved_at: "2026-10-12T00:00:00Z".to_string(),
+        };
+
+        let current_json = r#"{
+            "profiles": [
+                {
+                    "Output DPI": 800.0,
+                    "Whole or horizontal accel parameters": {
+                        "scale": 1.5
+                    },
+                    "Vertical accel parameters": {
+                        "scale": 1.5
+                    }
+                }
+            ]
+        }"#;
+
+        let restored_str = restore_rawaccel_json_from_backup(current_json, &backup).expect("restore ok");
+        let v: serde_json::Value = serde_json::from_str(&restored_str).unwrap();
+        let prof = &v["profiles"][0];
+
+        assert_eq!(prof["Whole or horizontal accel parameters"]["scale"].as_f64(), Some(1.0));
+        assert_eq!(prof["Vertical accel parameters"]["scale"].as_f64(), Some(0.9));
+        assert_eq!(prof["Output DPI"].as_f64(), Some(800.0));
+    }
+
+    #[test]
+    fn test_atomic_write_file() {
+        let tmp_dir = std::env::temp_dir().join(format!("aim_test_{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        let _ = std::fs::create_dir_all(&tmp_dir);
+        let target_file = tmp_dir.join("test_settings.json");
+
+        let test_content = "{\"hello\":\"world\"}";
+        atomic_write(&target_file, test_content).expect("atomic write should succeed");
+
+        let read_back = std::fs::read_to_string(&target_file).expect("should read target file");
+        assert_eq!(read_back, test_content);
+
+        // Verify temp file does not remain
+        let tmp_pattern = tmp_dir.join("test_settings.json.tmp");
+        assert!(!tmp_pattern.exists());
+
+        let _ = std::fs::remove_dir_all(&tmp_dir);
+    }
+
+    #[test]
+    fn test_multiplier_calculation_independent_of_center_override() {
+        let settings = RandomizerSettings {
+            base_sens_cm: 50.0,
+            spread_percent: 20.0,
+            auto_scenario_sens: true,
+            ..RandomizerSettings::default()
+        };
+
+        let mut st = SamplerState::default();
+        let mut rng = StdRng::seed_from_u64(123);
+
+        // Center override is 30.0 cm, but base is 50.0 cm
+        let (cm, mult) = generate_next_sens(&settings, Some(30.0), &mut st, &mut rng);
+        let expected_mult = (50.0 / cm * 10000.0).round() / 10000.0;
+        assert_eq!(mult, expected_mult, "mult must always be base / target cm regardless of center override");
+    }
+
+    #[test]
+    fn test_reroll_drift_threshold() {
+        let last_center: f64 = 40.0;
+        let threshold = 1.03_f64.ln();
+
+        // 2% drift -> should not trigger reroll
+        let center_2pct: f64 = 40.8;
+        let drift_2pct = (center_2pct / last_center).ln().abs();
+        assert!(drift_2pct < threshold);
+
+        // 2.9% drift -> should not trigger reroll
+        let center_2_9pct: f64 = 41.16;
+        let drift_2_9pct = (center_2_9pct / last_center).ln().abs();
+        assert!(drift_2_9pct < threshold);
+
+        // 4% drift -> triggers reroll
+        let center_4pct: f64 = 41.6;
+        let drift_4pct = (center_4pct / last_center).ln().abs();
+        assert!(drift_4pct > threshold);
+
+        // -5% drift -> triggers reroll
+        let center_minus_5pct: f64 = 38.0;
+        let drift_minus_5pct = (center_minus_5pct / last_center).ln().abs();
+        assert!(drift_minus_5pct > threshold);
     }
 }

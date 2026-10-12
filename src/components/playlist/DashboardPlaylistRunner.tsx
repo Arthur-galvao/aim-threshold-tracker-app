@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/Button";
 interface DashboardPlaylistRunnerProps {
   runner: PlaylistRunnerState;
   tasks?: Task[];
+  mouseDpi?: number;
 }
 
 function formatDuration(totalSeconds: number): string {
@@ -18,12 +19,13 @@ function formatDuration(totalSeconds: number): string {
   return `${mins}:${secs.toString().padStart(2, "0")}`;
 }
 
-export function DashboardPlaylistRunner({ runner, tasks }: DashboardPlaylistRunnerProps) {
+export function DashboardPlaylistRunner({ runner, tasks, mouseDpi }: DashboardPlaylistRunnerProps) {
   const { t } = useI18n();
+  const dpi = mouseDpi || 800;
 
   const { activePlaylist, currentStepIndex, currentItem, currentTask, isRunning, isFinished } = runner;
 
-  const idealSens = currentTask ? getScenarioIdealSens(currentTask, tasks) : null;
+  const idealSens = currentTask ? getScenarioIdealSens(currentTask, tasks, dpi) : null;
   const recSens = idealSens ? idealSens.value : (currentTask ? getRecommendedSens(currentTask.category, currentTask.subcategory) : null);
 
   const progressData = useMemo(() => {

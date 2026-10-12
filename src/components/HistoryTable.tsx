@@ -30,6 +30,7 @@ import {
 
 interface HistoryTableProps {
   activeTask: Task | null;
+  mouseDpi?: number;
   onDeleteSession: (sessionId: string) => void;
   onCopyEscalate: () => void;
   onNewSession?: () => void;
@@ -50,10 +51,12 @@ function formatDayDate(dateStr: string, lang: string) {
 
 export function HistoryTable({
   activeTask,
+  mouseDpi,
   onDeleteSession,
   onCopyEscalate,
   onNewSession,
 }: HistoryTableProps) {
+  const dpi = mouseDpi || 800;
   const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set());
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [pageLimit, setPageLimit] = useState(14);
@@ -177,6 +180,7 @@ export function HistoryTable({
                     isExpanded={isExpanded}
                     daySessions={daySessions}
                     confirmDeleteId={confirmDeleteId}
+                    mouseDpi={dpi}
                     onToggle={() => toggleDay(day.date)}
                     onSetConfirmDeleteId={setConfirmDeleteId}
                     onDeleteSession={onDeleteSession}
@@ -211,6 +215,7 @@ interface DayGroupRowsProps {
   isExpanded: boolean;
   daySessions: Session[];
   confirmDeleteId: string | null;
+  mouseDpi?: number;
   onToggle: () => void;
   onSetConfirmDeleteId: (id: string | null) => void;
   onDeleteSession: (sessionId: string) => void;
@@ -223,11 +228,13 @@ function DayGroupRows({
   isExpanded,
   daySessions,
   confirmDeleteId,
+  mouseDpi,
   onToggle,
   onSetConfirmDeleteId,
   onDeleteSession,
 }: DayGroupRowsProps) {
   const { t } = useI18n();
+  const rowDpi = mouseDpi || 800;
 
   return (
     <>
@@ -290,7 +297,7 @@ function DayGroupRows({
         </TableCell>
         <TableCell className="text-right text-text-faint tabular-nums font-mono text-xs">
           {day.sens.length > 0
-            ? `${day.sens.map((s) => formatSensitivity(s, "")).join(", ")} cm`
+            ? `${day.sens.map((s) => formatSensitivity(s, rowDpi, "")).join(", ")} cm`
             : "—"}
         </TableCell>
       </TableRow>
@@ -339,7 +346,7 @@ function DayGroupRows({
                       </div>
                       <div className="flex items-center gap-4">
                         <span className="text-text-faint text-xs tabular-nums">
-                          {formatSensitivity(session.sens)}cm
+                          {formatSensitivity(session.sens, rowDpi, "")}cm
                         </span>
                         {confirmDeleteId === session.id ? (
                           <div className="inline-flex items-center gap-1.5 animate-fadeIn">

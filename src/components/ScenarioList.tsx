@@ -15,14 +15,22 @@ import {
   List,
 } from "@phosphor-icons/react";
 import type { Playlist, Task } from "@/lib/types";
-import { VISCOSE_CATEGORIES, getDisplaySens, cleanScenarioName } from "@/lib/viscose";
-import { valorantToCm360, type RunDataPoint } from "@/lib/sens-analytics";
+import {
+  VISCOSE_CATEGORIES,
+  getDisplaySens,
+  cleanScenarioName,
+  DEFAULT_CATEGORY,
+  DEFAULT_SUBCATEGORY,
+} from "@/lib/viscose";
+import { type RunDataPoint } from "@/lib/sens-analytics";
+import { buildRunPoints } from "@/lib/run-points";
 import { useI18n } from "@/lib/i18n";
 import { Tooltip } from "@/components/ui/Tooltip";
 
 interface ScenarioListProps {
   tasks: Task[];
   activeTaskId: string | null;
+  mouseDpi?: number;
   onTaskChange: (id: string) => void;
   onNewTask: () => void;
   onDeleteTask: () => void;
@@ -42,6 +50,7 @@ interface ScenarioListProps {
 export function ScenarioList({
   tasks,
   activeTaskId,
+  mouseDpi,
   onTaskChange,
   onNewTask,
   onDeleteTask,
@@ -97,28 +106,35 @@ export function ScenarioList({
   };
 
   const categorySensMap = useMemo(() => {
+    const dpi = mouseDpi || 800;
+    const runPoints = buildRunPoints(tasks, { dpi });
+    const taskMap = new Map(tasks.map((t) => [t.id, t]));
     const runsMap = new Map<string, RunDataPoint[]>();
-    for (const t of tasks) {
-      const key = `${t.category}__${t.subcategory}`;
+
+    for (const p of runPoints) {
+      const t = taskMap.get(p.taskId);
+      const key = `${t?.category || DEFAULT_CATEGORY}__${t?.subcategory || DEFAULT_SUBCATEGORY}`;
       let r = runsMap.get(key);
       if (!r) {
         r = [];
         runsMap.set(key, r);
       }
-      for (const s of t.sessions) {
-        const sensCm = valorantToCm360(s.sens);
-        if (sensCm >= 5 && s.pb > 0) {
-          r.push({ sens: Number(sensCm.toFixed(1)), score: s.pb, date: s.date });
-        }
-      }
+      r.push({
+        sens: p.sens,
+        score: p.rel,
+        rawScore: p.score,
+        normScore: p.rel,
+        date: p.date,
+      });
     }
+
     const result = new Map<string, { value: number; source: "predicted" | "viscose" }>();
     for (const [key, runs] of runsMap.entries()) {
       const [category, subcategory] = key.split("__");
       result.set(key, getDisplaySens(category, subcategory, runs));
     }
     return result;
-  }, [tasks]);
+  }, [tasks, mouseDpi]);
 
   const taskMap = useMemo(() => new Map(tasks.map((t) => [t.id, t])), [tasks]);
 

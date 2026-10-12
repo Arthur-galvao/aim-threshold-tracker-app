@@ -1,17 +1,23 @@
 import { useMemo } from "react";
 import type { Task } from "@/lib/types";
 import { useI18n } from "@/lib/i18n";
-import { getDisplaySens, getRecommendedSens } from "@/lib/viscose";
+import {
+  DEFAULT_CATEGORY,
+  DEFAULT_SUBCATEGORY,
+  getDisplaySens,
+  getRecommendedSens,
+} from "@/lib/viscose";
 import {
   formatSensitivity,
   predictOptimalSensitivity,
-  valorantToCm360,
   type RunDataPoint,
 } from "@/lib/sens-analytics";
+import { buildRunPoints } from "@/lib/run-points";
 
 interface CategorySensCardProps {
   tasks: Task[];
-  onApplySens?: (sensCm: number) => Promise<void>;
+  mouseDpi?: number;
+  onApplySens?: (sensCm: number, targetScenarios?: string[]) => Promise<void>;
   onViewInChart?: (categoryKey: string) => void;
 }
 
@@ -28,10 +34,12 @@ interface CategoryGroupItem {
 
 export function CategorySensCard({
   tasks,
+  mouseDpi,
   onApplySens,
   onViewInChart,
 }: CategorySensCardProps) {
   const { t } = useI18n();
+  const dpi = mouseDpi || 800;
 
   const categoryGroups = useMemo<CategoryGroupItem[]>(() => {
     const map = new Map<
@@ -44,9 +52,13 @@ export function CategorySensCard({
       }
     >();
 
-    for (const task of tasks) {
-      const category = task.category || "Outros";
-      const subcategory = task.subcategory || "Geral";
+    const runPoints = buildRunPoints(tasks, { dpi });
+    const taskMap = new Map(tasks.map((t) => [t.id, t]));
+
+    for (const p of runPoints) {
+      const task = taskMap.get(p.taskId);
+      const category = task?.category || DEFAULT_CATEGORY;
+      const subcategory = task?.subcategory || DEFAULT_SUBCATEGORY;
       const groupKey = `${category}__${subcategory}`;
 
       let group = map.get(groupKey);
@@ -60,21 +72,16 @@ export function CategorySensCard({
         map.set(groupKey, group);
       }
 
-      group.taskNames.add(task.name);
-
-      for (const sess of task.sessions) {
-        const sensCm = valorantToCm360(sess.sens);
-        if (sensCm >= 5 && sess.pb > 0) {
-          group.runs.push({
-            scenario: task.name,
-            sens: Number(sensCm.toFixed(1)),
-            score: sess.pb,
-            rawScore: sess.pb,
-            threshold: sess.threshold,
-            date: sess.date,
-          });
-        }
-      }
+      group.taskNames.add(p.scenario);
+      group.runs.push({
+        scenario: p.scenario,
+        sens: p.sens,
+        score: p.rel,
+        rawScore: p.score,
+        normScore: p.rel,
+        threshold: p.threshold,
+        date: p.date,
+      });
     }
 
     const items: CategoryGroupItem[] = [];
@@ -205,7 +212,7 @@ export function CategorySensCard({
                     <td className="py-3 px-3">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-mono font-bold text-sm text-text-main">
-                          {formatSensitivity(item.displaySens.value)}
+                          {formatSensitivity(item.displaySens.value, dpi)}
                         </span>
                         {isPredicted ? (
                           <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
@@ -221,7 +228,7 @@ export function CategorySensCard({
 
                     <td className="py-3 px-3 font-mono text-text-secondary">
                       {item.viscoseSens !== null
-                        ? formatSensitivity(item.viscoseSens)
+                        ? formatSensitivity(item.viscoseSens, dpi)
                         : "-"}
                     </td>
 
@@ -251,7 +258,13 @@ export function CategorySensCard({
                           {onApplySens && (
                             <button
                               type="button"
-                              onClick={() => void onApplySens(item.displaySens.value)}
+                              onClick={() => {
+                                const scenarioNames = tasks
+                                  .filter((t) => `${t.category || DEFAULT_CATEGORY}__${t.subcategory || DEFAULT_SUBCATEGORY}` === item.key)
+                                  .map((t) => t.name)
+                                  .filter(Boolean);
+                                void onApplySens(item.displaySens.value, scenarioNames);
+                              }}
                               className="px-2.5 py-1 text-[11px] font-semibold rounded-lg bg-surface-subtle hover:bg-surface-hover border border-edge text-text-main transition-colors whitespace-nowrap"
                             >
                               {t("categorySens.applySens")}

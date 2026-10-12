@@ -22,10 +22,11 @@ Disponível para Windows. Não requer privilégios de administrador para instala
 - **Privacidade Local:** Todos os dados são armazenados localmente no computador via SQLite/JSON, sem envio de informações para servidores externos.
 
 ### Randomizador de Sensibilidade e Análise de Sweet Spot
-- **Integração com Raw Accel:** Detecção automática do driver Raw Accel e aplicação transparente de multiplicadores de sensibilidade no arquivo de configuração.
-- **Modos de Operação:** Suporte a faixas configuráveis por sensibilidade física absoluta (cm/360) ou por multiplicador relativo, com opção para evitar repetições imediatas.
-- **Identificação de Sweet Spot:** Agrupamento em faixas com encolhimento Bayesiano empírico para evitar conclusões precipitadas com amostras pequenas, calculando a consistência motora e indicando o nível de confiança estatística (Alta, Média, Baixa ou Amostra Preliminar).
-- **Visualização Gráfica:** Gráfico de dispersão relacionando sensibilidade física e pontuação, acompanhado de curva de tendência quadrática ajustada por mínimos quadrados.
+- **Gerenciamento Seguro do Driver Raw Accel:** Detecção automática do diretório do Raw Accel, preservando o Output DPI nativo e ajustando unicamente o parâmetro de escala (`scale`). Inclui backup automático do arquivo de configuração na inicialização e restauração íntegra ao encerrar o app.
+- **Grade Exponencial Logarítmica:** Amostragem em pontos discretos ancorados em 50 cm com razão de passo 1.05 (`50 * 1.05^k`), sorteados por saco embaralhado sem reposição e com espaçamento mínimo entre jogadas sucessivas.
+- **Preditor Estatístico de Sweet Spot:** Combinação de regressão quadrática paramétrica em espaço logarítmico e suavização por kernel com intervalos de confiança por bootstrap (IC 90%) e blend Bayesiano hierárquico por categorias de cenários.
+- **Perfis de Predição e Sugestão de Recentralização:** 4 perfis estatísticos (Equilibrado, Neutro, Teórico, Consistência) salvos nas configurações, detecção automática de desvios e sugestão de recentralização sem alterar o `baseSensCm`.
+- **Visualização Gráfica Avançada:** Gráfico com eixo logarítmico, curvas de tendência quadrática e suavizada, marcadores de limites de faixa ativa, intervalo de confiança do ápice e barra de cobertura de amostragem por ponto de grade.
 
 ## Contribuindo
 

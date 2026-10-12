@@ -22,10 +22,11 @@ Available for Windows. Does not require administrator privileges to install.
 - **Local Privacy:** All data is stored locally on your machine via SQLite/JSON; no data is sent to external servers.
 
 ### Sensitivity Randomizer & Sweet Spot Analysis
-- **Raw Accel Integration:** Automatic detection of the Raw Accel driver folder and transparent application of sensitivity multipliers to the configuration file.
-- **Operational Modes:** Configurable ranges by absolute physical sensitivity (cm/360) or relative multiplier, with anti-repetition protection.
-- **Sweet Spot Detection:** Range binning with empirical Bayesian shrinkage to prevent premature conclusions on small sample sizes, computing motor consistency and reporting statistical confidence levels (High, Medium, Low, or Preliminary Sample).
-- **Interactive Visualizations:** Scatter plot correlating physical sensitivity with performance scores, fitted with a least-squares quadratic trend curve.
+- **Raw Accel Safe Driver Management:** Automatic detection of Raw Accel directory, preserving original Output DPI and modifying only the scale parameter. Includes automatic JSON backup on startup and reliable restoration on application exit or shutdown.
+- **Logarithmic Exponential Lattice:** Discrete sensitivity sampling anchored at 50 cm with a 1.05 step ratio (`50 * 1.05^k`), drawn via a shuffled bag without replacement with a minimum gap constraint.
+- **Predictive Sweet Spot Modeling:** Combined parametric quadratic regression in log-space and kernel smoothing with bootstrap confidence intervals (90% CI) and hierarchical Bayesian category blending.
+- **Predictor Profiles & Recentering:** 4 statistical tuning profiles (Balanced, Neutral, Theoretical, Consistency) stored in settings, with automatic drift detection and manual recenter suggestions.
+- **Interactive Visualizations:** Log-scale scatter plot, quadratic trend and kernel curves, active range boundary markers, apex confidence interval indicator, and real-time lattice coverage bar.
 
 ## Contributing
 

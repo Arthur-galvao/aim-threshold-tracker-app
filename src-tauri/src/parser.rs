@@ -50,6 +50,10 @@ pub fn parse_stats_file_with_fallback_dpi(path: &Path, fallback_dpi: f64) -> Opt
     })
 }
 
+pub fn scenario_from_file_name(file_name: &str) -> Option<String> {
+    parse_filename_scenario(file_name)
+}
+
 fn parse_filename_scenario(file_name: &str) -> Option<String> {
     let trimmed = file_name.strip_suffix(".csv")?;
     let trimmed = trimmed.strip_suffix("Stats").map(str::trim).unwrap_or(trimmed);

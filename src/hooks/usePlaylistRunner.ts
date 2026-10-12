@@ -26,6 +26,7 @@ export interface PlaylistRunnerState {
   restart: () => void;
   jumpToStep: (index: number) => void;
   syncWithDetectedScenario: (scenarioName: string, playlistName?: string) => void;
+  predictNextScenarioName: () => string | null;
 }
 
 export function usePlaylistRunner({
@@ -277,6 +278,37 @@ export function usePlaylistRunner({
     return Math.max(0, Math.floor((now - startedAt) / 1000));
   }, [startedAt, now]);
 
+  const predictNextScenarioName = useCallback((): string | null => {
+    const {
+      activePlaylist: pl,
+      currentStepIndex: idx,
+      isRunning: running,
+      isFinished: finished,
+      sessionCountAtStart: startCount,
+    } = stateRef.current;
+    if (!running || finished || !pl || !pl.items[idx]) {
+      return null;
+    }
+    const item = pl.items[idx];
+    const task = taskMap.get(item.taskId);
+    if (!task) return null;
+
+    if (item.targetMode === "reps") {
+      const currentReps = Math.max(0, task.sessions.length - startCount);
+      if (currentReps + 1 < item.targetValue) {
+        return task.name;
+      }
+      if (idx + 1 < pl.items.length) {
+        const nextItem = pl.items[idx + 1];
+        const nextTask = taskMap.get(nextItem.taskId);
+        return nextTask ? nextTask.name : task.name;
+      }
+      return task.name;
+    }
+
+    return task.name;
+  }, [taskMap]);
+
   return {
     activePlaylist,
     currentStepIndex,
@@ -296,5 +328,6 @@ export function usePlaylistRunner({
     restart,
     jumpToStep,
     syncWithDetectedScenario,
+    predictNextScenarioName,
   };
 }

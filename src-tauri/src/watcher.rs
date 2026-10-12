@@ -99,15 +99,49 @@ fn is_stats_csv(path: &Path) -> bool {
     name.ends_with(".csv") && name.contains("stats")
 }
 
+#[allow(dead_code)]
+pub fn plan_roll(enabled: bool, dedupe_hit: bool) -> bool {
+    enabled && !dedupe_hit
+}
+
 fn process_new_csv(app: &AppHandle, path: &Path) -> Result<bool, String> {
     let state: State<AppState> = app.state();
+    let file_name = path
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_default();
 
+    // 1. dedupe por nome de arquivo ANTES de qualquer efeito colateral (evita rolar duas vezes)
+    if !state.emitted.lock().unwrap().insert(file_name.clone()) {
+        return Ok(false);
+    }
+
+    // 2. snapshot da sens usada na run que acabou e do cenario que acabou
     let (is_randomizer_enabled, active_sens, stats_path, auto_detect_playlist, mouse_dpi) = {
         let s = state.settings.lock().unwrap();
         let r = state.randomizer_state.lock().unwrap();
-        (s.randomizer.enabled, r.active_sens_cm, s.kovaak_stats_path.clone(), s.auto_detect_playlist, s.mouse_dpi)
+        (
+            s.randomizer.enabled,
+            r.active_sens_cm,
+            s.kovaak_stats_path.clone(),
+            s.auto_detect_playlist,
+            s.mouse_dpi,
+        )
     };
+    let finished = crate::parser::scenario_from_file_name(&file_name);
 
+    // 3. rolar a proxima sens agora, sincrono, serializado por roll_lock
+    if is_randomizer_enabled {
+        let _ = crate::randomizer::apply_next_sens(
+            app,
+            crate::randomizer::RollContext {
+                finished_scenario: finished.clone(),
+                reason: "run_end".into(),
+            },
+        );
+    }
+
+    // 4. reescrever CSV com used_cm e parsear (com override de sens)
     if is_randomizer_enabled && active_sens > 0.0 {
         let mut updated = false;
         for _ in 0..5 {
@@ -124,14 +158,17 @@ fn process_new_csv(app: &AppHandle, path: &Path) -> Result<bool, String> {
         }
     }
 
-    let mut run = wait_for_parse(path, mouse_dpi)?;
-
-    {
-        let mut emitted = state.emitted.lock().unwrap();
-        if !emitted.insert(run.source_file.clone()) {
-            return Ok(false);
+    let mut run = match wait_for_parse(path, mouse_dpi) {
+        Ok(r) => r,
+        Err(e) => {
+            let _ = app.emit(
+                "run_import_failed",
+                serde_json::json!({ "file": file_name, "error": e }),
+            );
+            return Err(e);
         }
-    }
+    };
+
     let already_imported = {
         let data = state.data.lock().unwrap();
         has_source_file(&data.tasks, &run.source_file)
@@ -153,12 +190,7 @@ fn process_new_csv(app: &AppHandle, path: &Path) -> Result<bool, String> {
     }
 
     if is_randomizer_enabled {
-        let app_clone = app.clone();
-        let scenario = run.scenario.clone();
-        let score = run.score;
-        thread::spawn(move || {
-            let _ = crate::randomizer::apply_next_sens(&app_clone, Some(scenario), Some(score));
-        });
+        crate::randomizer::record_last_run(app, &run.scenario, run.score);
     }
 
     Ok(true)
@@ -486,6 +518,25 @@ mod tests {
             assert!(set.insert(id), "Colisão detectada na geração de IDs únicos");
         }
         assert_eq!(set.len(), 10_000);
+    }
+
+    #[test]
+    fn test_plan_roll_decisions() {
+        assert!(plan_roll(true, false));
+        assert!(!plan_roll(true, true), "Dedupe hit prevents re-roll");
+        assert!(!plan_roll(false, false), "Disabled randomizer prevents roll");
+        assert!(!plan_roll(false, true));
+    }
+
+    #[test]
+    fn test_scenario_from_file_name() {
+        let name = "VT 1w4ts - Challenge - 2026.10.12-14.30.22 Stats.csv";
+        let parsed = crate::parser::scenario_from_file_name(name);
+        assert_eq!(parsed, Some("VT 1w4ts".to_string()));
+
+        let dash_name = "VT Pasu - Small - Challenge - 2026.10.12-14.30.22 Stats.csv";
+        let parsed_dash = crate::parser::scenario_from_file_name(dash_name);
+        assert_eq!(parsed_dash, Some("VT Pasu - Small".to_string()));
     }
 }
 

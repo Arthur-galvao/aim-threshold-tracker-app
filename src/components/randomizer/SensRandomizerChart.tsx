@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import {
   Chart as ChartJS,
   LinearScale,
+  LogarithmicScale,
   PointElement,
   LineElement,
   Tooltip,
@@ -10,12 +11,24 @@ import {
 import { Scatter } from "react-chartjs-2";
 import { useI18n } from "@/lib/i18n";
 import {
-  calculateParabolicTrendline,
   type RunDataPoint,
+  type SensPrediction,
+  binByLattice,
+  fitQuadraticLog,
+  predictOptimalSensitivity,
 } from "@/lib/sens-analytics";
+import { latticeIndex } from "@/lib/sens-lattice";
 import type { Playlist } from "@/lib/types";
+import { SensCoverageBar } from "./SensCoverageBar";
 
-ChartJS.register(LinearScale, PointElement, LineElement, Tooltip, Legend);
+ChartJS.register(
+  LinearScale,
+  LogarithmicScale,
+  PointElement,
+  LineElement,
+  Tooltip,
+  Legend
+);
 
 export type ChartScopeMode = "current" | "all" | "playlist" | "category";
 
@@ -36,33 +49,34 @@ interface SensRandomizerChartProps {
   relevantSessions: RunDataPoint[];
   scopeFilter?: ChartScopeFilter;
   onChangeScope?: (filter: ChartScopeFilter) => void;
-  // Retrocompatibilidade
-  scopeAllTasks?: boolean;
-  onToggleScope?: (val: boolean) => void;
   playlists?: Playlist[];
   categories?: CategoryOption[];
   scopeTitle?: string;
   theme: string;
+  activeMinCm?: number;
+  activeMaxCm?: number;
+  prediction?: SensPrediction | null;
 }
 
 export function SensRandomizerChart({
   relevantSessions,
   scopeFilter,
   onChangeScope,
-  scopeAllTasks = false,
-  onToggleScope,
   playlists = [],
   categories = [],
   scopeTitle,
   theme,
+  activeMinCm,
+  activeMaxCm,
+  prediction,
 }: SensRandomizerChartProps) {
   const { t } = useI18n();
   const isLight = theme === "light";
 
   const currentFilter: ChartScopeFilter = useMemo(() => {
     if (scopeFilter) return scopeFilter;
-    return { mode: scopeAllTasks ? "all" : "current" };
-  }, [scopeFilter, scopeAllTasks]);
+    return { mode: "current" };
+  }, [scopeFilter]);
 
   const isNormalized = currentFilter.mode !== "current";
 
@@ -74,19 +88,25 @@ export function SensRandomizerChart({
     if (mode === "category" && categories.length > 0) {
       nextFilter.categoryKey = currentFilter.categoryKey || categories[0].key;
     }
-    if (onChangeScope) {
-      onChangeScope(nextFilter);
-    } else if (onToggleScope) {
-      onToggleScope(mode === "all");
-    }
+    onChangeScope?.(nextFilter);
   };
 
+  const validRuns = useMemo(() => {
+    return relevantSessions.filter((s) => s.sens > 0 && Number.isFinite(s.score));
+  }, [relevantSessions]);
+
+  const effectivePrediction = useMemo(() => {
+    if (prediction !== undefined) return prediction;
+    if (validRuns.length === 0) return null;
+    return predictOptimalSensitivity(validRuns);
+  }, [prediction, validRuns]);
+
   const chartData = useMemo(() => {
-    if (relevantSessions.length === 0) {
+    if (validRuns.length === 0) {
       return { datasets: [] };
     }
 
-    const scatterPoints = relevantSessions.map((s) => ({
+    const scatterPoints = validRuns.map((s) => ({
       x: s.sens,
       y: s.score,
       scenario: s.scenario,
@@ -95,40 +115,169 @@ export function SensRandomizerChart({
       normScore: s.normScore ?? 100,
     }));
 
-    const trendPoints = calculateParabolicTrendline(
-      relevantSessions.map((s) => ({ x: s.sens, y: s.score }))
-    );
+    const yVals = validRuns.map((s) => s.score);
+    const yMin = Math.min(...yVals);
+    const yMax = Math.max(...yVals);
 
-    return {
-      datasets: [
-        {
-          type: "scatter" as const,
-          label: isNormalized ? t("randomizer.normPb") : t("randomizer.rawScore"),
-          data: scatterPoints,
-          backgroundColor: isLight ? "rgba(2, 132, 199, 0.75)" : "rgba(56, 189, 248, 0.8)",
-          borderColor: isLight ? "#0284c7" : "#38bdf8",
-          pointRadius: 5,
-          pointHoverRadius: 7,
-        },
-        ...(trendPoints.length > 0
-          ? [
-              {
-                type: "line" as const,
-                label: t("randomizer.chartTrend"),
-                data: trendPoints,
-                borderColor: "#f59e0b",
-                backgroundColor: "transparent",
-                borderWidth: 2.5,
-                borderDash: [4, 4],
-                pointRadius: 0,
-                fill: false,
-                tension: 0.3,
-              },
-            ]
-          : []),
-      ],
-    };
-  }, [relevantSessions, isNormalized, isLight, t]);
+    // 1. Curva do kernel suavizada por ponto de grade
+    let kernelCurvePoints: Array<{ x: number; y: number }> = [];
+    if (validRuns.length >= 3) {
+      const points = validRuns.map((r) => ({ k: latticeIndex(r.sens), rel: r.score }));
+      const bins = binByLattice(points);
+      if (bins.length > 0) {
+        kernelCurvePoints = bins
+          .map((b) => ({ x: Number(b.cm.toFixed(1)), y: b.smooth }))
+          .sort((a, b) => a.x - b.x);
+      }
+    }
+
+    // 2. Curva quadratica amostrada em u (log-space)
+    const quadCurvePoints: Array<{ x: number; y: number }> = [];
+    if (validRuns.length >= 12) {
+      const pts = validRuns.map((r) => ({ cm: r.sens, y: r.score }));
+      const quad = fitQuadraticLog(pts);
+      if (quad) {
+        const minCm = Math.min(...validRuns.map((r) => r.sens));
+        const maxCm = Math.max(...validRuns.map((r) => r.sens));
+        if (maxCm > minCm) {
+          const lnMin = Math.log(minCm);
+          const lnMax = Math.log(maxCm);
+          const steps = 30;
+          for (let i = 0; i <= steps; i++) {
+            const lnVal = lnMin + (i / steps) * (lnMax - lnMin);
+            const cm = Math.exp(lnVal);
+            const u = Math.log(cm / quad.refCm);
+            const y = quad.a * u * u + quad.b * u + quad.c;
+            quadCurvePoints.push({ x: Number(cm.toFixed(2)), y });
+          }
+        }
+      }
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const datasets: any[] = [
+      {
+        type: "scatter" as const,
+        label: isNormalized ? t("randomizer.normPb") : t("randomizer.rawScore"),
+        data: scatterPoints,
+        backgroundColor: isLight ? "rgba(2, 132, 199, 0.75)" : "rgba(56, 189, 248, 0.8)",
+        borderColor: isLight ? "#0284c7" : "#38bdf8",
+        pointRadius: 5,
+        pointHoverRadius: 7,
+      },
+    ];
+
+    if (kernelCurvePoints.length > 0) {
+      datasets.push({
+        type: "line" as const,
+        label: t("randomizer.chartKernel"),
+        data: kernelCurvePoints,
+        borderColor: isLight ? "#0284c7" : "#38bdf8",
+        backgroundColor: "transparent",
+        borderWidth: 2,
+        pointRadius: 0,
+        fill: false,
+      });
+    }
+
+    if (quadCurvePoints.length > 0) {
+      datasets.push({
+        type: "line" as const,
+        label: t("randomizer.chartTrend"),
+        data: quadCurvePoints,
+        borderColor: "#f59e0b",
+        backgroundColor: "transparent",
+        borderWidth: 2.5,
+        borderDash: [4, 4],
+        pointRadius: 0,
+        fill: false,
+      });
+    }
+
+    // Linhas verticais tracejadas para a faixa ativa
+    if (activeMinCm != null && activeMinCm > 0) {
+      datasets.push({
+        type: "line" as const,
+        label: t("randomizer.activeRangeMin"),
+        data: [
+          { x: activeMinCm, y: yMin * 0.95 },
+          { x: activeMinCm, y: yMax * 1.05 },
+        ],
+        borderColor: isLight ? "rgba(100, 116, 139, 0.45)" : "rgba(148, 163, 184, 0.4)",
+        backgroundColor: "transparent",
+        borderWidth: 1.5,
+        borderDash: [6, 4],
+        pointRadius: 0,
+        fill: false,
+      });
+    }
+
+    if (activeMaxCm != null && activeMaxCm > 0) {
+      datasets.push({
+        type: "line" as const,
+        label: t("randomizer.activeRangeMax"),
+        data: [
+          { x: activeMaxCm, y: yMin * 0.95 },
+          { x: activeMaxCm, y: yMax * 1.05 },
+        ],
+        borderColor: isLight ? "rgba(100, 116, 139, 0.45)" : "rgba(148, 163, 184, 0.4)",
+        backgroundColor: "transparent",
+        borderWidth: 1.5,
+        borderDash: [6, 4],
+        pointRadius: 0,
+        fill: false,
+      });
+    }
+
+    // Vertice com barra horizontal do IC
+    if (
+      effectivePrediction &&
+      effectivePrediction.vertexSens != null &&
+      effectivePrediction.scoreEstimate != null
+    ) {
+      const yEst = effectivePrediction.scoreEstimate;
+      if (
+        effectivePrediction.ci &&
+        effectivePrediction.ci.low != null &&
+        effectivePrediction.ci.high != null
+      ) {
+        datasets.push({
+          type: "line" as const,
+          label: t("randomizer.confidenceInterval"),
+          data: [
+            { x: effectivePrediction.ci.low, y: yEst },
+            { x: effectivePrediction.ci.high, y: yEst },
+          ],
+          borderColor: "#a855f7",
+          backgroundColor: "transparent",
+          borderWidth: 3,
+          pointRadius: 3,
+          fill: false,
+        });
+      }
+
+      datasets.push({
+        type: "scatter" as const,
+        label: t("randomizer.predictorApex"),
+        data: [{ x: effectivePrediction.vertexSens, y: yEst }],
+        backgroundColor: "#ec4899",
+        borderColor: "#db2777",
+        pointRadius: 7,
+        pointHoverRadius: 9,
+        pointStyle: "rectRot",
+      });
+    }
+
+    return { datasets };
+  }, [
+    validRuns,
+    isNormalized,
+    isLight,
+    t,
+    activeMinCm,
+    activeMaxCm,
+    effectivePrediction,
+  ]);
 
   const chartOptions = useMemo(() => {
     const gridColor = isLight ? "rgba(0, 0, 0, 0.05)" : "rgba(255, 255, 255, 0.04)";
@@ -164,14 +313,14 @@ export function SensRandomizerChart({
                 }
                 return `${raw.scenario}: ${raw.rawScore.toFixed(1)} pts (${raw.normScore.toFixed(1)}${t("randomizer.chartTooltipOfPb")}) ${t("randomizer.chartTooltipAt")} ${raw.x.toFixed(1)} cm`;
               }
-              return `${t("randomizer.chartTrendLabel")}: ${raw.y.toFixed(1)} ${isNormalized ? t("randomizer.chartTooltipOfPb") : "pts"} (${raw.x.toFixed(1)} cm)`;
+              return `${ctx.dataset.label || t("randomizer.chartTrendLabel")}: ${raw.y.toFixed(1)} ${isNormalized ? t("randomizer.chartTooltipOfPb") : "pts"} (${raw.x.toFixed(1)} cm)`;
             },
           },
         },
       },
       scales: {
         x: {
-          type: "linear" as const,
+          type: "logarithmic" as const,
           title: {
             display: true,
             text: t("randomizer.chartSensAxis"),
@@ -179,7 +328,11 @@ export function SensRandomizerChart({
             font: { size: 11, weight: "bold" as const },
           },
           grid: { color: gridColor },
-          ticks: { color: textColor },
+          ticks: {
+            color: textColor,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            callback: (value: any) => `${Number(value).toFixed(0)}`,
+          },
         },
         y: {
           title: {
@@ -317,7 +470,7 @@ export function SensRandomizerChart({
       </div>
 
       <div className="h-64 sm:h-72 lg:h-80 w-full relative">
-        {relevantSessions.length === 0 ? (
+        {validRuns.length === 0 ? (
           <div className="h-full w-full flex flex-col items-center justify-center text-center p-6">
             <div className="w-12 h-12 rounded-full bg-surface-subtle border border-edge flex items-center justify-center text-text-faint mb-3">
               <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -335,6 +488,12 @@ export function SensRandomizerChart({
           <Scatter data={chartData as any} options={chartOptions as any} />
         )}
       </div>
+
+      <SensCoverageBar
+        relevantSessions={relevantSessions}
+        minCm={activeMinCm}
+        maxCm={activeMaxCm}
+      />
     </div>
   );
 }

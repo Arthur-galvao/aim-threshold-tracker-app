@@ -2,7 +2,9 @@ import { useCallback, useEffect, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { AppProvider, useApp } from "@/hooks/useAppData";
 import { useKovaakWatcher } from "@/hooks/useKovaakWatcher";
-import { useSensRandomizer } from "@/hooks/useSensRandomizer";
+import { RandomizerProvider, useSensRandomizer } from "@/hooks/useSensRandomizer";
+import { useScenarioCentersSync } from "@/hooks/useScenarioCentersSync";
+import { invoke } from "@tauri-apps/api/core";
 import { I18nProvider, useI18n } from "@/lib/i18n";
 
 import { Header } from "@/components/Header";
@@ -22,7 +24,6 @@ import { Toast } from "@/components/Toast";
 import type { AppSettings, Playlist } from "@/lib/types";
 import { getSettings, saveSettings } from "@/lib/tauri-bridge";
 import { getStoredTheme, applyTheme, type AppTheme } from "@/lib/theme";
-import { getScenarioIdealSens, calculateSensRange } from "@/lib/sens-analytics";
 
 function Dashboard() {
   const {
@@ -60,7 +61,6 @@ function Dashboard() {
     detectPath: detectRawaccelPath,
     saveSettings: saveRandomizerSettings,
     testWriter: testRawaccelWriter,
-    syncScenarioSens,
   } = useSensRandomizer();
 
   const [activeTab, setActiveTab] = useState<"dashboard" | "randomizer" | "playlist">("dashboard");
@@ -114,21 +114,27 @@ function Dashboard() {
 
   const { t } = useI18n();
 
-  // Sincroniza sensibilidade ideal do cenario ativo quando autoScenarioSens estiver habilitado
+  // Sincroniza o mapa de centros de cenários com o backend Rust com debounce e estabilização
+  useScenarioCentersSync({
+    tasks: appData.tasks,
+    mouseDpi: randomizerSettings.mouseDpi,
+    enabled: randomizerSettings.autoScenarioSens,
+  });
+
+  // Notifica o backend sobre o próximo cenário esperado na playlist (com re-sorteio corretivo se >3%)
   useEffect(() => {
-    if (!randomizerSettings.autoScenarioSens || !activeTask) return;
-    const ideal = getScenarioIdealSens(activeTask, appData.tasks);
-    const currentIdeal = randomizerSettings.scenarioIdealCm;
-    if (currentIdeal === undefined || Math.abs(currentIdeal - ideal.value) >= 0.1) {
-      void syncScenarioSens(ideal.value, randomizerSettings.enabled, ideal.source);
-    }
+    const upcomingName = playlistRunner.isRunning
+      ? playlistRunner.predictNextScenarioName()
+      : null;
+    void invoke("set_upcoming_scenario", {
+      name: upcomingName,
+      reroll: Boolean(playlistRunner.isRunning),
+    }).catch(() => {});
   }, [
-    activeTask?.id,
-    randomizerSettings.autoScenarioSens,
-    randomizerSettings.enabled,
-    randomizerSettings.scenarioIdealCm,
-    appData.tasks,
-    syncScenarioSens,
+    playlistRunner.isRunning,
+    playlistRunner.currentStepIndex,
+    playlistRunner.sessionCountAtStart,
+    playlistRunner.predictNextScenarioName,
   ]);
 
   // Safety lock guard: if RawAccel is not available, guarantee user cannot remain on randomizer
@@ -180,22 +186,18 @@ function Dashboard() {
   const handleApplySens = useCallback(
     async (sensCm: number) => {
       const rounded = Number(sensCm.toFixed(1));
-      const centerSens = randomizerSettings.autoScenarioSens
-        ? (randomizerSettings.scenarioIdealCm ?? rounded)
-        : rounded;
-      const range = calculateSensRange(centerSens, randomizerSettings.spreadPercent, rounded);
+      const overrides = { ...(randomizerSettings.centerOverrides || {}) };
+      if (activeTask?.name) {
+        overrides[activeTask.name.trim().toLowerCase()] = rounded;
+      }
       await saveRandomizerSettings({
         ...randomizerSettings,
-        rangeMode: "cm360",
-        baseSensCm: rounded,
-        minCm: randomizerSettings.autoScenarioSens ? range.minCm : randomizerSettings.minCm,
-        maxCm: randomizerSettings.autoScenarioSens ? range.maxCm : randomizerSettings.maxCm,
-        minMult: randomizerSettings.autoScenarioSens ? range.minMult : randomizerSettings.minMult,
-        maxMult: randomizerSettings.autoScenarioSens ? range.maxMult : randomizerSettings.maxMult,
+        scenarioIdealCm: rounded,
+        centerOverrides: overrides,
       });
       showToast(t("playlist.appliedSuccess", { sens: rounded }), "success");
     },
-    [randomizerSettings, saveRandomizerSettings, showToast, t]
+    [activeTask?.name, randomizerSettings, saveRandomizerSettings, showToast, t]
   );
 
   return (
@@ -206,6 +208,7 @@ function Dashboard() {
       <ScenarioList
         tasks={appData.tasks}
         activeTaskId={appData.activeTaskId}
+        mouseDpi={randomizerSettings.mouseDpi}
         onTaskChange={setActiveTaskId}
         onNewTask={() => setNewTaskOpen(true)}
         onDeleteTask={deleteCurrentTask}
@@ -255,11 +258,19 @@ function Dashboard() {
               {activeTab === "dashboard" ? (
                 <>
                   {/* Active Playlist Runner Banner in Dashboard */}
-                  <DashboardPlaylistRunner runner={playlistRunner} tasks={appData.tasks} />
+                  <DashboardPlaylistRunner
+                    runner={playlistRunner}
+                    tasks={appData.tasks}
+                    mouseDpi={randomizerSettings.mouseDpi}
+                  />
 
                   {/* Top Full-Width KPI Metrics Cards */}
                   <section aria-label="KPI Metrics">
-                    <MetricsCards activeTask={activeTask} allTasks={appData.tasks} />
+                    <MetricsCards
+                      activeTask={activeTask}
+                      allTasks={appData.tasks}
+                      mouseDpi={randomizerSettings.mouseDpi}
+                    />
                   </section>
 
                   {/* Full-Width Telemetry Data Chart ("Data Chart" in mockup) */}
@@ -271,6 +282,7 @@ function Dashboard() {
                   <section aria-label="Session History">
                     <HistoryTable
                       activeTask={activeTask}
+                      mouseDpi={randomizerSettings.mouseDpi}
                       onDeleteSession={deleteSession}
                       onCopyEscalate={handleCopyEscalate}
                       onNewSession={() => setSessionModalOpen(true)}
@@ -288,6 +300,7 @@ function Dashboard() {
                   runner={playlistRunner}
                   playlists={appData.playlists ?? []}
                   tasks={appData.tasks}
+                  mouseDpi={randomizerSettings.mouseDpi}
                   onOpenManager={() => {
                     setPendingPlaylistTaskIds([]);
                     setPlaylistManagerOpen(true);
@@ -389,7 +402,9 @@ export default function App() {
   return (
     <I18nProvider>
       <AppProvider>
-        <Dashboard />
+        <RandomizerProvider>
+          <Dashboard />
+        </RandomizerProvider>
       </AppProvider>
     </I18nProvider>
   );

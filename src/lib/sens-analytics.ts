@@ -1,5 +1,24 @@
 import type { Playlist, Task } from "./types.ts";
-import { getRecommendedSens } from "./viscose.ts";
+import { DEFAULT_CATEGORY, DEFAULT_SUBCATEGORY, getRecommendedSens } from "./viscose.ts";
+import { buildRunPoints } from "./run-points.ts";
+import { latticeCm, latticeIndex } from "./sens-lattice.ts";
+import {
+  binByLattice,
+  kernelSmooth,
+  fitQuadraticLog,
+  bootstrapVertex,
+  type BinStat,
+  type QuadFit,
+} from "./sens-model.ts";
+
+export {
+  binByLattice,
+  kernelSmooth,
+  fitQuadraticLog,
+  bootstrapVertex,
+  type BinStat,
+  type QuadFit,
+};
 
 export interface BucketStat {
   sens: number;
@@ -33,6 +52,8 @@ export interface PredictorProfileConfig {
   id: PredictorProfile;
   labelKey: string;
   descKey: string;
+  wParam: number;
+  lambda: number;
   teoricoWeight: number;
   consistenciaWeight: number;
 }
@@ -42,13 +63,17 @@ export const PREDICTOR_PROFILES: Record<PredictorProfile, PredictorProfileConfig
     id: "equilibrado",
     labelKey: "randomizer.profileBalanced",
     descKey: "randomizer.profileBalancedDesc",
-    teoricoWeight: 0.6,
-    consistenciaWeight: 0.4,
+    wParam: 0.5,
+    lambda: 0.25,
+    teoricoWeight: 0.5,
+    consistenciaWeight: 0.5,
   },
   neutro: {
     id: "neutro",
     labelKey: "randomizer.profileNeutral",
     descKey: "randomizer.profileNeutralDesc",
+    wParam: 0.5,
+    lambda: 0.0,
     teoricoWeight: 0.5,
     consistenciaWeight: 0.5,
   },
@@ -56,13 +81,17 @@ export const PREDICTOR_PROFILES: Record<PredictorProfile, PredictorProfileConfig
     id: "teorico",
     labelKey: "randomizer.profileTheoretical",
     descKey: "randomizer.profileTheoreticalDesc",
-    teoricoWeight: 0.7,
-    consistenciaWeight: 0.3,
+    wParam: 0.8,
+    lambda: 0.0,
+    teoricoWeight: 0.8,
+    consistenciaWeight: 0.2,
   },
   consistencia: {
     id: "consistencia",
     labelKey: "randomizer.profileConsistency",
     descKey: "randomizer.profileConsistencyDesc",
+    wParam: 0.3,
+    lambda: 1.0,
     teoricoWeight: 0.3,
     consistenciaWeight: 0.7,
   },
@@ -79,6 +108,10 @@ export interface SensPrediction {
   profile: PredictorProfile;
   teoricoWeight: number;
   consistenciaWeight: number;
+  wParam?: number;
+  lambda?: number;
+  ci?: { low: number | null; high: number | null };
+  reasons?: string[];
 }
 
 export interface RunDataPoint {
@@ -95,7 +128,7 @@ export interface RunDataPoint {
  * Converte sensibilidade angular do motor do Valorant para cm/360 real a um dado DPI.
  * Caso o valor já esteja na escala física de cm/360 (ex.: >= 2.5), retorna o próprio valor.
  */
-export function valorantToCm360(sens: number, dpi: number = 800): number {
+export function valorantToCm360(sens: number, dpi: number): number {
   if (sens <= 0) return sens;
   if (sens < 2.5) {
     const yaw = 0.07;
@@ -108,7 +141,7 @@ export function valorantToCm360(sens: number, dpi: number = 800): number {
 /**
  * Converte cm/360 físico para a sensibilidade angular equivalente no Valorant para um dado DPI.
  */
-export function cm360ToValorant(cm: number, dpi: number = 800): number {
+export function cm360ToValorant(cm: number, dpi: number): number {
   if (cm <= 0 || dpi <= 0) return 0;
   const yaw = 0.07;
   // cm = (360 * 2.54) / (yaw * dpi * sens) => sens = (360 * 2.54) / (yaw * dpi * cm)
@@ -118,7 +151,7 @@ export function cm360ToValorant(cm: number, dpi: number = 800): number {
 /**
  * Converte cm/360 físico para a sensibilidade angular equivalente em jogos Source/Apex/CS para um dado DPI.
  */
-export function cm360ToSource(cm: number, dpi: number = 800): number {
+export function cm360ToSource(cm: number, dpi: number): number {
   if (cm <= 0 || dpi <= 0) return 0;
   const yaw = 0.022;
   return Number(((360 * 2.54) / (yaw * dpi * cm)).toFixed(3));
@@ -127,7 +160,7 @@ export function cm360ToSource(cm: number, dpi: number = 800): number {
 /**
  * Formata um valor de sensibilidade para exibicao amigavel com unidade (padrao: cm).
  */
-export function formatSensitivity(sens: number, unit: string = "cm", dpi: number = 800): string {
+export function formatSensitivity(sens: number, dpi: number, unit: string = "cm"): string {
   if (!sens || sens <= 0) return "-";
   const effectiveSens = valorantToCm360(sens, dpi);
   const rounded = Number(effectiveSens.toFixed(1));
@@ -218,17 +251,18 @@ export function calculateParabolicTrendline(
 }
 
 export interface SweetSpotOptions {
+  binPriorStrength?: number;
   shrinkageK?: number;
   minEligibleRuns?: number;
 }
 
 /**
  * Executa analise estatistica de Sweet Spot sobre sessoes de treino:
- * 1. Agrupamento por sensibilidade especifica (arredondada para 1 casa decimal).
- * 2. Encolhimento Bayesiano empirico (k configuravel, padrao 3) para mitigar distorcoes de amostra pequena.
+ * 1. Agrupamento por indice de grade exponencial (sens-lattice).
+ * 2. Prior bayesiano de vizinhos (looSmooth) com forca m (padrao 2).
  * 3. Variancia amostral com correcao de Bessel (n-1).
  * 4. Atribuicao de confianca estatistica (Alta, Media, Baixa, Insuficiente).
- * 5. Selecao da melhor sensibilidade baseada no score ponderado Bayesiano.
+ * 5. Selecao da melhor sensibilidade com ordenacao deterministica (weightedScore desc, sens desc).
  */
 export function computeSweetSpotAnalytics(
   runs: RunDataPoint[],
@@ -238,7 +272,7 @@ export function computeSweetSpotAnalytics(
     return null;
   }
 
-  const sensList = runs.map((r) => r.sens);
+  const sensList = runs.map((r) => (r.sens >= 2.5 ? r.sens : valorantToCm360(r.sens, 800)));
   const minSens = Math.floor(Math.min(...sensList));
   const maxSens = Math.ceil(Math.max(...sensList));
 
@@ -246,35 +280,37 @@ export function computeSweetSpotAnalytics(
   const globalMeanScore =
     totalScores.reduce((a, b) => a + b, 0) / (totalScores.length || 1);
 
-  const bucketMap = new Map<number, number[]>();
+  const latticePts = runs.map((r) => {
+    const cm = r.sens >= 2.5 ? r.sens : valorantToCm360(r.sens, 800);
+    return {
+      k: latticeIndex(cm),
+      rel: r.score,
+    };
+  });
 
-  for (const sess of runs) {
-    const sensKey = Number(sess.sens.toFixed(1));
-    const scores = bucketMap.get(sensKey) || [];
-    scores.push(sess.score);
-    bucketMap.set(sensKey, scores);
-  }
+  const binStats = binByLattice(latticePts);
+  const m =
+    typeof options.binPriorStrength === "number"
+      ? options.binPriorStrength
+      : typeof options.shrinkageK === "number"
+      ? options.shrinkageK
+      : 2;
 
   const buckets: BucketStat[] = [];
-  const k = typeof options.shrinkageK === "number" ? options.shrinkageK : 3; // peso do prior global no encolhimento bayesiano
 
-  for (const [sensKey, scores] of bucketMap.entries()) {
-    const count = scores.length;
-    const avg = scores.reduce((a, b) => a + b, 0) / count;
-    const max = Math.max(...scores);
+  for (const b of binStats) {
+    const count = b.n;
+    const avg = b.mean;
+    const binScores = runs
+      .filter((r) => latticeIndex(r.sens >= 2.5 ? r.sens : valorantToCm360(r.sens, 800)) === b.k)
+      .map((r) => r.score);
+    const max = binScores.length > 0 ? Math.max(...binScores) : avg;
 
-    const weightedScore =
-      (count / (count + k)) * avg + (k / (count + k)) * globalMeanScore;
+    const weightedScore = (count * avg + m * b.looSmooth) / (count + m);
 
-    let stdDev: number | null = null;
     let consistency: number | null = null;
-
-    if (count >= 2) {
-      const sampleVariance =
-        scores.reduce((acc, val) => acc + Math.pow(val - avg, 2), 0) /
-        (count - 1);
-      stdDev = Math.sqrt(sampleVariance);
-      const cv = avg > 0 ? stdDev / avg : 1;
+    if (b.sd !== null && count >= 2) {
+      const cv = avg > 0 ? b.sd / avg : 1;
       consistency = Math.max(0, Math.min(100, (1 - cv) * 100));
     }
 
@@ -289,48 +325,46 @@ export function computeSweetSpotAnalytics(
       confidenceLevel = "insufficient";
     }
 
-    const formattedLabel = formatSensitivity(sensKey);
+    const formattedLabel = formatSensitivity(b.cm, 800);
 
     buckets.push({
-      sens: sensKey,
+      sens: b.cm,
       label: formattedLabel,
       rangeLabel: formattedLabel,
-      min: sensKey,
-      max: sensKey,
+      min: b.cm,
+      max: b.cm,
       count,
-      avgScore: avg,
-      maxScore: max,
-      stdDev,
-      consistency,
-      weightedScore,
+      avgScore: Number(avg.toFixed(2)),
+      maxScore: Number(max.toFixed(2)),
+      stdDev: b.sd !== null ? Number(b.sd.toFixed(2)) : null,
+      consistency: consistency !== null ? Number(consistency.toFixed(1)) : null,
+      weightedScore: Number(weightedScore.toFixed(4)),
       confidenceLevel,
     });
   }
 
-  const maxCountInAnyBucket = Math.max(...buckets.map((b) => b.count), 0);
+  const hasBinWith2 = buckets.some((b) => b.count >= 2);
   const minEligibleRuns =
     typeof options.minEligibleRuns === "number"
       ? options.minEligibleRuns
-      : maxCountInAnyBucket >= 5
-      ? 3
-      : maxCountInAnyBucket >= 3
+      : hasBinWith2
       ? 2
       : 1;
 
   const eligibleBuckets = buckets.filter((b) => b.count >= minEligibleRuns);
 
   eligibleBuckets.sort((a, b) => {
-    if (Math.abs(b.weightedScore - a.weightedScore) > 0.05) {
+    if (b.weightedScore !== a.weightedScore) {
       return b.weightedScore - a.weightedScore;
     }
-    return b.avgScore - a.avgScore;
+    return b.sens - a.sens;
   });
 
   buckets.sort((a, b) => {
-    if (Math.abs(b.weightedScore - a.weightedScore) > 0.05) {
+    if (b.weightedScore !== a.weightedScore) {
       return b.weightedScore - a.weightedScore;
     }
-    return b.avgScore - a.avgScore;
+    return b.sens - a.sens;
   });
 
   const bestBucket = eligibleBuckets[0] || buckets[0] || null;
@@ -386,6 +420,8 @@ export function fitWeightedParabolaCoefficients(
   points: Array<{ x: number; y: number; weight?: number }>
 ): { a: number; b: number; c: number; vertex: number | null } | null {
   if (points.length < 4) return null;
+  const distinctX = new Set(points.map((p) => Number(p.x.toFixed(1))));
+  if (distinctX.size < 3) return null;
   const sorted = [...points].sort((p1, p2) => p1.x - p2.x);
   const xMin = sorted[0].x;
   const xMax = sorted[sorted.length - 1].x;
@@ -463,16 +499,18 @@ export function fitParabolaCoefficients(
 
 export interface HierarchicalOptions {
   groupRuns?: RunDataPoint[];
-  shrinkageK?: number;
+  groupBlendK?: number;
+  binPriorStrength?: number;
   minEligibleRuns?: number;
   recencyHalfLifeDays?: number;
   now?: number;
+  shrinkageK?: number;
 }
 
 /**
- * Preditor de sensibilidade ideal.
- * Combina o vertice da curva de dispersao quadratica com o ponto otimo bayesiano empirico
- * de acordo com o perfil de ponderacao e suporta blend hierarquico com o grupo da categoria.
+ * Preditor de sensibilidade ideal refinado.
+ * Combina o vertice da curva quadratica em log (fitQuadraticLog) com o ponto otimo do kernel smoother
+ * ponderado pelo perfil estatistico (wParam e lambda) e suporta blend hierarquico em log com o grupo da categoria.
  */
 export function predictOptimalSensitivity(
   runs: RunDataPoint[],
@@ -485,66 +523,121 @@ export function predictOptimalSensitivity(
 
   if (!hasLocal && !hasGroup) return null;
 
-  const halfLife = options.recencyHalfLifeDays ?? 60;
+  const halfLife = options.recencyHalfLifeDays ?? 0;
   const now = options.now ?? Date.now();
 
   const evaluateSingleSet = (dataPoints: RunDataPoint[]): SensPrediction | null => {
     if (!dataPoints || dataPoints.length === 0) return null;
-    const sweetSpot = computeSweetSpotAnalytics(dataPoints, {
-      minEligibleRuns: options.minEligibleRuns,
-      shrinkageK: options.shrinkageK,
+
+    const totalN = dataPoints.length;
+    const profileConfig = PREDICTOR_PROFILES[profile] ?? PREDICTOR_PROFILES.equilibrado;
+    const { wParam, lambda, teoricoWeight, consistenciaWeight } = profileConfig;
+
+    const pts = dataPoints.map((r) => {
+      const cm = r.sens >= 2.5 ? r.sens : valorantToCm360(r.sens, 800);
+      const w = halfLife > 0 ? recencyWeight(r.date, now, halfLife) : 1;
+      return {
+        k: latticeIndex(cm),
+        cm,
+        rel: r.score,
+        w,
+      };
     });
-    const empiricalBest = sweetSpot?.bestBucket?.sens ?? dataPoints[0].sens;
 
-    const points = dataPoints.map((r) => ({
-      x: valorantToCm360(r.sens),
-      y: r.score,
-      weight: halfLife > 0 ? recencyWeight(r.date, now, halfLife) : 1,
-    }));
+    const binStats = binByLattice(pts);
+    if (binStats.length === 0) return null;
 
-    const parabola = fitWeightedParabolaCoefficients(points);
-    const total = dataPoints.length;
+    let globalSd = 0;
+    if (totalN >= 2) {
+      const meanScore = pts.reduce((sum, p) => sum + p.rel, 0) / totalN;
+      const sqDiff = pts.reduce((sum, p) => sum + Math.pow(p.rel - meanScore, 2), 0);
+      globalSd = Math.sqrt(sqDiff / (totalN - 1));
+    }
 
+    let bestBin = binStats[0];
+    let bestScore = -Infinity;
+
+    for (const b of binStats) {
+      const sd_k = b.sd !== null && b.n >= 2 ? b.sd : globalSd;
+      const score_k = b.smooth - lambda * sd_k;
+      if (score_k > bestScore || (score_k === bestScore && b.cm > bestBin.cm)) {
+        bestScore = score_k;
+        bestBin = b;
+      }
+    }
+
+    const kernelBest = bestBin.cm;
+
+    const ptsForFit = pts.map((p) => ({ cm: p.cm, y: p.rel, w: p.w }));
+    const quadFit = fitQuadraticLog(ptsForFit);
+
+    let predictedRaw: number;
+    let basis: "curvature_blend" | "empirical_best";
+    const vertexSens: number | null = quadFit?.vertexCm ?? null;
+    let scoreEstimate: number | null = null;
+
+    if (quadFit && vertexSens !== null) {
+      predictedRaw = Math.exp(wParam * Math.log(vertexSens) + (1 - wParam) * Math.log(kernelBest));
+      basis = "curvature_blend";
+      scoreEstimate = Math.round(quadFit.c);
+    } else {
+      predictedRaw = kernelBest;
+      basis = "empirical_best";
+      scoreEstimate = Math.round(bestBin.mean);
+    }
+
+    const predictedSens = latticeCm(latticeIndex(predictedRaw));
+
+    let ci: { low: number | null; high: number | null } = { low: null, high: null };
+    let icWidth = Infinity;
+
+    if (quadFit && vertexSens !== null) {
+      const boot = bootstrapVertex(ptsForFit, { b: 150, seed: 42 });
+      if (boot) {
+        ci = { low: boot.low, high: boot.high };
+        icWidth = (boot.high - boot.low) / (predictedSens || 1);
+      }
+    }
+
+    const distinctBins = binStats.length;
     let confidence: "high" | "medium" | "low" | "insufficient";
-    if (total >= 20) {
+
+    if (totalN >= 30 && distinctBins >= 6 && icWidth <= 0.15) {
       confidence = "high";
-    } else if (total >= 10) {
+    } else if (totalN >= 15 && distinctBins >= 5 && icWidth <= 0.30) {
       confidence = "medium";
-    } else if (total >= 5) {
+    } else if (totalN >= 8 && distinctBins >= 3) {
       confidence = "low";
     } else {
       confidence = "insufficient";
     }
 
-    const profileConfig = PREDICTOR_PROFILES[profile] ?? PREDICTOR_PROFILES.equilibrado;
-    const { teoricoWeight, consistenciaWeight } = profileConfig;
-
-    let predicted: number;
-    let basis: "curvature_blend" | "empirical_best";
-    const vertexSens: number | null = parabola?.vertex ?? null;
-    let scoreEstimate: number | null = null;
-
-    if (parabola && vertexSens !== null) {
-      predicted = Number((teoricoWeight * vertexSens + consistenciaWeight * empiricalBest).toFixed(1));
-      basis = "curvature_blend";
-      scoreEstimate = Math.round(parabola.a * predicted * predicted + parabola.b * predicted + parabola.c);
-    } else {
-      predicted = Number(empiricalBest.toFixed(1));
-      basis = "empirical_best";
-      scoreEstimate = sweetSpot?.bestBucket?.avgScore ? Math.round(sweetSpot.bestBucket.avgScore) : null;
+    const reasons: string[] = [];
+    if (totalN < 15) {
+      reasons.push("randomizer.reasonFewRuns");
+    }
+    if (distinctBins < 5) {
+      reasons.push("randomizer.reasonFewSens");
+    }
+    if (ci.low === null || icWidth > 0.30) {
+      reasons.push("randomizer.reasonWideCi");
     }
 
     return {
-      predictedSens: predicted,
-      label: formatSensitivity(predicted),
+      predictedSens,
+      label: formatSensitivity(predictedSens, 800),
       confidence,
       basis,
       vertexSens,
-      empiricalSens: Number(empiricalBest.toFixed(1)),
+      empiricalSens: kernelBest,
       scoreEstimate,
       profile,
       teoricoWeight,
       consistenciaWeight,
+      wParam,
+      lambda,
+      ci,
+      reasons,
     };
   };
 
@@ -557,21 +650,31 @@ export function predictOptimalSensitivity(
   if (!localPred) return null;
 
   if (groupRuns && groupRuns.length > 0) {
-    const distinctSens = new Set(
-      groupRuns.map((r) => Number(valorantToCm360(r.sens).toFixed(1)))
-    );
-    if (distinctSens.size >= 4) {
+    const groupPts = groupRuns.map((r) => {
+      const cm = r.sens >= 2.5 ? r.sens : valorantToCm360(r.sens, 800);
+      return { k: latticeIndex(cm), rel: r.score };
+    });
+    const groupBins = binByLattice(groupPts);
+
+    if (groupBins.length >= 4) {
       const groupPred = evaluateSingleSet(groupRuns);
       if (groupPred) {
-        const n_local = runs.length;
-        const k = typeof options.shrinkageK === "number" ? options.shrinkageK : 6;
-        const peso_local = n_local + k > 0 ? n_local / (n_local + k) : 1;
-        const blendedSens = Number(
-          (peso_local * localPred.predictedSens + (1 - peso_local) * groupPred.predictedSens).toFixed(1)
+        const nLocal = runs.length;
+        const kBlend =
+          typeof options.groupBlendK === "number"
+            ? options.groupBlendK
+            : typeof options.shrinkageK === "number"
+            ? options.shrinkageK
+            : 12;
+        const wLocal = nLocal / (nLocal + kBlend);
+
+        const blendedRaw = Math.exp(
+          wLocal * Math.log(localPred.predictedSens) + (1 - wLocal) * Math.log(groupPred.predictedSens)
         );
+        const blendedSens = latticeCm(latticeIndex(blendedRaw));
 
         let blendedConfidence = localPred.confidence;
-        if (groupRuns.length > n_local && groupPred.confidence !== "insufficient") {
+        if (groupRuns.length > nLocal && groupPred.confidence !== "insufficient") {
           const confidenceLevels: Array<SensPrediction["confidence"]> = [
             "insufficient",
             "low",
@@ -592,16 +695,51 @@ export function predictOptimalSensitivity(
         return {
           ...localPred,
           predictedSens: blendedSens,
-          label: formatSensitivity(blendedSens),
+          label: formatSensitivity(blendedSens, 800),
           confidence: blendedConfidence,
           basis,
           vertexSens: localPred.vertexSens ?? groupPred.vertexSens,
+          ci: localPred.ci?.low !== null ? localPred.ci : groupPred.ci,
         };
       }
     }
   }
 
   return localPred;
+}
+
+export const predictSens = predictOptimalSensitivity;
+
+export interface RecenterSuggestion {
+  suggestedCm: number;
+  currentCm: number;
+  ratio: number;
+}
+
+/**
+ * Sugere recentralizacao quando ha confianca estatistica (medium/high) e
+ * a sensibilidade predita desviou mais de 8% do centro atual (|ln(pred / center)| > ln(1.08)).
+ */
+export function suggestRecenter(
+  prediction: SensPrediction | null | undefined,
+  currentCenterCm: number
+): RecenterSuggestion | null {
+  if (!prediction || (prediction.confidence !== "high" && prediction.confidence !== "medium")) {
+    return null;
+  }
+  if (!currentCenterCm || currentCenterCm <= 0) {
+    return null;
+  }
+  const ratio = prediction.predictedSens / currentCenterCm;
+  const drift = Math.abs(Math.log(ratio));
+  if (drift > Math.log(1.08)) {
+    return {
+      suggestedCm: prediction.predictedSens,
+      currentCm: currentCenterCm,
+      ratio,
+    };
+  }
+  return null;
 }
 
 export interface PlaylistCategorySlice {
@@ -627,7 +765,8 @@ export interface PlaylistSensStats {
 export function computePlaylistSensStats(
   playlist: Playlist,
   tasks: Task[],
-  profile: PredictorProfile = "equilibrado"
+  profile: PredictorProfile = "equilibrado",
+  dpi: number = 800
 ): PlaylistSensStats {
   const taskMap = new Map<string, Task>();
   for (const t of tasks) {
@@ -653,11 +792,10 @@ export function computePlaylistSensStats(
   }
 
   const sliceMap = new Map<string, SliceBucket>();
-  const normalizedRuns: RunDataPoint[] = [];
 
   for (const task of matchedTasks) {
-    const cat = task.category || "Click Timing";
-    const subcat = task.subcategory || "Precision";
+    const cat = task.category || DEFAULT_CATEGORY;
+    const subcat = task.subcategory || DEFAULT_SUBCATEGORY;
     const key = `${cat}__${subcat}`;
 
     let bucket = sliceMap.get(key);
@@ -671,34 +809,33 @@ export function computePlaylistSensStats(
       sliceMap.set(key, bucket);
     }
     bucket.scenariosCount += 1;
-
-    let taskPb = 0;
-    for (const sess of task.sessions || []) {
-      const cmSens = valorantToCm360(sess.sens);
-      if (cmSens >= 5 && sess.pb > 0 && sess.pb > taskPb) {
-        taskPb = sess.pb;
-      }
-    }
-
-    for (const sess of task.sessions || []) {
-      const cmSens = valorantToCm360(sess.sens);
-      if (cmSens >= 5 && sess.pb > 0) {
-        const normScore = taskPb > 0 ? (sess.pb / taskPb) * 100 : 100;
-        const runPoint: RunDataPoint = {
-          sens: Number(cmSens.toFixed(1)),
-          score: normScore,
-          rawScore: sess.pb,
-          normScore: normScore,
-          scenario: task.name,
-          date: sess.date,
-          threshold: sess.threshold,
-        };
-
-        bucket.runs.push(runPoint);
-        normalizedRuns.push(runPoint);
-      }
-    }
   }
+
+  const runPoints = buildRunPoints(matchedTasks, { dpi });
+  const matchedTaskMap = new Map(matchedTasks.map((t) => [t.id, t]));
+
+  const normalizedRuns: RunDataPoint[] = runPoints.map((p) => {
+    const task = matchedTaskMap.get(p.taskId);
+    const cat = task?.category || DEFAULT_CATEGORY;
+    const subcat = task?.subcategory || DEFAULT_SUBCATEGORY;
+    const key = `${cat}__${subcat}`;
+
+    const runPoint: RunDataPoint = {
+      sens: p.sens,
+      score: p.rel,
+      rawScore: p.score,
+      normScore: p.rel,
+      scenario: p.scenario,
+      date: p.date,
+      threshold: p.threshold,
+    };
+
+    const bucket = sliceMap.get(key);
+    if (bucket) {
+      bucket.runs.push(runPoint);
+    }
+    return runPoint;
+  });
 
   const categorySlices: PlaylistCategorySlice[] = [];
 
@@ -753,7 +890,11 @@ export function computePlaylistSensStats(
   const totalRuns = normalizedRuns.length;
   if (totalRuns >= 8) {
     const distinctSens = new Set(
-      normalizedRuns.map((r) => Number(valorantToCm360(r.sens).toFixed(1)))
+      normalizedRuns.map((r) =>
+        r.sens >= 2.5
+          ? Number(r.sens.toFixed(1))
+          : Number(valorantToCm360(r.sens, dpi).toFixed(1))
+      )
     );
 
     if (distinctSens.size >= 4) {
@@ -827,14 +968,14 @@ export interface ScenarioIdealSens {
  */
 export function getScenarioIdealSens(
   task: Task | null | undefined,
-  allTasks?: Task[],
-  userDpi: number = 800
+  allTasks: Task[] | undefined,
+  dpi: number
 ): ScenarioIdealSens {
-  const category = task?.category || "Click Timing";
-  const subcategory = task?.subcategory || "Precision";
+  const category = task?.category || DEFAULT_CATEGORY;
+  const subcategory = task?.subcategory || DEFAULT_SUBCATEGORY;
   const viscoseSens =
     getRecommendedSens(category, subcategory) ??
-    getRecommendedSens("Click Timing", "Precision") ??
+    getRecommendedSens(DEFAULT_CATEGORY, DEFAULT_SUBCATEGORY) ??
     45;
 
   if (!task || !task.sessions || task.sessions.length === 0) {
@@ -849,32 +990,29 @@ export function getScenarioIdealSens(
     };
   }
 
-  // Coleta runs elegiveis do cenario
-  const taskRuns: RunDataPoint[] = [];
-  for (const sess of task.sessions) {
-    const cm = valorantToCm360(sess.sens, userDpi);
-    if (cm >= 5 && sess.pb > 0) {
-      taskRuns.push({
-        sens: Number(cm.toFixed(1)),
-        score: sess.pb,
-        rawScore: sess.pb,
-        date: sess.date,
-        scenario: task.name,
-      });
-    }
-  }
+  // Coleta runs elegiveis do cenario via buildRunPoints
+  const runPoints = buildRunPoints([task], { dpi });
+  const taskRuns: RunDataPoint[] = runPoints.map((p) => ({
+    sens: p.sens,
+    score: p.score,
+    rawScore: p.score,
+    normScore: p.rel,
+    date: p.date,
+    scenario: p.scenario,
+    threshold: p.threshold,
+  }));
 
-  // Tentativa 1: Sweet Spot Bayesiano local do cenario (>= 3 runs estaveis)
+  // Tentativa 1: Preditor local do cenario (confidence medium ou high)
   if (taskRuns.length >= 3) {
-    const analysis = computeSweetSpotAnalytics(taskRuns);
-    if (analysis && analysis.bestBucket && !analysis.isProvisional) {
+    const localPred = predictOptimalSensitivity(taskRuns);
+    if (localPred && (localPred.confidence === "high" || localPred.confidence === "medium")) {
       return {
-        value: analysis.bestBucket.sens,
+        value: localPred.predictedSens,
         source: "empirical",
-        confidence: analysis.bestBucket.confidenceLevel,
+        confidence: localPred.confidence,
         count: taskRuns.length,
         viscoseSens,
-        empiricalSens: analysis.bestBucket.sens,
+        empiricalSens: localPred.predictedSens,
         scenarioName: task.name,
       };
     }
@@ -882,25 +1020,25 @@ export function getScenarioIdealSens(
 
   // Tentativa 2: Agrupamento da categoria se allTasks fornecido e local insuficiente
   if (allTasks && allTasks.length > 0) {
-    const groupRuns: RunDataPoint[] = [];
-    for (const t of allTasks) {
-      if (t.category === category && t.subcategory === subcategory) {
-        for (const sess of t.sessions) {
-          const cm = valorantToCm360(sess.sens, userDpi);
-          if (cm >= 5 && sess.pb > 0) {
-            groupRuns.push({
-              sens: Number(cm.toFixed(1)),
-              score: sess.pb,
-              rawScore: sess.pb,
-            });
-          }
-        }
-      }
-    }
+    const categoryTasks = allTasks.filter(
+      (t) =>
+        (t.category || DEFAULT_CATEGORY) === category &&
+        (t.subcategory || DEFAULT_SUBCATEGORY) === subcategory
+    );
+    const categoryRunPoints = buildRunPoints(categoryTasks, { dpi });
+    const groupRuns: RunDataPoint[] = categoryRunPoints.map((p) => ({
+      sens: p.sens,
+      score: p.rel, // pooled rel score (item 2: pooling usa rel)
+      rawScore: p.score,
+      normScore: p.rel,
+      date: p.date,
+      scenario: p.scenario,
+      threshold: p.threshold,
+    }));
 
     if (groupRuns.length >= 8) {
-      const pred = predictOptimalSensitivity([], "equilibrado", { groupRuns });
-      if (pred && pred.confidence !== "insufficient") {
+      const pred = predictOptimalSensitivity(groupRuns);
+      if (pred && (pred.confidence === "high" || pred.confidence === "medium")) {
         return {
           value: pred.predictedSens,
           source: "empirical",
@@ -924,34 +1062,5 @@ export function getScenarioIdealSens(
     empiricalSens: null,
     scenarioName: task.name,
   };
-}
-
-/**
- * Calcula os limites do randomizador com base no spread percentual customizavel (padrao 25%).
- * Caso userBaseSensCm seja informado e divirja da sensibilidade central, os multiplicadores
- * sao dimensionados a partir da sensibilidade base fisica do usuario no KovaaK's.
- */
-export function calculateSensRange(
-  centerSensCm: number,
-  spreadPercent: number = 25,
-  userBaseSensCm?: number
-): { minCm: number; maxCm: number; minMult: number; maxMult: number; spreadPercent: number } {
-  const spread = Math.max(1, Math.min(90, spreadPercent));
-  const pct = spread / 100;
-  const minCm = Number((centerSensCm * (1 - pct)).toFixed(1));
-  const maxCm = Number((centerSensCm * (1 + pct)).toFixed(1));
-
-  let minMult: number;
-  let maxMult: number;
-
-  if (userBaseSensCm !== undefined && userBaseSensCm > 0) {
-    minMult = Number((userBaseSensCm / maxCm).toFixed(2));
-    maxMult = Number((userBaseSensCm / minCm).toFixed(2));
-  } else {
-    minMult = Number((1 - pct).toFixed(2));
-    maxMult = Number((1 + pct).toFixed(2));
-  }
-
-  return { minCm, maxCm, minMult, maxMult, spreadPercent: spread };
 }
 

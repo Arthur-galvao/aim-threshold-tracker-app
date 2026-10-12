@@ -1,12 +1,13 @@
 import { useMemo } from "react";
 import type { Task } from "@/lib/types";
-import { getDisplaySens } from "@/lib/viscose";
-import { valorantToCm360, type RunDataPoint } from "@/lib/sens-analytics";
+import { DEFAULT_CATEGORY, DEFAULT_SUBCATEGORY, getDisplaySens } from "@/lib/viscose";
+import { buildRunPoints } from "@/lib/run-points";
 import { useI18n } from "@/lib/i18n";
 
 interface TaskSelectorProps {
   tasks: Task[];
   activeTaskId: string | null;
+  mouseDpi?: number;
   onTaskChange: (id: string) => void;
   onNewTask: () => void;
   onDeleteTask: () => void;
@@ -15,6 +16,7 @@ interface TaskSelectorProps {
 export function TaskSelector({
   tasks,
   activeTaskId,
+  mouseDpi,
   onTaskChange,
   onNewTask,
   onDeleteTask,
@@ -23,26 +25,23 @@ export function TaskSelector({
 
   const groupRuns = useMemo(() => {
     if (!activeTask) return [];
-    const runs: RunDataPoint[] = [];
-    for (const t of tasks) {
-      if (
-        t.category === activeTask.category &&
-        t.subcategory === activeTask.subcategory
-      ) {
-        for (const s of t.sessions) {
-          const sensCm = valorantToCm360(s.sens);
-          if (sensCm >= 5 && s.pb > 0) {
-            runs.push({
-              sens: Number(sensCm.toFixed(1)),
-              score: s.pb,
-              date: s.date,
-            });
-          }
-        }
-      }
-    }
-    return runs;
-  }, [activeTask, tasks]);
+    const cat = activeTask.category || DEFAULT_CATEGORY;
+    const subcat = activeTask.subcategory || DEFAULT_SUBCATEGORY;
+    const matchingTasks = tasks.filter(
+      (t) =>
+        (t.category || DEFAULT_CATEGORY) === cat &&
+        (t.subcategory || DEFAULT_SUBCATEGORY) === subcat
+    );
+    const dpi = mouseDpi || 800;
+    const runPoints = buildRunPoints(matchingTasks, { dpi });
+    return runPoints.map((p) => ({
+      sens: p.sens,
+      score: p.rel,
+      rawScore: p.score,
+      normScore: p.rel,
+      date: p.date,
+    }));
+  }, [activeTask, tasks, mouseDpi]);
 
   const displaySens = activeTask
     ? getDisplaySens(activeTask.category, activeTask.subcategory, groupRuns)
