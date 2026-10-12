@@ -1,4 +1,5 @@
 import type { Task } from "./types.ts";
+import { summarizeDays } from "./day-summary.ts";
 
 export interface MetricDeltas {
   scoreDelta: number | null;
@@ -12,29 +13,19 @@ export interface TargetProgress {
 }
 
 export function computeMetricDeltas(task: Task | null): MetricDeltas {
-  if (!task || !task.sessions || task.sessions.length < 2) {
+  const days = summarizeDays(task);
+  if (days.length < 2) {
     return {
       scoreDelta: null,
       thresholdDelta: null,
     };
   }
 
-  const sessions = task.sessions;
-  const lastIndex = sessions.length - 1;
-  const lastSession = sessions[lastIndex];
-  const prevSession = sessions[lastIndex - 1];
+  const lastDay = days[days.length - 1];
+  const prevDay = days[days.length - 2];
 
-  const lastScore = typeof lastSession.pb === "number" ? lastSession.pb : null;
-  const prevScore = typeof prevSession.pb === "number" ? prevSession.pb : null;
-
-  const scoreDelta =
-    lastScore !== null && prevScore !== null ? lastScore - prevScore : null;
-
-  const thresholdDelta =
-    typeof lastSession.threshold === "number" &&
-    typeof prevSession.threshold === "number"
-      ? lastSession.threshold - prevSession.threshold
-      : null;
+  const scoreDelta = lastDay.best - prevDay.best;
+  const thresholdDelta = lastDay.threshold - prevDay.threshold;
 
   return {
     scoreDelta,
@@ -62,9 +53,10 @@ export function computeTargetProgress(
 }
 
 export function extractRecentTrend(task: Task | null, limit: number = 6): number[] {
-  if (!task || !task.sessions || task.sessions.length === 0) {
+  const days = summarizeDays(task);
+  if (days.length === 0) {
     return [];
   }
 
-  return task.sessions.slice(-limit).map((s) => Number(s.pb) || 0);
+  return days.slice(-limit).map((d) => d.best);
 }

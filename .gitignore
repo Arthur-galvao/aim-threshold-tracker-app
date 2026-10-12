@@ -81,4 +81,3 @@ test_output.css
 screenshot_tool.js
 *.png
 !src-tauri/icons/*.png
-src/components/DesignMockupsModal.tsx

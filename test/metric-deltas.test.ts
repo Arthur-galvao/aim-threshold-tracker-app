@@ -94,4 +94,31 @@ describe("metric-deltas analytics", () => {
       []
     );
   });
+
+  it("calculates deltas across distinct days even when a day has multiple runs", () => {
+    const multiRunTask: Task = {
+      id: "task-multi",
+      name: "1w2ts Pasu Multi",
+      category: "Flick Tech",
+      subcategory: "Speed",
+      sessions: [
+        // Day 1: runs 900, 940 (best: 940, thresh: 900)
+        { id: "s1", date: "2026-10-01", pb: 900, sens: 45, threshold: 900 },
+        { id: "s2", date: "2026-10-01", pb: 940, sens: 45, threshold: 900 },
+        // Day 2: runs 960, 1000 (best: 1000, thresh: 940)
+        { id: "s3", date: "2026-10-02", pb: 960, sens: 45, threshold: 940 },
+        { id: "s4", date: "2026-10-02", pb: 1000, sens: 45, threshold: 940 },
+      ],
+    };
+
+    const deltas = computeMetricDeltas(multiRunTask);
+    // Compares Day 2 best (1000) vs Day 1 best (940) -> +60
+    assert.equal(deltas.scoreDelta, 60);
+    // Compares Day 2 threshold (940) vs Day 1 threshold (900) -> +40
+    assert.equal(deltas.thresholdDelta, 40);
+
+    const trend = extractRecentTrend(multiRunTask, 5);
+    // Trend should have 2 points (one best per day: 940, 1000)
+    assert.deepEqual(trend, [940, 1000]);
+  });
 });

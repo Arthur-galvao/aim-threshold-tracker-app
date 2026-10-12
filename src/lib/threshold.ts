@@ -1,5 +1,6 @@
 import type { AppData, Task } from "./types.ts";
 import { categorizeScenario } from "./viscose.ts";
+import { summarizeDays } from "./day-summary.ts";
 
 export function cloneAppData(data: AppData): AppData {
   return typeof structuredClone === "function"
@@ -90,6 +91,25 @@ export function getTargetThresholdForTask(task: Task | null): number | null {
   return sorted[sorted.length - 1].threshold;
 }
 
+export function computeDayThreshold(prev: number | null, scores: number[]): number {
+  if (!scores || scores.length === 0) return prev ?? 0;
+  const numScores = scores.map((s) => Number(s) || 0);
+  const dayPB = Math.max(...numScores);
+  const sortedScores = numScores.length > 1 ? [...numScores].sort((a, b) => b - a) : null;
+  const secondPB = sortedScores ? sortedScores[1] : null;
+
+  if (prev === null) {
+    return secondPB !== null ? Math.round(secondPB) : Math.round(dayPB * 0.92);
+  }
+
+  let candidate = Math.round(dayPB * 0.93);
+  if (secondPB !== null) {
+    candidate = Math.max(candidate, Math.round(secondPB));
+  }
+
+  return Math.max(prev, candidate);
+}
+
 export function recalculateAllTaskThresholds(task: Task): void {
   if (!task.sessions || task.sessions.length === 0) return;
 
@@ -106,37 +126,16 @@ export function recalculateAllTaskThresholds(task: Task): void {
   }
 
   let prevThreshold: number | null = null;
-  let gIdx = 0;
 
   for (const entries of dateGroups.values()) {
     const scores = entries.map((e) => Number(e.pb) || 0);
-    const dayPB = Math.max(...scores);
-    const sortedScores = scores.length > 1 ? [...scores].sort((a, b) => b - a) : null;
-    const secondPB = sortedScores ? sortedScores[1] : null;
-
-    let groupThreshold = 0;
-
-    if (gIdx === 0 || prevThreshold === null) {
-      groupThreshold = secondPB !== null ? Math.round(secondPB) : Math.round(dayPB * 0.92);
-    } else {
-      let candidate = Math.round(dayPB * 0.93);
-      if (secondPB !== null) {
-        candidate = Math.max(candidate, Math.round(secondPB));
-      }
-
-      groupThreshold = Math.max(prevThreshold, candidate);
-
-      if (dayPB < groupThreshold) {
-        groupThreshold = Math.min(prevThreshold, dayPB);
-      }
-    }
+    const groupThreshold = computeDayThreshold(prevThreshold, scores);
 
     for (const entry of entries) {
       entry.threshold = groupThreshold;
     }
 
     prevThreshold = groupThreshold;
-    gIdx++;
   }
 }
 
@@ -177,11 +176,7 @@ export function estimateSessionThreshold(
 
   if (targetThresh === null) {
     if (rawScores.length > 0) {
-      const maxInInput = Math.max(...rawScores);
-      const firstThreshold =
-        rawScores.length > 1
-          ? [...rawScores].sort((a, b) => b - a)[1]
-          : Math.round(maxInInput * 0.92);
+      const firstThreshold = computeDayThreshold(null, rawScores);
       return {
         threshold: firstThreshold,
         detailKey: "session.detailFirst",
@@ -203,19 +198,7 @@ export function estimateSessionThreshold(
     };
   }
 
-  const maxInInput = Math.max(...rawScores);
-  let estimatedThreshold = targetThresh;
-
-  if (rawScores.length > 1) {
-    const sortedRuns = [...rawScores].sort((a, b) => b - a);
-    estimatedThreshold = Math.max(targetThresh, Math.round(sortedRuns[1]));
-  } else {
-    estimatedThreshold = Math.max(targetThresh, Math.round(maxInInput * 0.93));
-  }
-
-  if (maxInInput < estimatedThreshold) {
-    estimatedThreshold = Math.min(targetThresh, maxInInput);
-  }
+  const estimatedThreshold = computeDayThreshold(targetThresh, rawScores);
 
   return {
     threshold: estimatedThreshold,
@@ -232,7 +215,8 @@ export function computeTaskMetrics(task: Task | null) {
     return {
       maxPB: null as number | null,
       targetThreshold: null as number | null,
-      consistency: null as string | null,
+      hitRate: null as number | null,
+      streak: 0,
       lastSens: null as number | null,
     };
   }
@@ -241,30 +225,22 @@ export function computeTaskMetrics(task: Task | null) {
   const maxPB = Math.max(...pbs);
   const targetThreshold = getTargetThresholdForTask(task);
 
-  const dateGroups = new Map<string, typeof task.sessions>();
-  for (const sess of task.sessions) {
-    const list = dateGroups.get(sess.date);
-    if (list) {
-      list.push(sess);
+  const summaries = summarizeDays(task);
+  const eligibleDays = summaries.filter((d) => d.hit !== null);
+  let hitRate: number | null = null;
+  if (eligibleDays.length > 0) {
+    const hits = eligibleDays.filter((d) => d.hit === true).length;
+    hitRate = Number(((hits / eligibleDays.length) * 100).toFixed(1));
+  }
+
+  let streak = 0;
+  for (let i = summaries.length - 1; i >= 0; i--) {
+    if (summaries[i].hit === true) {
+      streak++;
     } else {
-      dateGroups.set(sess.date, [sess]);
+      break;
     }
   }
-
-  let totalRatio = 0;
-  let validDays = 0;
-  for (const entries of dateGroups.values()) {
-    const scores = entries.map((e) => Number(e.pb) || 0);
-    const dayPB = Math.max(...scores);
-    const dayThreshold = entries[0].threshold;
-    if (dayPB > 0) {
-      totalRatio += dayThreshold / dayPB;
-      validDays++;
-    }
-  }
-
-  const consistency =
-    validDays > 0 ? ((totalRatio / validDays) * 100).toFixed(1) : "0.0";
 
   const sorted = [...task.sessions].sort((a, b) => a.date.localeCompare(b.date));
   const lastSession = sorted[sorted.length - 1];
@@ -272,7 +248,8 @@ export function computeTaskMetrics(task: Task | null) {
   return {
     maxPB,
     targetThreshold,
-    consistency: `${consistency}%`,
+    hitRate,
+    streak,
     lastSens: lastSession.sens,
   };
 }
