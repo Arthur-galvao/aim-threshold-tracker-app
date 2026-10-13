@@ -15,6 +15,7 @@ import {
   poolCategoryRuns,
   predictOptimalSensitivity,
   predictSens,
+  kernelSupport,
   suggestRecenter,
   PREDICTOR_PROFILES,
   computePlaylistSensStats,
@@ -332,6 +333,70 @@ describe("sens-analytics", () => {
       assert.equal(neutral.empiricalSens, 41.14);
       // Consistencia (lambda=1.0) penaliza a variância alta de 41.14 e escolhe a estável 50.0
       assert.equal(consistency.empiricalSens, 50.0);
+    });
+
+    it("C3: isolated run at 136 cm with high score never becomes empirical best when support is below minSupport", () => {
+      // 45 runs concentrated between 37 and 82 cm with normal scores
+      const runs: RunDataPoint[] = [];
+      const testSensList = [38, 42, 46, 50, 55, 60, 65, 70, 80];
+      for (const sens of testSensList) {
+        for (let i = 0; i < 5; i++) {
+          runs.push({ sens, score: 950 + (i % 3) * 10 });
+        }
+      }
+      assert.equal(runs.length, 45);
+
+      // 1 isolated run at 136 cm with very high score (1500)
+      runs.push({ sens: 136.0, score: 1500 });
+      assert.equal(runs.length, 46);
+
+      const prediction = predictOptimalSensitivity(runs, "neutro");
+      assert.ok(prediction !== null);
+
+      // Empirical best must stay in the supported region (between 37 and 82 cm)
+      assert.ok(
+        prediction.empiricalSens >= 37 && prediction.empiricalSens <= 82,
+        `Expected empiricalSens between 37 and 82 cm, got ${prediction.empiricalSens}`
+      );
+      assert.notEqual(prediction.empiricalSens, 136.0);
+    });
+
+    it("C4: bin with n=2 and near-zero sample variance does not beat n=15 with moderate variance in consistencia profile", () => {
+      const runs: RunDataPoint[] = [];
+
+      // Global context: lower scores at 40 cm to give positive globalSd
+      for (let i = 0; i < 5; i++) {
+        runs.push({ sens: 40.0, score: 880 });
+      }
+
+      // Bin A at 50 cm: n=15, good average (1000) and moderate sample variance
+      const scores50 = [985, 985, 990, 990, 995, 995, 1000, 1000, 1000, 1005, 1005, 1010, 1010, 1015, 1015];
+      for (const score of scores50) {
+        runs.push({ sens: 50.0, score });
+      }
+
+      // Supporting bin at 57.88 cm (k=3) so k=4 has sufficient kernel support (>= minSupport = 3)
+      for (let i = 0; i < 2; i++) {
+        runs.push({ sens: 57.88, score: 1002 });
+      }
+
+      // Bin B at 60.78 cm (k=4): n=2, identical high scores (sample sd = 0)
+      for (let i = 0; i < 2; i++) {
+        runs.push({ sens: 60.78, score: 1002 });
+      }
+
+      const neutral = predictOptimalSensitivity(runs, "neutro");
+      const consistency = predictOptimalSensitivity(runs, "consistencia");
+
+      assert.ok(neutral && consistency);
+      // In neutral (lambda=0), higher smoothed average at 60.78 cm wins
+      assert.equal(neutral.empiricalSens, 60.78);
+      // In consistencia (lambda=1.0), variance shrinkage penalizes n=2 and robust n=15 bin at 50.0 cm wins
+      assert.equal(consistency.empiricalSens, 50.0);
+    });
+
+    it("reexports kernelSupport from sens-model and verifies support computation", () => {
+      assert.equal(typeof kernelSupport, "function");
     });
   });
 

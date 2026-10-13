@@ -1,18 +1,27 @@
 import type { Task } from "./types.ts";
 import { latticeIndex } from "./sens-lattice.ts";
 import { valorantToCm360 } from "./sens-analytics.ts";
+import { binByLattice, kernelSmooth } from "./sens-kernel.ts";
 
 export interface RunPoint {
   taskId: string;
   sessionId: string;
   scenario: string;
   date: string;
+  ts: string;           // timestamp formato YYYYMMDDHHmmss
   k: number;            // indice da grade (latticeIndex)
   sens: number;         // cm/360
   score: number;        // score bruto da run (Session.pb)
-  rel: number;          // desempenho relativo ao baseline do cenario, 100 = tipico
+  rel: number;          // 100 + desvio vs tendencia, em % da mediana
   relReliable: boolean; // false se nao ha runs suficientes pra baseline
   threshold?: number;
+}
+
+export const TS_RE = /(\d{4})\.(\d{2})\.(\d{2})-(\d{2})\.(\d{2})\.(\d{2})/;
+
+export function runTimestamp(sess: { date: string; sourceFile?: string }): string {
+  const m = sess.sourceFile?.match(TS_RE);
+  return m ? m.slice(1, 7).join("") : sess.date.replace(/-/g, "") + "000000";
 }
 
 function computeMedian(arr: number[]): number {
@@ -25,17 +34,33 @@ function computeMedian(arr: number[]): number {
   return (sorted[mid - 1] + sorted[mid]) / 2;
 }
 
+export function movingMedian(vals: number[], W: number): number[] {
+  const n = vals.length;
+  if (n === 0) return [];
+  const result: number[] = new Array(n);
+  for (let i = 0; i < n; i++) {
+    const start = Math.max(0, i - W);
+    const end = Math.min(n - 1, i + W);
+    const windowVals: number[] = [];
+    for (let j = start; j <= end; j++) {
+      windowVals.push(vals[j]);
+    }
+    result[i] = computeMedian(windowVals);
+  }
+  return result;
+}
+
 export function buildRunPoints(
   tasks: Task[],
-  opts: { dpi: number; window?: number }
+  opts: { dpi: number; trendWindow?: number; window?: number }
 ): RunPoint[] {
-  const windowSize = opts.window ?? 8;
+  const windowSize = opts.trendWindow ?? opts.window ?? 10;
   const allPoints: RunPoint[] = [];
 
   for (const task of tasks) {
     if (!task.sessions || task.sessions.length === 0) continue;
 
-    // Filtra e normaliza sessoes elegíveis mantendo o índice original
+    // Filtra e normaliza sessoes elegiveis mantendo o indice original
     const eligible = task.sessions
       .map((sess, originalIdx) => {
         const cm = valorantToCm360(sess.sens, opts.dpi);
@@ -49,58 +74,51 @@ export function buildRunPoints(
 
     if (eligible.length === 0) continue;
 
-    // Ordena por date crescente (empate: índice original)
+    // Ordena por ts crescente (empate: indice original)
     eligible.sort((a, b) => {
-      const cmp = a.sess.date.localeCompare(b.sess.date);
+      const cmp = runTimestamp(a.sess).localeCompare(runTimestamp(b.sess));
       if (cmp !== 0) return cmp;
       return a.originalIdx - b.originalIdx;
     });
 
     const totalRuns = eligible.length;
+    const sc = eligible.map((item) => Number(item.sess.pb) || 0);
+    const k = eligible.map((item) => latticeIndex(item.cm));
+
+    // Identificabilidade: o que separa tendencia de sens sao as transicoes e os retornos (ex.: 50 para 68 e de volta para 50). Cenarios com um unico bloco de sens nao possuem informacao para separar efeito de sens de tendencia, sendo tratados com relReliable=false.
+    const distinctK = new Set(k).size;
+    const isReliable = totalRuns >= 12 && distinctK >= 3;
+
+    const medianSc = computeMedian(sc);
+    let trend: number[] = [];
+
+    if (isReliable) {
+      trend = movingMedian(sc, windowSize);
+      for (let iter = 0; iter < 12; iter++) {
+        const residuals = sc.map((scoreVal, idx) => ({ k: k[idx], rel: scoreVal - trend[idx] }));
+        const bins = binByLattice(residuals);
+        const evalSmooth = kernelSmooth(bins, 1.5);
+        const fVals = k.map((kIdx) => evalSmooth(kIdx));
+        const meanF = fVals.reduce((sum, v) => sum + v, 0) / fVals.length;
+        const centeredF = fVals.map((v) => v - meanF);
+        const detrendedForTrend = sc.map((scoreVal, idx) => scoreVal - centeredF[idx]);
+        trend = movingMedian(detrendedForTrend, windowSize);
+      }
+    }
 
     for (let i = 0; i < totalRuns; i++) {
       const current = eligible[i];
-      const currentScore = Number(current.sess.pb) || 0;
+      const currentScore = sc[i];
+      let rel: number;
+      let relReliable: boolean;
 
-      // Vizinhos em +- windowSize posições, excluindo i
-      const start = Math.max(0, i - windowSize);
-      const end = Math.min(totalRuns - 1, i + windowSize);
-
-      const neighborScores: number[] = [];
-      for (let j = start; j <= end; j++) {
-        if (j !== i) {
-          neighborScores.push(Number(eligible[j].sess.pb) || 0);
-        }
-      }
-
-      let baseline = 0;
-      let relReliable = true;
-
-      if (neighborScores.length >= 6) {
-        baseline = computeMedian(neighborScores);
-      } else {
-        // Se menos de 6 vizinhos, usa todas as outras runs se >= 3
-        const allOtherScores: number[] = [];
-        for (let j = 0; j < totalRuns; j++) {
-          if (j !== i) {
-            allOtherScores.push(Number(eligible[j].sess.pb) || 0);
-          }
-        }
-
-        if (allOtherScores.length >= 3) {
-          baseline = computeMedian(allOtherScores);
-        } else {
-          baseline = currentScore;
-          relReliable = false;
-        }
-      }
-
-      let rel = 100;
-      if (baseline > 0 && relReliable) {
-        rel = (currentScore / baseline) * 100;
-      } else {
-        rel = 100;
+      if (!isReliable) {
+        rel = medianSc > 0 ? Number(((currentScore / medianSc) * 100).toFixed(2)) : 100;
         relReliable = false;
+      } else {
+        relReliable = true;
+        const y = currentScore - trend[i];
+        rel = medianSc > 0 ? Number((100 + (y / medianSc) * 100).toFixed(2)) : 100;
       }
 
       const point: RunPoint = {
@@ -108,10 +126,11 @@ export function buildRunPoints(
         sessionId: current.sess.id,
         scenario: task.name,
         date: current.sess.date,
-        k: latticeIndex(current.cm),
+        ts: runTimestamp(current.sess),
+        k: k[i],
         sens: current.cm,
         score: currentScore,
-        rel: Number(rel.toFixed(2)),
+        rel,
         relReliable,
         threshold: current.sess.threshold,
       };
@@ -120,8 +139,8 @@ export function buildRunPoints(
     }
   }
 
-  // Ordena globalmente por data crescente (estável para ordem original em empate)
-  allPoints.sort((a, b) => a.date.localeCompare(b.date));
+  // Ordena globalmente por ts crescente
+  allPoints.sort((a, b) => a.ts.localeCompare(b.ts));
 
   return allPoints;
 }

@@ -5,6 +5,7 @@ import { latticeCm, latticeIndex } from "./sens-lattice.ts";
 import {
   binByLattice,
   kernelSmooth,
+  kernelSupport,
   fitQuadraticLog,
   bootstrapVertex,
   type BinStat,
@@ -14,6 +15,7 @@ import {
 export {
   binByLattice,
   kernelSmooth,
+  kernelSupport,
   fitQuadraticLog,
   bootstrapVertex,
   type BinStat,
@@ -554,11 +556,20 @@ export function predictOptimalSensitivity(
       globalSd = Math.sqrt(sqDiff / (totalN - 1));
     }
 
-    let bestBin = binStats[0];
+    const minSupport = Math.max(3, 0.05 * totalN);
+    const eligibleBins = binStats.filter(
+      (b) => kernelSupport(b.k, binStats, 1.5) >= minSupport
+    );
+    const candidateBins = eligibleBins.length > 0 ? eligibleBins : binStats;
+
+    let bestBin = candidateBins[0];
     let bestScore = -Infinity;
 
-    for (const b of binStats) {
-      const sd_k = b.sd !== null && b.n >= 2 ? b.sd : globalSd;
+    for (const b of candidateBins) {
+      const sd_bin = b.sd !== null && b.n >= 2 ? b.sd : globalSd;
+      const sd_k = Math.sqrt(
+        ((b.n - 1) * Math.pow(sd_bin, 2) + 3 * Math.pow(globalSd, 2)) / (b.n - 1 + 3)
+      );
       const score_k = b.smooth - lambda * sd_k;
       if (score_k > bestScore || (score_k === bestScore && b.cm > bestBin.cm)) {
         bestScore = score_k;
