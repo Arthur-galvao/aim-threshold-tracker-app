@@ -182,12 +182,13 @@ export function SettingsModal({
       onClose={onClose}
       title={t("settings.title")}
       maxWidth="lg"
+      className="glass-floating"
     >
-      <div className="space-y-5 pb-4">
-        {/* Status Section */}
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <label className="block text-[11px] font-semibold uppercase tracking-wider text-text-muted">
+      <div className="space-y-6 pb-2">
+        {/* Status & KovaaK Directory Section */}
+        <section className="enter space-y-2" style={{ "--i": 0 } as React.CSSProperties}>
+          <div className="flex items-center justify-between px-1">
+            <label className="text-[11px] font-semibold uppercase tracking-wider text-text-faint">
               {t("settings.dir")}
             </label>
             <span
@@ -206,70 +207,67 @@ export function SettingsModal({
             </span>
           </div>
 
-          <div className="bg-surface-subtle border border-edge rounded-md px-3.5 py-2.5 text-[10px] font-mono tracking-widest uppercase font-mono text-text-secondary break-all">
-            {settingsPath ?? t("settings.none")}
+          <div className="bg-surface-subtle/60 border border-edge rounded-2xl p-3.5 space-y-3">
+            <div className="font-mono text-xs text-text-secondary break-all bg-surface/50 border border-edge rounded-xl px-3 py-2">
+              {settingsPath ?? t("settings.none")}
+            </div>
+
+            {watcherStatus.error && (
+              <p className="text-[11px] text-red font-medium">
+                {watcherStatus.error}
+              </p>
+            )}
+
+            <form onSubmit={handleSubmit} className="flex gap-2">
+              <input
+                type="text"
+                value={manualPath}
+                onChange={(e) => setManualPath(e.target.value)}
+                placeholder="C:\Steam\steamapps\common\FPSAimTrainer\FPSAimTrainer\stats"
+                className="flex-1 glass-input font-mono text-xs"
+              />
+              <Button
+                type="submit"
+                variant="primary"
+                size="md"
+                disabled={!manualPath.trim()}
+                className="press font-semibold whitespace-nowrap"
+              >
+                {t("settings.save")}
+              </Button>
+            </form>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+              <Button
+                variant="secondary"
+                size="md"
+                onClick={() => void onDetectPath()}
+                className="press"
+                icon={<MagnifyingGlass size={14} weight="bold" />}
+              >
+                {t("settings.detect")}
+              </Button>
+              <Button
+                variant="secondary"
+                size="md"
+                onClick={() => void handlePickFolder()}
+                className="press"
+                icon={<Folder size={14} weight="bold" />}
+              >
+                {t("settings.pick")}
+              </Button>
+            </div>
           </div>
-
-          {watcherStatus.error && (
-            <p className="mt-1.5 text-[11px] text-red font-medium">
-              {watcherStatus.error}
-            </p>
-          )}
-        </div>
-
-        {/* Manual Path Form */}
-        <form onSubmit={handleSubmit} className="space-y-2">
-          <label className="block text-[11px] font-semibold uppercase tracking-wider text-text-muted">
-            {t("settings.manual")}
-          </label>
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={manualPath}
-              onChange={(e) => setManualPath(e.target.value)}
-              placeholder="C:\Steam\steamapps\common\FPSAimTrainer\FPSAimTrainer\stats"
-              className="flex-1 minimal-input font-mono text-[10px] font-mono tracking-widest uppercase"
-            />
-            <Button
-              type="submit"
-              variant="primary"
-              size="md"
-              disabled={!manualPath.trim()}
-              className="uppercase tracking-wider font-semibold whitespace-nowrap"
-            >
-              {t("settings.save")}
-            </Button>
-          </div>
-        </form>
-
-        {/* Folder Detection Buttons */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          <Button
-            variant="secondary"
-            size="md"
-            onClick={() => void onDetectPath()}
-            icon={<MagnifyingGlass size={14} weight="bold" />}
-          >
-            {t("settings.detect")}
-          </Button>
-          <Button
-            variant="secondary"
-            size="md"
-            onClick={() => void handlePickFolder()}
-            icon={<Folder size={14} weight="bold" />}
-          >
-            {t("settings.pick")}
-          </Button>
-        </div>
+        </section>
 
         {/* Watcher Controls */}
-        <div className="flex gap-2 pt-2 border-t border-edge">
+        <div className="enter flex gap-2" style={{ "--i": 1 } as React.CSSProperties}>
           <Button
             variant={watcherStatus.active ? "danger" : "secondary"}
             size="md"
             onClick={() => void onToggleWatcher()}
             disabled={!hasPath}
-            className="flex-1 uppercase tracking-wider font-bold"
+            className="flex-1 press font-semibold"
             icon={
               watcherStatus.active ? (
                 <Stop size={14} weight="bold" />
@@ -285,6 +283,7 @@ export function SettingsModal({
             size="md"
             onClick={() => void onReimport()}
             disabled={!hasPath}
+            className="press"
             icon={<ArrowClockwise size={14} weight="bold" />}
           >
             {t("settings.reimport")}
@@ -292,13 +291,13 @@ export function SettingsModal({
         </div>
 
         {/* RawAccel Integration Section */}
-        <div className="pt-4 border-t border-edge space-y-3">
-          <div className="flex items-center justify-between">
-            <label className="block text-[11px] font-semibold uppercase tracking-wider text-text-muted">
+        <section className="enter space-y-2" style={{ "--i": 2 } as React.CSSProperties}>
+          <div className="flex items-center justify-between px-1">
+            <label className="text-[11px] font-semibold uppercase tracking-wider text-text-faint">
               {t("randomizer.rawaccelPath")}
             </label>
             <span
-              className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
+              className={`flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-semibold border ${
                 rawaccelAvailable
                   ? "bg-emerald-soft text-emerald border-emerald-edge"
                   : "bg-red-soft text-red border-red-edge"
@@ -313,83 +312,87 @@ export function SettingsModal({
             </span>
           </div>
 
-          <div className="bg-surface-subtle border border-edge rounded-md px-3.5 py-2 text-[10px] font-mono tracking-widest uppercase font-mono text-text-secondary break-all">
-            {rawaccelPath ?? t("settings.rawaccelNone")}
-          </div>
+          <div className="bg-surface-subtle/60 border border-edge rounded-2xl p-3.5 space-y-3">
+            <div className="font-mono text-xs text-text-secondary break-all bg-surface/50 border border-edge rounded-xl px-3 py-2">
+              {rawaccelPath ?? t("settings.rawaccelNone")}
+            </div>
 
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={manualRawaccel}
-              onChange={(e) => setManualRawaccel(e.target.value)}
-              placeholder={t("settings.rawaccelPh")}
-              className="flex-1 minimal-input font-mono text-[10px] font-mono tracking-widest uppercase"
-            />
-            <Button
-              type="button"
-              variant="primary"
-              size="md"
-              onClick={() => {
-                if (manualRawaccel.trim() && onUpdateRawaccelPath) {
-                  void onUpdateRawaccelPath(manualRawaccel.trim());
-                }
-              }}
-              disabled={!manualRawaccel.trim()}
-              className="uppercase tracking-wider font-semibold whitespace-nowrap"
-            >
-              {t("settings.save")}
-            </Button>
-          </div>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={manualRawaccel}
+                onChange={(e) => setManualRawaccel(e.target.value)}
+                placeholder={t("settings.rawaccelPh")}
+                className="flex-1 glass-input font-mono text-xs"
+              />
+              <Button
+                type="button"
+                variant="primary"
+                size="md"
+                onClick={() => {
+                  if (manualRawaccel.trim() && onUpdateRawaccelPath) {
+                    void onUpdateRawaccelPath(manualRawaccel.trim());
+                  }
+                }}
+                disabled={!manualRawaccel.trim()}
+                className="press font-semibold whitespace-nowrap"
+              >
+                {t("settings.save")}
+              </Button>
+            </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-            <Button
-              variant="secondary"
-              size="md"
-              onClick={async () => {
-                if (onDetectRawaccel) {
-                  const detected = await onDetectRawaccel();
-                  if (detected) setManualRawaccel(detected);
-                }
-              }}
-              icon={<MagnifyingGlass size={14} weight="bold" />}
-            >
-              {t("randomizer.detectPath")}
-            </Button>
-            <Button
-              variant="secondary"
-              size="md"
-              onClick={() => {
-                if (onTestRawaccel) {
-                  void onTestRawaccel();
-                }
-              }}
-              disabled={!rawaccelAvailable}
-              icon={<Wrench size={14} weight="bold" />}
-            >
-              {t("randomizer.testWriter")}
-            </Button>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+              <Button
+                variant="secondary"
+                size="md"
+                onClick={async () => {
+                  if (onDetectRawaccel) {
+                    const detected = await onDetectRawaccel();
+                    if (detected) setManualRawaccel(detected);
+                  }
+                }}
+                className="press"
+                icon={<MagnifyingGlass size={14} weight="bold" />}
+              >
+                {t("randomizer.detectPath")}
+              </Button>
+              <Button
+                variant="secondary"
+                size="md"
+                onClick={() => {
+                  if (onTestRawaccel) {
+                    void onTestRawaccel();
+                  }
+                }}
+                disabled={!rawaccelAvailable}
+                className="press"
+                icon={<Wrench size={14} weight="bold" />}
+              >
+                {t("randomizer.testWriter")}
+              </Button>
+            </div>
           </div>
-        </div>
+        </section>
 
-        {/* Background & Automation Section */}
-        <div className="space-y-3 pt-3 border-t border-edge">
-          <div>
-            <h4 className="text-[10px] font-mono tracking-widest uppercase font-bold uppercase tracking-wider text-text-main">
+        {/* Background & Automation Section (iOS Inset Group) */}
+        <section className="enter space-y-2" style={{ "--i": 3 } as React.CSSProperties}>
+          <div className="px-1">
+            <label className="text-[11px] font-semibold uppercase tracking-wider text-text-faint">
               {t("settings.automationSection")}
-            </h4>
+            </label>
           </div>
 
-          <div className="space-y-2">
+          <div className="bg-surface-subtle/60 rounded-2xl border border-edge divide-y divide-edge overflow-hidden">
             {/* Close to Tray Toggle */}
             <div
               onClick={() => void handleToggleCloseToTray(!closeToTray)}
-              className="flex items-center justify-between gap-3 p-3 rounded-md border border-edge bg-surface-subtle/40 hover:bg-surface-subtle/80 transition-colors cursor-pointer select-none"
+              className="flex items-center justify-between gap-3 p-3.5 sm:p-4 hover:bg-surface-hover/50 transition-colors cursor-pointer select-none"
             >
               <div className="flex-1 min-w-0 pr-2">
-                <span className="block text-[10px] font-mono tracking-widest uppercase font-semibold text-text-main">
+                <span className="block text-xs font-semibold text-text-main">
                   {t("settings.closeToTray")}
                 </span>
-                <p className="text-[11px] text-text-muted leading-snug mt-0.5">
+                <p className="text-[11px] text-text-secondary leading-snug mt-0.5">
                   {t("settings.closeToTrayDesc")}
                 </p>
               </div>
@@ -401,13 +404,13 @@ export function SettingsModal({
                   e.stopPropagation();
                   void handleToggleCloseToTray(!closeToTray);
                 }}
-                className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                className={`press relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
                   closeToTray ? "bg-accent" : "bg-edge-strong"
                 }`}
               >
                 <span
-                  className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
-                    closeToTray ? "translate-x-4" : "translate-x-0"
+                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-surface shadow-md ring-0 transition duration-200 ease-in-out ${
+                    closeToTray ? "translate-x-5" : "translate-x-0"
                   }`}
                 />
               </button>
@@ -416,13 +419,13 @@ export function SettingsModal({
             {/* Auto Detect Playlist Toggle */}
             <div
               onClick={() => void handleToggleAutoDetectPlaylist(!autoDetectPlaylist)}
-              className="flex items-center justify-between gap-3 p-3 rounded-md border border-edge bg-surface-subtle/40 hover:bg-surface-subtle/80 transition-colors cursor-pointer select-none"
+              className="flex items-center justify-between gap-3 p-3.5 sm:p-4 hover:bg-surface-hover/50 transition-colors cursor-pointer select-none"
             >
               <div className="flex-1 min-w-0 pr-2">
-                <span className="block text-[10px] font-mono tracking-widest uppercase font-semibold text-text-main">
+                <span className="block text-xs font-semibold text-text-main">
                   {t("settings.autoDetectPlaylist")}
                 </span>
-                <p className="text-[11px] text-text-muted leading-snug mt-0.5">
+                <p className="text-[11px] text-text-secondary leading-snug mt-0.5">
                   {t("settings.autoDetectPlaylistDesc")}
                 </p>
               </div>
@@ -434,13 +437,13 @@ export function SettingsModal({
                   e.stopPropagation();
                   void handleToggleAutoDetectPlaylist(!autoDetectPlaylist);
                 }}
-                className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                className={`press relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
                   autoDetectPlaylist ? "bg-accent" : "bg-edge-strong"
                 }`}
               >
                 <span
-                  className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
-                    autoDetectPlaylist ? "translate-x-4" : "translate-x-0"
+                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-surface shadow-md ring-0 transition duration-200 ease-in-out ${
+                    autoDetectPlaylist ? "translate-x-5" : "translate-x-0"
                   }`}
                 />
               </button>
@@ -449,13 +452,13 @@ export function SettingsModal({
             {/* Notify Step Advance Toggle */}
             <div
               onClick={() => void handleToggleNotifyStepAdvance(!notifyStepAdvance)}
-              className="flex items-center justify-between gap-3 p-3 rounded-md border border-edge bg-surface-subtle/40 hover:bg-surface-subtle/80 transition-colors cursor-pointer select-none"
+              className="flex items-center justify-between gap-3 p-3.5 sm:p-4 hover:bg-surface-hover/50 transition-colors cursor-pointer select-none"
             >
               <div className="flex-1 min-w-0 pr-2">
-                <span className="block text-[10px] font-mono tracking-widest uppercase font-semibold text-text-main">
+                <span className="block text-xs font-semibold text-text-main">
                   {t("settings.notifyStepAdvance")}
                 </span>
-                <p className="text-[11px] text-text-muted leading-snug mt-0.5">
+                <p className="text-[11px] text-text-secondary leading-snug mt-0.5">
                   {t("settings.notifyStepAdvanceDesc")}
                 </p>
               </div>
@@ -467,39 +470,39 @@ export function SettingsModal({
                   e.stopPropagation();
                   void handleToggleNotifyStepAdvance(!notifyStepAdvance);
                 }}
-                className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                className={`press relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
                   notifyStepAdvance ? "bg-accent" : "bg-edge-strong"
                 }`}
               >
                 <span
-                  className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
-                    notifyStepAdvance ? "translate-x-4" : "translate-x-0"
+                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-surface shadow-md ring-0 transition duration-200 ease-in-out ${
+                    notifyStepAdvance ? "translate-x-5" : "translate-x-0"
                   }`}
                 />
               </button>
             </div>
           </div>
-        </div>
+        </section>
 
         {/* Mouse Hardware & DPI Section */}
-        <div className="space-y-3 pt-3 border-t border-edge">
-          <div>
-            <h4 className="text-[10px] font-mono tracking-widest uppercase font-bold uppercase tracking-wider text-text-main">
+        <section className="enter space-y-2" style={{ "--i": 4 } as React.CSSProperties}>
+          <div className="px-1">
+            <label className="text-[11px] font-semibold uppercase tracking-wider text-text-faint">
               {t("settings.mouseHardware")}
-            </h4>
+            </label>
           </div>
 
-          <div className="p-3 rounded-md border border-edge bg-surface-subtle/40 space-y-2.5">
+          <div className="p-3.5 sm:p-4 rounded-2xl border border-edge bg-surface-subtle/60 space-y-3">
             <div className="flex items-start justify-between gap-2">
               <div className="flex-1 min-w-0 pr-2">
-                <span className="block text-[10px] font-mono tracking-widest uppercase font-semibold text-text-main">
+                <span className="block text-xs font-semibold text-text-main">
                   {t("settings.mouseDpi")}
                 </span>
-                <p className="text-[11px] text-text-muted leading-snug mt-0.5">
+                <p className="text-[11px] text-text-secondary leading-snug mt-0.5">
                   {t("settings.mouseDpiDesc")}
                 </p>
               </div>
-              <span className="text-xs font-mono font-bold text-accent px-2 py-0.5 rounded bg-accent/10 border border-accent/20 whitespace-nowrap">
+              <span className="text-xs font-mono font-bold text-accent px-2.5 py-0.5 rounded-full bg-accent/10 border border-accent/20 whitespace-nowrap tabular-nums">
                 {mouseDpi} DPI
               </span>
             </div>
@@ -510,9 +513,9 @@ export function SettingsModal({
                   key={preset}
                   type="button"
                   onClick={() => void handleDpiChange(preset)}
-                  className={`px-2.5 py-1 rounded text-[11px] font-mono font-semibold transition-colors ${
+                  className={`press px-3 py-1.5 rounded-xl text-xs font-mono font-semibold transition-all tabular-nums ${
                     mouseDpi === preset
-                      ? "bg-accent text-white"
+                      ? "bg-accent text-accent-fg shadow-xs"
                       : "bg-surface border border-edge text-text-secondary hover:text-text-main hover:bg-surface-hover"
                   }`}
                 >
@@ -542,24 +545,24 @@ export function SettingsModal({
                       (e.target as HTMLInputElement).blur();
                     }
                   }}
-                  className="w-20 minimal-input py-1 px-2 text-[11px] font-mono font-medium text-right"
+                  className="w-20 glass-input py-1 px-2.5 text-xs font-mono font-medium text-right tabular-nums"
                   aria-label={t("settings.mouseDpi")}
                 />
-                <span className="ml-1 text-[10px] font-mono text-text-muted uppercase">DPI</span>
+                <span className="ml-1.5 text-[10px] font-mono text-text-faint uppercase">DPI</span>
               </div>
             </div>
           </div>
-        </div>
+        </section>
 
         {/* Visual Theme Selection */}
         {onThemeChange && (
-          <div className="space-y-3 pt-3 border-t border-edge">
-            <div>
-              <h4 className="text-[10px] font-mono tracking-widest uppercase font-bold uppercase tracking-wider text-text-main flex items-center gap-1.5">
+          <section className="enter space-y-2" style={{ "--i": 5 } as React.CSSProperties}>
+            <div className="px-1">
+              <label className="text-[11px] font-semibold uppercase tracking-wider text-text-faint flex items-center gap-1.5">
                 <Palette size={13} weight="bold" className="text-score" />
                 <span>{t("theme.title")}</span>
-              </h4>
-              <p className="text-[11px] text-text-muted mt-0.5">
+              </label>
+              <p className="text-[11px] text-text-secondary mt-0.5">
                 {t("theme.subtitle")}
               </p>
             </div>
@@ -572,7 +575,7 @@ export function SettingsModal({
                     key={th.id}
                     type="button"
                     onClick={() => onThemeChange(th.id)}
-                    className={`p-2.5 rounded-lg border text-left font-mono transition-all flex items-start gap-2.5 cursor-pointer select-none ${
+                    className={`press p-3 rounded-xl border text-left font-mono transition-all flex items-start gap-2.5 cursor-pointer select-none ${
                       isSelected
                         ? "bg-surface-subtle border-score/40 shadow-xs"
                         : "bg-surface/60 border-edge hover:border-edge-strong hover:bg-surface"
@@ -584,14 +587,14 @@ export function SettingsModal({
                     />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center justify-between gap-1">
-                        <span className="text-[11px] font-bold text-text-main truncate">
+                        <span className="text-xs font-bold text-text-main truncate">
                           {th.name}
                         </span>
                         {isSelected && (
                           <Check size={12} weight="bold" className="text-score shrink-0" />
                         )}
                       </div>
-                      <p className="text-[9px] text-text-muted line-clamp-1 mt-0.5 leading-tight">
+                      <p className="text-[10px] text-text-faint line-clamp-1 mt-0.5 leading-tight">
                         {th.desc}
                       </p>
                     </div>
@@ -599,16 +602,16 @@ export function SettingsModal({
                 );
               })}
             </div>
-          </div>
+          </section>
         )}
 
         {/* Data Management Section */}
-        <div className="space-y-3 pt-3 border-t border-edge">
-          <div>
-            <h4 className="text-[10px] font-mono tracking-widest uppercase font-bold uppercase tracking-wider text-text-main">
+        <section className="enter space-y-2" style={{ "--i": 6 } as React.CSSProperties}>
+          <div className="px-1">
+            <label className="text-[11px] font-semibold uppercase tracking-wider text-text-faint">
               {t("settings.dataTitle")}
-            </h4>
-            <p className="text-[11px] text-text-muted mt-0.5">
+            </label>
+            <p className="text-[11px] text-text-secondary mt-0.5">
               {t("settings.dataSubtitle")}
             </p>
           </div>
@@ -619,6 +622,7 @@ export function SettingsModal({
                 variant="secondary"
                 size="md"
                 onClick={onExport}
+                className="press"
                 icon={<DownloadSimple size={14} weight="bold" />}
               >
                 {t("settings.exportBtn")}
@@ -626,7 +630,7 @@ export function SettingsModal({
             )}
 
             {onImport && (
-              <label className="inline-flex items-center justify-center font-sans tracking-tight cursor-pointer select-none h-8 px-3 text-[10px] font-mono tracking-widest uppercase gap-2 rounded-lg font-medium bg-surface-subtle text-text-main border border-edge hover:bg-surface-hover hover:border-edge-strong active:scale-[0.985] transition-all duration-150">
+              <label className="press inline-flex items-center justify-center font-sans tracking-tight cursor-pointer select-none h-9 px-3.5 text-xs gap-2 rounded-xl font-medium bg-surface-subtle text-text-main border border-edge hover:bg-surface-hover hover:border-edge-strong transition-all">
                 <UploadSimple size={14} weight="bold" />
                 <span>{t("settings.importBtn")}</span>
                 <input
@@ -647,6 +651,7 @@ export function SettingsModal({
                 variant="secondary"
                 size="md"
                 onClick={onLoadDemo}
+                className="press"
                 icon={<Sparkle size={14} weight="bold" />}
               >
                 {t("settings.demoBtn")}
@@ -662,13 +667,14 @@ export function SettingsModal({
                     onClear();
                   }
                 }}
+                className="press"
                 icon={<Trash size={14} weight="bold" />}
               >
                 {t("settings.clearBtn")}
               </Button>
             )}
           </div>
-        </div>
+        </section>
       </div>
     </Dialog>
   );

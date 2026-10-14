@@ -49,7 +49,7 @@ export function TaskSelector({
   const { t } = useI18n();
 
   return (
-    <section className="panel p-5 rounded-2xl transition-all duration-200">
+    <section className="liquid-glass-panel p-5 rounded-2xl transition-all duration-200 shadow-xs">
       {/* Header */}
       <div className="flex items-center justify-between mb-3.5">
         <div className="flex items-center gap-2">
@@ -67,13 +67,13 @@ export function TaskSelector({
               <line x1="4" y1="22" x2="4" y2="15" />
             </svg>
           </div>
-          <h2 className="text-xs font-bold uppercase tracking-wider text-text-main">
+          <h2 className="text-xs font-bold uppercase tracking-wider text-text-main font-mono">
             {t("task.active")}
           </h2>
         </div>
         <button
           onClick={onNewTask}
-          className="minimal-btn-secondary px-3 py-1.5 text-xs font-medium gap-1.5 text-text-secondary hover:text-text-main border-edge rounded-full"
+          className="minimal-btn-secondary px-3 py-1.5 text-xs font-mono font-medium gap-1.5 text-text-secondary hover:text-text-main border-edge rounded-full press"
         >
           <span className="w-3.5 h-3.5 rounded-full bg-surface-hover text-text-secondary flex items-center justify-center text-xs font-bold leading-none">
             +
@@ -89,7 +89,7 @@ export function TaskSelector({
             id="taskSelect"
             value={activeTaskId ?? ""}
             onChange={(e) => onTaskChange(e.target.value)}
-            className="minimal-input font-medium cursor-pointer"
+            className="glass-input font-medium font-mono cursor-pointer"
           >
             {tasks.length === 0 ? (
               <option value="">{t("task.none")}</option>
@@ -105,17 +105,17 @@ export function TaskSelector({
 
         {/* Task Meta Chips (Clean Minimalist) */}
         {activeTask && (
-          <div className="p-3 bg-surface-subtle rounded-xl border border-edge text-xs transition-all">
+          <div className="p-3 bg-glass-bg-elevated rounded-xl border border-glass-edge text-xs transition-all">
             <div className="flex items-center justify-between gap-2 flex-wrap">
               <div className="flex items-center gap-1.5 flex-wrap">
-                <span className="px-2.5 py-0.5 bg-surface text-text-secondary border border-edge rounded-full text-[11px] font-medium tracking-normal">
+                <span className="px-2.5 py-0.5 bg-glass-bg text-text-secondary border border-glass-edge rounded-full text-[11px] font-mono font-medium">
                   {activeTask.category}
                 </span>
-                <span className="px-2.5 py-0.5 bg-surface text-text-secondary border border-edge rounded-full text-[11px] font-medium tracking-normal">
+                <span className="px-2.5 py-0.5 bg-glass-bg text-text-secondary border border-glass-edge rounded-full text-[11px] font-mono font-medium">
                   {activeTask.subcategory}
                 </span>
               </div>
-              <span className="text-[11px] text-text-faint ml-auto flex items-center gap-1.5">
+              <span className="text-[11px] text-text-faint ml-auto flex items-center gap-1.5 font-mono">
                 <span>{t("task.sens")}</span>
                 {displaySens ? (
                   <strong
@@ -126,14 +126,14 @@ export function TaskSelector({
                     }
                     className={`px-2 py-0.5 rounded-full border text-xs tabular-nums font-semibold ${
                       displaySens.source === "predicted"
-                        ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
-                        : "bg-surface border-edge text-text-main"
+                        ? "bg-emerald-soft border-emerald-edge text-emerald"
+                        : "bg-surface-subtle border-edge text-text-main"
                     }`}
                   >
                     {displaySens.value}cm
                   </strong>
                 ) : (
-                  <strong className="px-2 py-0.5 rounded-full bg-surface border border-edge text-text-main text-xs tabular-nums font-semibold">
+                  <strong className="px-2 py-0.5 rounded-full bg-surface-subtle border border-edge text-text-main text-xs tabular-nums font-semibold">
                     {t("task.defaultSens")}
                   </strong>
                 )}
@@ -144,14 +144,14 @@ export function TaskSelector({
       </div>
 
       {/* Footer */}
-      <div className="mt-3.5 flex justify-between items-center text-xs text-text-faint">
-        <span className="text-[11px] opacity-80">
+      <div className="mt-3.5 flex justify-between items-center text-xs text-text-faint font-mono">
+        <span className="text-[11px] opacity-80 tabular-nums">
           {t("task.count", { n: tasks.length })}
         </span>
         {activeTask && (
           <button
             onClick={onDeleteTask}
-            className="text-text-faint hover:text-red transition-colors text-xs flex items-center gap-1.5 px-2 py-1 rounded-full hover:bg-red-500/10"
+            className="text-text-faint hover:text-red transition-colors text-xs flex items-center gap-1.5 px-2.5 py-1 rounded-full hover:bg-red-soft press"
           >
             <svg
               className="w-3 h-3"

@@ -100,6 +100,7 @@ export function PlaylistManagerModal({
       onClose={onClose}
       title={modalTitle}
       maxWidth="2xl"
+      className="glass-floating"
     >
       <div className="flex-1 pr-1">
         {isCreating || editingPlaylist ? (
@@ -117,8 +118,8 @@ export function PlaylistManagerModal({
           <div className="space-y-4">
             {/* Option to append selection to existing if initialTaskIds is provided */}
             {initialTaskIds && initialTaskIds.length > 0 && playlists.length > 0 && (
-              <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl mb-3">
-                <div className="text-xs font-semibold text-blue-400 mb-2">
+              <div className="p-3.5 bg-score-soft border border-score/25 rounded-2xl mb-3 enter" style={{ "--i": 0 } as React.CSSProperties}>
+                <div className="text-xs font-semibold text-score mb-2">
                   {t("playlist.selectPlaylistToAdd")}
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -126,7 +127,7 @@ export function PlaylistManagerModal({
                     <button
                       key={pl.id}
                       onClick={() => handleAppendToExisting(pl)}
-                      className="px-3 py-1.5 rounded-lg bg-surface text-xs font-medium border border-edge hover:border-blue-400 text-text-main transition-colors"
+                      className="press px-3 py-1.5 rounded-xl bg-surface text-xs font-medium border border-edge hover:border-score text-text-main transition-colors"
                     >
                       + {pl.name}
                     </button>
@@ -137,7 +138,7 @@ export function PlaylistManagerModal({
 
             {/* Top action to create and sync */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-              <span className="text-xs text-text-muted">
+              <span className="text-xs text-text-secondary">
                 {t("playlist.subtitle")}
               </span>
               <div className="flex items-center gap-2 self-end sm:self-auto">
@@ -148,6 +149,7 @@ export function PlaylistManagerModal({
                     onClick={handleSyncKovaak}
                     disabled={isSyncing}
                     title={t("playlist.syncGames")}
+                    className="press"
                     icon={<ArrowsClockwise size={13} weight="bold" className={isSyncing ? "animate-spin" : ""} />}
                   >
                     {isSyncing ? t("playlist.syncing") : t("playlist.syncGames")}
@@ -157,6 +159,7 @@ export function PlaylistManagerModal({
                   variant="primary"
                   size="sm"
                   onClick={() => setIsCreating(true)}
+                  className="press"
                   icon={<Plus size={13} weight="bold" />}
                 >
                   {t("playlist.createNew")}
@@ -166,37 +169,38 @@ export function PlaylistManagerModal({
 
             {/* Playlists List */}
             {playlists.length === 0 ? (
-              <div className="py-12 text-center text-xs text-text-muted border border-dashed border-edge rounded-xl">
+              <div className="py-12 text-center text-xs text-text-faint border border-dashed border-edge rounded-2xl">
                 {t("playlist.emptyList")}
               </div>
             ) : (
               <div className="space-y-3">
-                {playlists.map((playlist) => {
+                {playlists.map((playlist, index) => {
                   return (
                     <div
                       key={playlist.id}
-                      className="p-4 rounded-xl border border-edge bg-surface hover:border-edge-strong transition-all flex flex-col gap-3"
+                      className="glass-card-interactive p-4 sm:p-5 rounded-2xl border border-edge flex flex-col gap-3 enter"
+                      style={{ "--i": index } as React.CSSProperties}
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
                           <h4 className="text-sm font-semibold text-text-main truncate">
                             {playlist.name}
                           </h4>
-                          <div className="flex items-center gap-2 text-[11px] text-text-muted mt-1">
-                            <span className="font-medium text-text-secondary">
+                          <div className="flex items-center gap-2 text-xs text-text-secondary mt-1">
+                            <span className="font-medium tabular-nums">
                               {t("playlist.itemsCount", {
                                 n: playlist.items.length,
                               })}
                             </span>
-                            <span>·</span>
-                            <span>
+                            <span className="text-text-faint">·</span>
+                            <span className="text-text-faint tabular-nums">
                               {new Date(playlist.createdAt).toLocaleDateString()}
                             </span>
                           </div>
                         </div>
 
                         {/* Action buttons */}
-                        <div className="flex items-center gap-1.5 shrink-0">
+                        <div className="flex items-center gap-2 shrink-0">
                           <Button
                             variant="primary"
                             size="sm"
@@ -204,6 +208,7 @@ export function PlaylistManagerModal({
                               onStartPlaylist(playlist);
                               onClose();
                             }}
+                            className="press"
                             icon={<Play size={12} weight="bold" />}
                           >
                             {t("playlist.start")}
@@ -213,6 +218,7 @@ export function PlaylistManagerModal({
                             variant="secondary"
                             size="sm"
                             onClick={() => setEditingPlaylist(playlist)}
+                            className="press"
                             icon={<PencilSimple size={12} weight="bold" />}
                           >
                             {t("playlist.edit")}
@@ -223,7 +229,7 @@ export function PlaylistManagerModal({
                             size="sm"
                             onClick={() => onDeletePlaylist(playlist.id)}
                             aria-label={t("playlist.delete")}
-                            className="text-text-muted hover:text-red hover:bg-red-500/10"
+                            className="press text-text-faint hover:text-red hover:bg-red-soft"
                           >
                             <Trash size={14} weight="regular" />
                           </IconButton>
@@ -231,21 +237,21 @@ export function PlaylistManagerModal({
                       </div>
 
                       {/* Scenario chips preview */}
-                      <div className="flex flex-wrap gap-1.5 pt-2 border-t border-edge">
+                      <div className="flex flex-wrap gap-1.5 pt-2.5 border-t border-edge">
                         {playlist.items.slice(0, 6).map((item, idx) => {
                           const task = taskMap.get(item.taskId);
                           return (
                             <span
                               key={item.id}
-                              className="px-2 py-0.5 rounded-md bg-surface-subtle border border-edge text-[11px] text-text-secondary flex items-center gap-1"
+                              className="px-2.5 py-1 rounded-lg bg-surface-subtle border border-edge text-xs text-text-secondary flex items-center gap-1.5"
                             >
-                              <span className="text-[10px] text-text-muted font-mono">
+                              <span className="text-[10px] text-text-faint font-mono tabular-nums">
                                 {idx + 1}.
                               </span>
                               <span className="truncate max-w-[130px]">
                                 {task ? task.name : `#${item.taskId}`}
                               </span>
-                              <span className="text-[10px] text-text-muted font-medium">
+                              <span className="text-[10px] text-text-faint font-medium font-mono tabular-nums">
                                 ({item.targetValue}
                                 {item.targetMode === "reps" ? "r" : "s"})
                               </span>
@@ -253,7 +259,7 @@ export function PlaylistManagerModal({
                           );
                         })}
                         {playlist.items.length > 6 && (
-                          <span className="px-2 py-0.5 rounded-md bg-surface-subtle border border-edge text-[10px] text-text-muted">
+                          <span className="px-2.5 py-1 rounded-lg bg-surface-subtle border border-edge text-xs text-text-faint font-mono tabular-nums">
                             +{playlist.items.length - 6}
                           </span>
                         )}

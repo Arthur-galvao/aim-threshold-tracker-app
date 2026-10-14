@@ -37,28 +37,28 @@ export function PlaylistSensCard({
     switch (confidence) {
       case "high":
         return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-soft text-emerald border border-emerald-edge">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald" />
             {t("randomizer.confidenceHigh")}
           </span>
         );
       case "medium":
         return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/10 text-blue-400 border border-blue-500/20">
-            <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-score-soft text-score border border-score/25">
+            <span className="w-1.5 h-1.5 rounded-full bg-score" />
             {t("randomizer.confidenceMedium")}
           </span>
         );
       case "low":
         return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20">
-            <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-amber-soft text-amber border border-amber-edge">
+            <span className="w-1.5 h-1.5 rounded-full bg-amber" />
             {t("randomizer.confidenceLow")}
           </span>
         );
       default:
         return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-surface-subtle text-text-faint border border-edge">
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-surface-subtle text-text-faint border border-edge">
             <span className="w-1.5 h-1.5 rounded-full bg-text-faint" />
             {t("randomizer.confInsufficient")}
           </span>
@@ -67,9 +67,9 @@ export function PlaylistSensCard({
   };
 
   return (
-    <div className="panel p-4 sm:p-6 rounded-2xl border-edge-strong relative overflow-hidden space-y-4">
+    <div className="glass-panel p-4 sm:p-6 rounded-2xl relative overflow-hidden space-y-4">
       <div className="border-b border-edge pb-4">
-        <h3 className="text-base font-bold text-text-main">
+        <h3 className="text-sm font-semibold text-text-main font-sans">
           {t("playlistSens.title")}
         </h3>
         <p className="text-xs text-text-secondary mt-1">
@@ -99,20 +99,21 @@ export function PlaylistSensCard({
               </tr>
             </thead>
             <tbody className="divide-y divide-edge">
-              {playlistStatsList.map((stats) => {
+              {playlistStatsList.map((stats, index) => {
                 const isPredicted = stats.displaySens.source === "predicted";
 
                 return (
                   <tr
                     key={stats.playlistId}
-                    className="hover:bg-surface-hover transition-colors"
+                    style={{ "--i": index } as React.CSSProperties}
+                    className="hover:bg-surface-hover/50 transition-colors enter"
                   >
                     {/* Playlist Name & Count */}
                     <td className="py-3 px-3">
                       <div className="font-semibold text-text-main">
                         {stats.playlistName}
                       </div>
-                      <div className="text-[11px] text-text-secondary">
+                      <div className="text-xs text-text-secondary tabular-nums">
                         {t("playlist.itemsCount", { n: stats.scenariosCount })}
                       </div>
                     </td>
@@ -120,15 +121,15 @@ export function PlaylistSensCard({
                     {/* Recommended Sensitivity */}
                     <td className="py-3 px-3">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-mono font-bold text-sm text-text-main">
+                        <span className="font-mono font-bold text-sm text-text-main tabular-nums">
                           {formatSensitivity(stats.displaySens.value, dpi)}
                         </span>
                         {isPredicted ? (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-soft text-emerald border border-emerald-edge">
                             {t("playlistSens.sourcePredicted")}
                           </span>
                         ) : (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold bg-purple-500/10 text-purple-300 border border-purple-500/20">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-accent/10 text-accent border border-accent/20">
                             {t("playlistSens.sourceViscose")}
                           </span>
                         )}
@@ -138,9 +139,9 @@ export function PlaylistSensCard({
                     {/* Category Slices Composition */}
                     <td className="py-3 px-3 max-w-xs">
                       {stats.categorySlices.length === 0 ? (
-                        <span className="text-text-faint text-[11px]">-</span>
+                        <span className="text-text-faint text-xs">-</span>
                       ) : (
-                        <div className="text-[11px] text-text-secondary leading-relaxed">
+                        <div className="text-xs text-text-secondary leading-relaxed">
                           {stats.categorySlices.map((slice, idx) => (
                             <span
                               key={`${slice.category}__${slice.subcategory}`}
@@ -150,7 +151,7 @@ export function PlaylistSensCard({
                               <span className="text-text-main font-medium">
                                 {slice.subcategory}
                               </span>{" "}
-                              <span className="font-mono">
+                              <span className="font-mono tabular-nums">
                                 {formatSensitivity(slice.displaySens.value, dpi)}
                               </span>
                             </span>
@@ -160,7 +161,7 @@ export function PlaylistSensCard({
                     </td>
 
                     {/* Stats: Scenarios / Runs */}
-                    <td className="py-3 px-3 text-text-secondary whitespace-nowrap">
+                    <td className="py-3 px-3 text-text-secondary whitespace-nowrap tabular-nums">
                       {t("playlistSens.scenariosRuns", {
                         scenarios: stats.scenariosCount,
                         runs: stats.totalRuns,
@@ -175,12 +176,12 @@ export function PlaylistSensCard({
                     {/* Actions: View in Chart & Apply Sens */}
                     {(onViewInChart || onApplySens) && (
                       <td className="py-3 px-3 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
+                        <div className="flex items-center justify-end gap-2">
                           {onViewInChart && (
                             <button
                               type="button"
                               onClick={() => onViewInChart(stats.playlistId)}
-                              className="px-2.5 py-1 text-[11px] font-semibold rounded-lg bg-surface-subtle hover:bg-surface-hover border border-edge text-text-main transition-colors whitespace-nowrap"
+                              className="press px-3 py-1.5 text-xs font-semibold rounded-xl bg-surface-subtle hover:bg-surface-hover border border-edge text-text-main transition-all whitespace-nowrap cursor-pointer"
                             >
                               {t("playlistSens.viewInChart")}
                             </button>
@@ -195,7 +196,7 @@ export function PlaylistSensCard({
                                   : [];
                                 void onApplySens(stats.displaySens.value, scenarioNames);
                               }}
-                              className="px-2.5 py-1 text-[11px] font-semibold rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-colors whitespace-nowrap"
+                              className="press px-3 py-1.5 text-xs font-semibold rounded-xl bg-score hover:brightness-105 text-primary-foreground transition-all whitespace-nowrap cursor-pointer shadow-xs"
                             >
                               {t("playlistSens.applySens")}
                             </button>

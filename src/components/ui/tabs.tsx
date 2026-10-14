@@ -60,7 +60,7 @@ export const TabsList = React.forwardRef<HTMLDivElement, TabsListProps>(
     <BaseTabs.List
       ref={ref}
       className={cn(
-        "inline-flex items-center justify-center rounded-lg bg-surface-subtle p-1 border border-edge text-text-secondary select-none font-sans",
+        "inline-flex items-center justify-center rounded-[var(--r-control,14px)] bg-[var(--glass-bg)] backdrop-blur-md p-1 border border-[var(--glass-edge)] text-text-secondary select-none font-sans shadow-xs",
         className
       )}
       {...props}
@@ -87,8 +87,8 @@ export const TabsTrigger = React.forwardRef<HTMLButtonElement, TabsTriggerProps>
         value={value}
         disabled={disabled}
         className={cn(
-          "relative inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1.5 text-xs font-mono font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-40 cursor-pointer z-10 select-none",
-          isSelected ? "text-text-main font-semibold" : "text-text-faint hover:text-text-main",
+          "relative inline-flex items-center justify-center whitespace-nowrap rounded-[calc(var(--r-control,14px)-4px)] px-3 py-1.5 text-xs font-mono font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-score focus-visible:ring-offset-1 disabled:pointer-events-none disabled:opacity-40 cursor-pointer z-10 select-none",
+          isSelected ? "text-text-main font-semibold" : "text-text-secondary hover:text-text-main",
           className
         )}
         {...props}
@@ -96,8 +96,8 @@ export const TabsTrigger = React.forwardRef<HTMLButtonElement, TabsTriggerProps>
         {isSelected && (
           <motion.div
             layoutId={layoutId}
-            className="absolute inset-0 rounded-[inherit] bg-surface border border-edge shadow-xs -z-10"
-            transition={{ type: "spring", bounce: 0.15, duration: 0.22 }}
+            className="absolute inset-0 rounded-[inherit] bg-[var(--glass-bg-elevated)] backdrop-blur-md border border-[var(--glass-edge)] shadow-sm -z-10"
+            transition={{ type: "spring", stiffness: 400, damping: 28, mass: 0.8 }}
           />
         )}
         {children}

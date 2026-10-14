@@ -80,17 +80,17 @@ export function HistoryTable({
   };
 
   return (
-    <div className="p-3.5 sm:p-5 rounded-xl bg-surface border border-edge shadow-xs">
+    <div className="p-4 sm:p-5 rounded-2xl liquid-glass-panel shadow-xs">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
         <div className="flex items-center gap-2.5">
-          <div className="w-6 h-6 rounded-md bg-surface-subtle text-text-secondary border border-edge flex items-center justify-center">
-            <ClockCounterClockwise size={13} weight="bold" />
+          <div className="w-7 h-7 rounded-xl bg-score-soft text-score border border-score/30 flex items-center justify-center shadow-xs">
+            <ClockCounterClockwise size={14} weight="bold" />
           </div>
           <div>
             <h2 className="text-xs font-semibold uppercase tracking-wider text-text-main font-mono">
               {t("hist.title")}
             </h2>
-            <p className="text-[10px] text-text-faint font-mono">
+            <p className="text-[10px] text-text-faint font-mono tabular-nums">
               {t("hist.totalDaysRuns", {
                 days: summaries.length,
                 runs: totalRuns,
@@ -103,11 +103,11 @@ export function HistoryTable({
           {onNewSession && (
             <Tooltip content={t("session.title")}>
               <Button
-                variant="secondary"
+                variant="frosted"
                 size="sm"
                 onClick={onNewSession}
-                className="h-7.5 px-2.5 text-xs rounded-md font-mono"
-                icon={<Plus size={12} weight="bold" />}
+                className="h-8 px-2.5 text-xs rounded-xl font-mono flex items-center gap-1.5 press"
+                icon={<Plus size={13} weight="bold" className="text-score" />}
               >
                 {t("session.title")}
               </Button>
@@ -115,12 +115,12 @@ export function HistoryTable({
           )}
           <Tooltip content={t("hist.copy")}>
             <Button
-              variant="secondary"
+              variant="frosted"
               size="sm"
               onClick={onCopyEscalate}
               disabled={!activeTask?.sessions.length}
-              className="h-7.5 px-2.5 text-xs rounded-md font-mono"
-              icon={<Copy size={12} weight="bold" />}
+              className="h-8 px-2.5 text-xs rounded-xl font-mono flex items-center gap-1.5 press"
+              icon={<Copy size={13} weight="bold" />}
             >
               {t("hist.copy")}
             </Button>
@@ -241,8 +241,8 @@ function DayGroupRows({
       <TableRow
         onClick={onToggle}
         className={cn(
-          "group border-b border-edge hover:bg-surface-hover/50 transition-colors duration-150 cursor-pointer select-none",
-          isExpanded && "bg-surface-hover/30"
+          "group border-b border-glass-edge hover:bg-glass-bg-elevated/70 transition-all duration-150 cursor-pointer select-none press",
+          isExpanded && "bg-glass-bg-elevated/40"
         )}
       >
         <TableCell className="w-8 p-2 text-center">
@@ -261,7 +261,7 @@ function DayGroupRows({
           </span>
         </TableCell>
         <TableCell className="tabular-nums font-mono text-xs">
-          <span className="px-1.5 py-0.5 rounded bg-surface-subtle border border-edge text-text-secondary text-[10px]">
+          <span className="px-2 py-0.5 rounded-full bg-surface-subtle border border-edge text-text-secondary text-[10px]">
             {t("hist.runsCount", { n: day.runs })}
           </span>
         </TableCell>
@@ -271,7 +271,7 @@ function DayGroupRows({
               {day.best}
             </span>
             {day.isPbDay && (
-              <span className="text-[9px] font-mono font-bold px-1.5 py-0.2 rounded bg-amber-soft text-amber border border-amber-edge">
+              <span className="text-[9px] font-mono font-bold px-2 py-0.5 rounded-full bg-amber-soft text-amber border border-amber-edge">
                 {t("hist.pbBadge")}
               </span>
             )}
@@ -282,15 +282,15 @@ function DayGroupRows({
         </TableCell>
         <TableCell className="font-mono text-xs">
           {day.hit === true ? (
-            <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-emerald-soft text-emerald border border-emerald-edge">
+            <span className="text-[9px] font-mono font-bold px-2 py-0.5 rounded-full bg-emerald-soft text-emerald border border-emerald-edge">
               {t("hist.hit")}
             </span>
           ) : day.hit === false ? (
-            <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-red-soft text-red border border-red-edge">
+            <span className="text-[9px] font-mono font-bold px-2 py-0.5 rounded-full bg-red-soft text-red border border-red-edge">
               {t("hist.miss")}
             </span>
           ) : (
-            <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-surface-subtle text-text-faint border border-edge">
+            <span className="text-[9px] font-mono px-2 py-0.5 rounded-full bg-surface-subtle text-text-faint border border-edge">
               {t("hist.firstDay")}
             </span>
           )}
@@ -303,13 +303,13 @@ function DayGroupRows({
       </TableRow>
 
       {isExpanded && (
-        <TableRow className="bg-surface-subtle/25 hover:bg-surface-subtle/25 border-b border-edge">
+        <TableRow className="bg-surface-subtle/25 hover:bg-surface-subtle/25 border-b border-glass-edge">
           <TableCell colSpan={7} className="p-0">
-            <div className="py-2.5 px-4 sm:px-8 bg-surface-subtle/20 border-y border-edge space-y-1.5">
+            <div className="py-2.5 px-4 sm:px-8 bg-surface-subtle/20 border-y border-glass-edge space-y-1.5">
               <div className="text-[10px] font-mono font-semibold uppercase tracking-wider text-text-faint mb-2">
                 Runs ({daySessions.length})
               </div>
-              <div className="grid grid-cols-1 divide-y divide-edge">
+              <div className="grid grid-cols-1 divide-y divide-glass-edge">
                 {daySessions.map((session, idx) => {
                   const delta = session.pb - day.threshold;
                   return (
@@ -318,7 +318,7 @@ function DayGroupRows({
                       className="flex items-center justify-between py-1.5 text-xs font-mono"
                     >
                       <div className="flex items-center gap-3">
-                        <span className="text-text-faint text-[10px] w-6">
+                        <span className="text-text-faint text-[10px] w-6 tabular-nums">
                           #{idx + 1}
                         </span>
                         <span className="font-bold text-text-main tabular-nums">
@@ -334,7 +334,7 @@ function DayGroupRows({
                           <Badge
                             variant={delta >= 0 ? "emerald" : "neutral"}
                             size="sm"
-                            className="font-mono text-[10px]"
+                            className="font-mono text-[10px] tabular-nums rounded-full"
                           >
                             {delta > 0
                               ? `+${delta}`
@@ -357,7 +357,7 @@ function DayGroupRows({
                                 onDeleteSession(session.id);
                                 onSetConfirmDeleteId(null);
                               }}
-                              className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-semibold rounded bg-red text-white hover:opacity-90 transition-opacity cursor-pointer"
+                              className="inline-flex items-center gap-1 px-2.5 py-0.5 text-[11px] font-semibold rounded-lg bg-red text-white hover:brightness-110 transition-all cursor-pointer press shadow-xs"
                             >
                               <Check size={11} weight="bold" />
                               <span>{t("hist.confirm")}</span>
@@ -368,7 +368,7 @@ function DayGroupRows({
                                 e.stopPropagation();
                                 onSetConfirmDeleteId(null);
                               }}
-                              className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-medium rounded text-text-faint hover:text-text-main transition-colors cursor-pointer"
+                              className="inline-flex items-center gap-1 px-2.5 py-0.5 text-[11px] font-medium rounded-lg text-text-faint hover:text-text-main hover:bg-surface-hover transition-colors cursor-pointer press"
                             >
                               <X size={11} weight="bold" />
                               <span>{t("hist.cancel")}</span>
@@ -384,7 +384,7 @@ function DayGroupRows({
                                 onSetConfirmDeleteId(session.id);
                               }}
                               aria-label={t("hist.delete")}
-                              className="text-text-faint hover:text-red hover:bg-red-soft transition-colors opacity-70 hover:opacity-100 h-6 w-6"
+                              className="text-text-faint hover:text-red hover:bg-red-soft transition-colors opacity-70 hover:opacity-100 h-6 w-6 press rounded-lg"
                             >
                               <Trash size={12} weight="regular" />
                             </IconButton>

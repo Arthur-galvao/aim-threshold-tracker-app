@@ -255,13 +255,13 @@ export function ScenarioList({
   // Render Collapsed Sidebar Rail
   if (isCollapsed) {
     return (
-      <aside className="w-14 max-md:hidden shrink-0 h-screen max-h-screen border-r border-edge bg-[#0c0e16]/85 backdrop-blur-md flex flex-col items-center py-3.5 px-1.5 select-none z-20 transition-all duration-200">
+      <aside className="w-14 max-md:hidden shrink-0 h-screen max-h-screen border-r border-glass-edge bg-glass-bg/90 backdrop-blur-2xl flex flex-col items-center py-3.5 px-1.5 select-none z-20 transition-all duration-200 shadow-xs">
         <Tooltip content="Expand sidebar" side="right">
           <button
             type="button"
             onClick={toggleCollapse}
             aria-label="Expand sidebar"
-            className="w-9 h-9 rounded-lg bg-surface hover:bg-surface-hover border border-edge text-text-secondary hover:text-text-main flex items-center justify-center transition-colors cursor-pointer mb-4"
+            className="w-9 h-9 rounded-lg bg-glass-bg hover:bg-glass-bg-elevated border border-glass-edge hover:border-glass-edge-strong text-text-secondary hover:text-text-main flex items-center justify-center transition-all cursor-pointer mb-4 active:scale-95 shadow-xs"
           >
             <CaretRight size={15} weight="bold" />
           </button>
@@ -275,10 +275,10 @@ export function ScenarioList({
                 setSidebarTab("scenarios");
                 toggleCollapse();
               }}
-              className={`w-9 h-9 rounded-lg flex items-center justify-center transition-all cursor-pointer ${
+              className={`w-9 h-9 rounded-lg flex items-center justify-center transition-all cursor-pointer active:scale-95 ${
                 sidebarTab === "scenarios"
-                  ? "bg-surface-subtle text-text-main border border-edge font-bold shadow-xs"
-                  : "text-text-faint hover:text-text-secondary hover:bg-surface-hover/50"
+                  ? "bg-glass-bg-elevated text-score border border-score/35 font-bold shadow-xs"
+                  : "text-text-faint hover:text-text-secondary hover:bg-glass-bg"
               }`}
             >
               <List size={16} weight="bold" />
@@ -292,10 +292,10 @@ export function ScenarioList({
                 setSidebarTab("playlists");
                 toggleCollapse();
               }}
-              className={`w-9 h-9 rounded-lg flex items-center justify-center transition-all cursor-pointer ${
+              className={`w-9 h-9 rounded-lg flex items-center justify-center transition-all cursor-pointer active:scale-95 ${
                 sidebarTab === "playlists"
-                  ? "bg-surface-subtle text-text-main border border-edge font-bold shadow-xs"
-                  : "text-text-faint hover:text-text-secondary hover:bg-surface-hover/50"
+                  ? "bg-glass-bg-elevated text-score border border-score/35 font-bold shadow-xs"
+                  : "text-text-faint hover:text-text-secondary hover:bg-glass-bg"
               }`}
             >
               <Play size={14} weight="bold" />
@@ -303,13 +303,13 @@ export function ScenarioList({
           </Tooltip>
         </div>
 
-        <div className="pt-2 border-t border-edge w-full flex justify-center">
+        <div className="pt-2 border-t border-glass-edge w-full flex justify-center">
           <Tooltip content={t("task.new")} side="right">
             <button
               type="button"
               onClick={onNewTask}
               aria-label="New Task"
-              className="w-9 h-9 rounded-lg bg-surface hover:bg-surface-hover border border-edge text-text-secondary hover:text-text-main flex items-center justify-center transition-colors cursor-pointer"
+              className="w-9 h-9 rounded-lg bg-glass-bg hover:bg-glass-bg-elevated border border-glass-edge text-text-secondary hover:text-text-main flex items-center justify-center transition-all cursor-pointer active:scale-95 shadow-xs"
             >
               <Plus size={15} weight="bold" />
             </button>
@@ -324,39 +324,39 @@ export function ScenarioList({
     <>
       {/* Mobile Drawer Backdrop */}
       <div
-        className="fixed inset-0 bg-black/60 backdrop-blur-xs z-40 md:hidden"
+        className="fixed inset-0 modal-scrim z-40 md:hidden"
         onClick={toggleCollapse}
         aria-hidden="true"
       />
-      <aside className="w-72 sm:w-80 max-md:fixed max-md:inset-y-0 max-md:left-0 max-md:z-50 max-md:shadow-2xl md:relative shrink-0 h-screen max-h-screen border-r border-edge bg-[#0c0e16]/95 md:bg-[#0c0e16]/85 backdrop-blur-md flex flex-col p-3 sm:p-4 select-none z-20 transition-all duration-200">
+      <aside className="w-72 sm:w-80 max-md:fixed max-md:inset-y-0 max-md:left-0 max-md:z-50 max-md:shadow-2xl md:relative shrink-0 h-screen max-h-screen border-r border-glass-edge bg-glass-bg/95 md:bg-glass-bg/85 backdrop-blur-2xl flex flex-col p-3 sm:p-4 select-none z-20 transition-all duration-200">
       {/* Top Header Row: Tab Switcher & Collapse Button */}
       <div className="flex items-center gap-2 mb-3">
-        <div className="grid grid-cols-2 p-1 rounded-lg bg-surface-subtle border border-edge flex-1">
+        <div className="grid grid-cols-2 p-1 rounded-xl bg-glass-bg border border-glass-edge flex-1 shadow-xs">
           <button
             type="button"
             onClick={() => setSidebarTab("scenarios")}
-            className={`flex items-center justify-center gap-1.5 py-1.5 rounded-md text-[10px] uppercase tracking-widest font-mono font-semibold transition-all cursor-pointer ${
+            className={`flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[10px] uppercase tracking-widest font-mono font-semibold transition-all cursor-pointer press ${
               sidebarTab === "scenarios"
-                ? "bg-surface text-text-main shadow-xs border border-edge"
+                ? "bg-glass-bg-elevated text-text-main shadow-xs border border-glass-edge"
                 : "text-text-faint hover:text-text-secondary"
             }`}
           >
             <span>{t("scenarioList.title")}</span>
-            <span className="text-[9px] px-1.5 rounded-sm bg-surface-hover text-text-secondary font-mono">
+            <span className="text-[9px] px-1.5 rounded-full bg-glass-bg text-text-secondary font-mono border border-glass-edge tabular-nums">
               {tasks.length}
             </span>
           </button>
           <button
             type="button"
             onClick={() => setSidebarTab("playlists")}
-            className={`flex items-center justify-center gap-1.5 py-1.5 rounded-md text-[10px] uppercase tracking-widest font-mono font-semibold transition-all cursor-pointer ${
+            className={`flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[10px] uppercase tracking-widest font-mono font-semibold transition-all cursor-pointer press ${
               sidebarTab === "playlists"
-                ? "bg-surface text-text-main shadow-xs border border-edge"
+                ? "bg-glass-bg-elevated text-text-main shadow-xs border border-glass-edge"
                 : "text-text-faint hover:text-text-secondary"
             }`}
           >
             <span>{t("tab.playlist")}</span>
-            <span className="text-[9px] px-1.5 rounded-sm bg-surface-hover text-text-secondary font-mono">
+            <span className="text-[9px] px-1.5 rounded-full bg-glass-bg text-text-secondary font-mono border border-glass-edge tabular-nums">
               {playlists.length}
             </span>
           </button>
@@ -367,7 +367,7 @@ export function ScenarioList({
             type="button"
             onClick={toggleCollapse}
             aria-label="Collapse sidebar"
-            className="w-8 h-8 rounded-lg bg-surface hover:bg-surface-hover border border-edge text-text-faint hover:text-text-main flex items-center justify-center transition-colors cursor-pointer shrink-0"
+            className="w-8 h-8 rounded-xl bg-glass-bg hover:bg-glass-bg-elevated border border-glass-edge text-text-faint hover:text-text-main flex items-center justify-center transition-all cursor-pointer shrink-0 press shadow-xs"
           >
             <CaretLeft size={14} weight="bold" />
           </button>
@@ -386,17 +386,17 @@ export function ScenarioList({
                 ? t("playlist.searchPlaceholder")
                 : t("scenarioList.search")
             }
-            className="minimal-input text-[11px] font-mono py-1.5 pl-8 pr-8 w-full uppercase placeholder:text-text-faint"
+            className="glass-input text-[11px] font-mono py-1.5 pl-8 pr-8 w-full uppercase placeholder:text-text-faint"
           />
           <MagnifyingGlass
             size={13}
             weight="bold"
-            className="text-text-muted absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none"
+            className="text-text-faint absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none"
           />
           {search && (
             <button
               onClick={() => setSearch("")}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-main p-0.5 rounded-full cursor-pointer"
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-text-faint hover:text-text-main p-0.5 rounded-full cursor-pointer press"
             >
               <X size={12} weight="bold" />
             </button>
@@ -414,10 +414,10 @@ export function ScenarioList({
                     if (selectMode) setSelectedIds(new Set());
                   }}
                   title={selectMode ? t("scenarioList.cancelSelect") : t("scenarioList.selectMode")}
-                  className={`p-2 text-[10px] font-mono font-bold rounded-lg border transition-all shrink-0 cursor-pointer ${
+                  className={`p-2 text-[10px] font-mono font-bold rounded-xl border transition-all shrink-0 cursor-pointer press ${
                     selectMode
-                      ? "bg-score text-white border-score shadow-sm"
-                      : "bg-surface text-text-secondary hover:text-text-main border border-edge"
+                      ? "bg-score text-primary-fg border-score shadow-xs"
+                      : "bg-surface-subtle text-text-secondary hover:text-text-main border border-edge"
                   }`}
                 >
                   <Checks size={13} weight="bold" />
@@ -427,7 +427,7 @@ export function ScenarioList({
               <button
                 type="button"
                 onClick={onNewTask}
-                className="bg-surface px-2.5 py-1.5 text-[10px] font-mono font-bold uppercase tracking-widest gap-1 text-text-secondary hover:text-text-main border border-edge rounded-lg shrink-0 inline-flex items-center cursor-pointer"
+                className="bg-surface-subtle px-2.5 py-1.5 text-[10px] font-mono font-bold uppercase tracking-widest gap-1 text-text-secondary hover:text-text-main border border-edge rounded-xl shrink-0 inline-flex items-center cursor-pointer press"
               >
                 <Plus size={12} weight="bold" />
                 <span>{t("task.new").replace("+ ", "")}</span>
@@ -441,7 +441,7 @@ export function ScenarioList({
                   onClick={handleSyncKovaak}
                   disabled={isSyncing}
                   title={t("playlist.syncGames")}
-                  className="bg-surface p-2 rounded-lg text-text-secondary hover:text-text-main border border-edge disabled:opacity-50 shrink-0 inline-flex items-center cursor-pointer"
+                  className="bg-surface-subtle p-2 rounded-xl text-text-secondary hover:text-text-main border border-edge disabled:opacity-50 shrink-0 inline-flex items-center cursor-pointer press"
                 >
                   <ArrowsClockwise size={13} weight="bold" className={isSyncing ? "animate-spin" : ""} />
                 </button>
@@ -450,7 +450,7 @@ export function ScenarioList({
                 <button
                   type="button"
                   onClick={onOpenPlaylistManager}
-                  className="bg-surface px-2.5 py-1.5 text-[10px] font-mono font-bold uppercase tracking-widest gap-1 text-text-secondary hover:text-text-main border border-edge rounded-lg shrink-0 inline-flex items-center cursor-pointer"
+                  className="bg-surface-subtle px-2.5 py-1.5 text-[10px] font-mono font-bold uppercase tracking-widest gap-1 text-text-secondary hover:text-text-main border border-edge rounded-xl shrink-0 inline-flex items-center cursor-pointer press"
                 >
                   <Plus size={12} weight="bold" />
                   <span>PLAYLIST</span>
@@ -496,19 +496,19 @@ export function ScenarioList({
                   <button
                     type="button"
                     onClick={() => toggleCategory(category)}
-                    className="w-full px-2 py-1 flex items-center justify-between text-left cursor-pointer select-none text-[11px] font-mono uppercase tracking-wider text-text-faint hover:text-text-main transition-colors"
+                    className="w-full px-2 py-1 flex items-center justify-between text-left cursor-pointer select-none text-[11px] font-mono uppercase tracking-wider text-text-faint hover:text-text-main transition-colors press"
                   >
                     <div className="flex items-center gap-1.5">
                       <CaretDown
                         size={11}
                         weight="bold"
                         className={`transition-transform duration-200 ${
-                          isCollapsedCategory ? "-rotate-90 text-text-muted" : "rotate-0 text-text-secondary"
+                          isCollapsedCategory ? "-rotate-90 text-text-faint" : "rotate-0 text-text-secondary"
                         }`}
                       />
                       <span>{category}</span>
                     </div>
-                    <span className="text-[10px] text-text-muted font-mono">{totalCount}</span>
+                    <span className="text-[10px] text-text-faint font-mono tabular-nums">{totalCount}</span>
                   </button>
 
                   {/* Smooth Accordion with AnimatePresence */}
@@ -542,12 +542,12 @@ export function ScenarioList({
                                         }
                                       }
                                     }}
-                                    className={`group px-2 py-1.5 rounded-md text-xs cursor-pointer transition-all flex items-center justify-between gap-2 ${
+                                    className={`group px-2.5 py-1.5 rounded-xl text-xs cursor-pointer transition-all flex items-center justify-between gap-2 press ${
                                       isActive && !selectMode
-                                        ? "bg-surface-subtle text-text-main font-medium shadow-xs border border-edge"
+                                        ? "bg-glass-bg-elevated text-text-main font-semibold shadow-xs border border-score/35"
                                         : isSelected && selectMode
                                         ? "bg-score-soft text-text-main border border-score/30"
-                                        : "text-text-secondary hover:text-text-main hover:bg-surface-hover/60"
+                                        : "text-text-secondary hover:text-text-main hover:bg-glass-bg-elevated/70"
                                     }`}
                                   >
                                     <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -557,7 +557,7 @@ export function ScenarioList({
                                           checked={isSelected}
                                           onChange={() => toggleSelectTask(task.id)}
                                           onClick={(e) => e.stopPropagation()}
-                                          className="rounded-sm border-edge text-score focus:ring-0 cursor-pointer"
+                                          className="rounded border-edge text-score focus:ring-0 cursor-pointer"
                                         />
                                       )}
                                       {isActive && !selectMode && (
@@ -568,7 +568,7 @@ export function ScenarioList({
                                       </span>
                                     </div>
                                     {task.sessions && task.sessions.length > 0 && (
-                                      <span className="text-[10px] font-mono tabular-nums text-text-faint px-1.5 py-0.2 rounded bg-surface border border-edge shrink-0">
+                                      <span className="text-[10px] font-mono tabular-nums text-text-faint px-1.5 py-0.5 rounded-full bg-surface-subtle border border-edge shrink-0">
                                         {Math.max(...task.sessions.map((s) => s.pb))}
                                       </span>
                                     )}
@@ -617,26 +617,26 @@ export function ScenarioList({
                   className={`rounded-lg transition-all overflow-hidden mb-2 border ${
                     isRunningThis
                       ? "border-score/35 bg-score/[0.04] shadow-xs relative before:absolute before:left-0 before:top-0 before:bottom-0 before:w-1 before:bg-score"
-                      : "border-edge bg-surface/70 hover:bg-surface hover:border-edge-strong"
+                      : "border-glass-edge bg-glass-bg hover:bg-glass-bg-elevated hover:border-glass-edge-strong"
                   }`}
                 >
                   {/* Playlist Header Row */}
                   <div
                     onClick={() => toggleExpandPlaylist(pl.id)}
-                    className="w-full px-3 py-2 flex items-center justify-between gap-2 hover:bg-surface-hover/70 transition-colors cursor-pointer select-none"
+                    className="w-full px-3 py-2 flex items-center justify-between gap-2 hover:bg-glass-bg-elevated/70 transition-colors cursor-pointer select-none press"
                   >
                     <div className="flex items-center gap-2 min-w-0 flex-1">
                       <CaretDown
                         size={12}
                         weight="bold"
-                        className={`text-text-muted transition-transform duration-150 shrink-0 ${
+                        className={`text-text-faint transition-transform duration-150 shrink-0 ${
                           isExpanded ? "rotate-0" : "-rotate-90"
                         }`}
                       />
                       <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-text-main truncate" title={pl.name}>
                         {pl.name}
                       </span>
-                      <span className="text-[9px] px-1.5 py-0.2 rounded bg-surface-subtle border border-edge text-text-faint font-mono shrink-0">
+                      <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-surface-subtle border border-edge text-text-faint font-mono tabular-nums shrink-0">
                         {pl.items.length}
                       </span>
                     </div>
@@ -654,10 +654,10 @@ export function ScenarioList({
                           }
                         }}
                         title={isRunningThis ? t("runner.exit") : t("playlist.start")}
-                        className={`px-2 py-0.5 rounded text-[9px] uppercase tracking-wider font-mono font-bold transition-all flex items-center gap-1 shrink-0 cursor-pointer active:scale-95 ${
+                        className={`px-2.5 py-1 rounded-lg text-[9px] uppercase tracking-wider font-mono font-bold transition-all flex items-center gap-1 shrink-0 cursor-pointer press ${
                           isRunningThis
-                            ? "bg-red/15 hover:bg-red/25 text-red border border-red/30"
-                            : "bg-score/10 hover:bg-score/20 text-score border border-score/25"
+                            ? "bg-red-soft hover:bg-red/20 text-red border border-red-edge"
+                            : "bg-score-soft hover:bg-score/20 text-score border border-score/30"
                         }`}
                       >
                         {isRunningThis ? (
@@ -703,8 +703,8 @@ export function ScenarioList({
                               const pb = task ? getTaskPb(task) : null;
                               const targetLabel =
                                 item.targetMode === "time"
-                                  ? `${item.targetValue}s`
-                                  : `${item.targetValue}x`;
+                                    ? `${item.targetValue}s`
+                                    : `${item.targetValue}x`;
 
                               return (
                                 <div
@@ -716,15 +716,15 @@ export function ScenarioList({
                                       onTaskChange(task.id);
                                     }
                                   }}
-                                  className={`group px-2 py-1.5 rounded-md border text-[10px] font-mono cursor-pointer transition-all flex items-center justify-between gap-2 ${
+                                  className={`group px-2.5 py-1.5 rounded-xl border text-[10px] font-mono cursor-pointer transition-all flex items-center justify-between gap-2 press ${
                                     isActive || isStepActive
-                                      ? "bg-score/10 border-score/30 text-text-main font-semibold shadow-xs"
+                                      ? "bg-score-soft border-score/30 text-text-main font-semibold shadow-xs"
                                       : "bg-surface-subtle/50 border-edge hover:border-edge-strong text-text-secondary hover:text-text-main font-medium"
                                   }`}
                                 >
                                   <div className="flex items-center gap-2 min-w-0 flex-1">
                                     <div
-                                      className={`w-1.5 h-1.5 rounded-sm shrink-0 ${
+                                      className={`w-1.5 h-1.5 rounded-full shrink-0 ${
                                         isActive || isStepActive
                                           ? "bg-score"
                                           : "bg-transparent group-hover:bg-text-faint"
@@ -743,21 +743,21 @@ export function ScenarioList({
                                             ? t("categorySens.sourcePredicted")
                                             : t("categorySens.sourceViscose")
                                         }
-                                        className={`px-1 rounded-sm border ${
+                                        className={`px-1.5 py-0.5 rounded-full border tabular-nums ${
                                           displaySensInfo.source === "predicted"
-                                            ? "bg-emerald/10 border-emerald/20 text-emerald"
-                                            : "bg-surface border border-edge text-text-faint"
+                                            ? "bg-emerald-soft border-emerald-edge text-emerald"
+                                            : "bg-surface-subtle border border-edge text-text-faint"
                                         }`}
                                       >
                                         {displaySensInfo.value}cm
                                       </span>
                                     )}
                                     {pb !== null && (
-                                      <span className="px-1 rounded-sm bg-surface border border-edge text-text-secondary">
+                                      <span className="px-1.5 py-0.5 rounded-full bg-surface-subtle border border-edge text-text-secondary tabular-nums">
                                         {pb}
                                       </span>
                                     )}
-                                    <span className="text-text-faint opacity-80">
+                                    <span className="text-text-faint opacity-80 tabular-nums">
                                       {targetLabel}
                                     </span>
                                   </div>
@@ -781,7 +781,7 @@ export function ScenarioList({
         <div className="mt-2.5 pt-2.5 border-t border-edge">
           <button
             onClick={handleAddSelected}
-            className="w-full bg-score hover:bg-score/90 text-surface font-mono font-bold uppercase tracking-widest py-2 px-3 rounded-lg text-[10px] flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer"
+            className="minimal-btn w-full press py-2 px-3 text-[10px] uppercase tracking-widest gap-2 font-mono"
           >
             <Plus size={12} weight="bold" />
             <span>
@@ -804,7 +804,7 @@ export function ScenarioList({
         {sidebarTab === "scenarios" && activeTask && !selectMode && (
           <button
             onClick={onDeleteTask}
-            className="text-text-muted hover:text-red transition-colors flex items-center gap-1 px-2 py-1 rounded-md hover:bg-red/10 cursor-pointer"
+            className="text-text-faint hover:text-red transition-colors flex items-center gap-1 px-2.5 py-1 rounded-lg hover:bg-red-soft cursor-pointer press"
           >
             <Trash size={12} weight="bold" />
             <span>{t("hist.delete")}</span>
@@ -815,7 +815,7 @@ export function ScenarioList({
           <button
             type="button"
             onClick={onOpenPlaylistManager}
-            className="text-text-faint hover:text-text-main transition-colors flex items-center gap-1 px-2 py-1 rounded-md hover:bg-surface-hover cursor-pointer"
+            className="text-text-faint hover:text-text-main transition-colors flex items-center gap-1 px-2.5 py-1 rounded-lg hover:bg-surface-hover cursor-pointer press"
           >
             <span>{t("playlist.manage")}</span>
           </button>

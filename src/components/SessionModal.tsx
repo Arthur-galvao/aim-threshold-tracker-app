@@ -62,13 +62,14 @@ export function SessionModal({
       open={open}
       onClose={onClose}
       maxWidth="md"
+      className="glass-floating"
       title={
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-md bg-surface-subtle text-text-secondary border border-edge flex items-center justify-center">
-            <NotePencil size={15} weight="bold" />
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-xl bg-surface-subtle text-text-secondary border border-edge flex items-center justify-center">
+            <NotePencil size={16} weight="bold" />
           </div>
           <div>
-            <span className="text-xs font-bold uppercase tracking-wider text-text-main font-mono block">
+            <span className="text-sm font-semibold text-text-main font-sans block">
               {t("session.title")}
             </span>
             {activeTask && (
@@ -82,16 +83,16 @@ export function SessionModal({
     >
       <div className="space-y-4">
         {/* Goal Indicator */}
-        <div className="border border-edge rounded-lg p-3 bg-surface-subtle/40 space-y-1">
+        <div className="border border-edge rounded-2xl p-4 bg-surface-subtle/50 space-y-1.5 enter" style={{ "--i": 0 } as React.CSSProperties}>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1.5">
-              <Target size={13} weight="bold" className="text-amber" />
-              <span className="text-[10px] font-semibold text-text-secondary uppercase tracking-wider font-mono">
+              <Target size={14} weight="bold" className="text-amber" />
+              <span className="text-xs font-semibold text-text-secondary">
                 {t("session.goal")}
               </span>
             </div>
             <span
-              className={`text-lg font-bold font-mono tabular-nums ${
+              className={`text-xl font-bold font-mono tabular-nums ${
                 targetThreshold ? "text-amber" : "text-amber/40"
               }`}
             >
@@ -104,12 +105,12 @@ export function SessionModal({
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="space-y-3.5">
+        <form onSubmit={handleSubmit} className="space-y-4 enter" style={{ "--i": 1 } as React.CSSProperties}>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label
                 htmlFor="modalDate"
-                className="block text-[11px] font-semibold uppercase tracking-wider text-text-secondary mb-1.5 font-mono"
+                className="block text-[11px] font-semibold uppercase tracking-wider text-text-faint mb-1.5 px-0.5"
               >
                 {t("session.date")}
               </label>
@@ -119,13 +120,13 @@ export function SessionModal({
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
                 required
-                className="minimal-input text-xs font-mono tabular-nums w-full"
+                className="glass-input text-xs font-mono tabular-nums w-full"
               />
             </div>
             <div>
               <label
                 htmlFor="modalSens"
-                className="block text-[11px] font-semibold uppercase tracking-wider text-text-secondary mb-1.5 font-mono"
+                className="block text-[11px] font-semibold uppercase tracking-wider text-text-faint mb-1.5 px-0.5"
               >
                 {t("session.sens")}
               </label>
@@ -137,7 +138,7 @@ export function SessionModal({
                 onChange={(e) => setSens(e.target.value)}
                 placeholder="Ex: 45"
                 required
-                className="minimal-input text-xs font-mono tabular-nums w-full"
+                className="glass-input text-xs font-mono tabular-nums w-full"
               />
             </div>
           </div>
@@ -145,7 +146,7 @@ export function SessionModal({
           <div>
             <label
               htmlFor="modalScores"
-              className="block text-[11px] font-semibold uppercase tracking-wider text-text-secondary mb-1.5 font-mono"
+              className="block text-[11px] font-semibold uppercase tracking-wider text-text-faint mb-1.5 px-0.5"
             >
               {t("session.scores")}
             </label>
@@ -156,25 +157,25 @@ export function SessionModal({
               onChange={(e) => setScoresInput(e.target.value)}
               placeholder="Ex: 1000 970 890 900 980"
               required
-              className="minimal-input text-xs font-mono tabular-nums w-full"
+              className="glass-input text-xs font-mono tabular-nums w-full"
             />
-            <p className="text-[10px] text-text-faint mt-1 font-medium font-mono">
+            <p className="text-[10px] text-text-faint mt-1.5 font-medium px-0.5">
               {t("session.separator")}
             </p>
           </div>
 
           {/* Live Threshold Preview */}
-          <div className="bg-surface-subtle/70 p-3 rounded-lg border border-edge flex items-center justify-between">
-            <div className="min-w-0 flex-1 pr-2">
-              <span className="text-[10px] font-semibold text-text-faint uppercase tracking-wider block font-mono">
+          <div className="bg-surface-subtle/60 p-4 rounded-2xl border border-edge flex items-center justify-between">
+            <div className="min-w-0 flex-1 pr-3">
+              <span className="text-[11px] font-semibold text-text-faint uppercase tracking-wider block">
                 {t("session.newThreshold")}
               </span>
-              <span className="text-[11px] text-text-secondary mt-0.5 block truncate">
+              <span className="text-xs text-text-secondary mt-0.5 block truncate">
                 {t(preview.detailKey, preview.detailParams)}
               </span>
             </div>
             <span
-              className={`font-bold font-mono text-xl shrink-0 tabular-nums ${
+              className={`font-bold font-mono text-2xl shrink-0 tabular-nums ${
                 preview.threshold !== null ? "text-amber" : "text-amber/40"
               }`}
             >
@@ -182,19 +183,19 @@ export function SessionModal({
             </span>
           </div>
 
-          <div className="flex items-center gap-2 pt-1">
+          <div className="flex items-center gap-2 pt-2">
             <Button
               type="button"
               variant="secondary"
               onClick={onClose}
-              className="w-1/3 text-xs"
+              className="w-1/3 text-xs press"
             >
               {t("modal.cancel")}
             </Button>
             <Button
               type="submit"
               variant="primary"
-              className="w-2/3 uppercase tracking-wider font-semibold text-xs flex items-center justify-center gap-1.5"
+              className="w-2/3 press font-semibold text-xs flex items-center justify-center gap-1.5"
               icon={<FloppyDisk size={14} weight="bold" />}
             >
               {t("session.save")}

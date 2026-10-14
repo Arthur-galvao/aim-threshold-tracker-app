@@ -33,7 +33,12 @@ export function Tooltip({
           <BaseTooltip.Positioner side={side} sideOffset={sideOffset}>
             <BaseTooltip.Popup
               className={cn(
-                "z-50 px-2.5 py-1 text-[11px] font-mono tracking-tight text-text-main bg-surface border border-edge rounded shadow-panel-dark select-none animate-fade-in focus:outline-none",
+                "z-50 px-2.5 py-1 text-[11px] font-mono tracking-tight text-text-main",
+                "bg-[var(--glass-bg-elevated)] backdrop-blur-md border border-[var(--glass-edge)] rounded-lg shadow-sm select-none",
+                "transition-all duration-150 ease-[cubic-bezier(0.16,1,0.3,1)]",
+                "data-[starting-style]:scale-95 data-[starting-style]:opacity-0",
+                "data-[ending-style]:scale-95 data-[ending-style]:opacity-0",
+                "focus:outline-none pointer-events-none",
                 className
               )}
             >

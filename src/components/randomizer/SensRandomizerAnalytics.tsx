@@ -75,28 +75,28 @@ export function SensRandomizerAnalytics({
     switch (bucket.confidenceLevel) {
       case "high":
         return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-soft text-emerald border border-emerald-edge">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald" />
             {t("randomizer.confidenceHigh")}
           </span>
         );
       case "medium":
         return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/10 text-blue-400 border border-blue-500/20">
-            <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />
+          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-score-soft text-score border border-score/20">
+            <span className="w-1.5 h-1.5 rounded-full bg-score" />
             {t("randomizer.confidenceMedium")}
           </span>
         );
       case "low":
         return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20">
-            <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-soft text-amber border border-amber-edge">
+            <span className="w-1.5 h-1.5 rounded-full bg-amber" />
             {t("randomizer.confidenceLow")}
           </span>
         );
       default:
         return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-surface-subtle text-text-faint border border-edge">
+          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-surface-subtle text-text-faint border border-edge">
             <span className="w-1.5 h-1.5 rounded-full bg-text-faint" />
             {t("randomizer.confInsufficient")}
           </span>
@@ -108,16 +108,16 @@ export function SensRandomizerAnalytics({
     <div className="space-y-6">
       {/* Sweet Spot Recommendation Hero Card */}
       {analysis && bestBucket && (
-        <div className="panel p-4 sm:p-6 rounded-2xl border-edge-strong bg-surface/80 relative overflow-hidden">
+        <div className="glass-panel p-4 sm:p-6 relative overflow-hidden">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-edge pb-5">
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-xs font-bold uppercase tracking-wider text-amber">
                   {t("randomizer.sweetSpotTitle")}
                 </span>
                 {renderConfidenceBadge(bestBucket)}
                 {analysis.isProvisional && (
-                  <span className="text-[11px] font-medium text-amber/90 bg-amber-500/10 px-2 py-0.5 rounded-md border border-amber-500/20">
+                  <span className="text-[11px] font-medium text-amber bg-amber-soft px-2 py-0.5 rounded-md border border-amber-edge">
                     {t("randomizer.badgeProvisional")}
                   </span>
                 )}
@@ -132,10 +132,10 @@ export function SensRandomizerAnalytics({
             <button
               type="button"
               onClick={() => onApplySens(bestBucket.sens)}
-              className="minimal-btn px-4 py-2 text-xs font-bold uppercase tracking-wider rounded-xl shadow-sm flex items-center gap-2 self-stretch sm:self-auto justify-center"
+              className="px-4 py-2 text-xs font-bold uppercase tracking-wider rounded-xl shadow-xs flex items-center gap-2 self-stretch sm:self-auto justify-center bg-score text-primary-foreground hover:brightness-105 press cursor-pointer"
             >
               <span>{t("randomizer.applySensBtn")}</span>
-              <span className="font-mono text-primary-foreground opacity-90 underline underline-offset-2">
+              <span className="font-mono text-primary-foreground opacity-90 underline underline-offset-2 tabular-nums">
                 {bestBucket.label}
               </span>
             </button>
@@ -146,7 +146,7 @@ export function SensRandomizerAnalytics({
               <span className="text-[11px] font-semibold uppercase tracking-wider text-text-faint block">
                 {t("randomizer.optimalSens")}
               </span>
-              <span className="text-2xl font-mono font-bold text-text-main mt-1 block">
+              <span className="text-2xl font-mono font-bold text-text-main mt-1 block tabular-nums">
                 {bestBucket.label}
               </span>
             </div>
@@ -155,11 +155,11 @@ export function SensRandomizerAnalytics({
               <span className="text-[11px] font-semibold uppercase tracking-wider text-text-faint block">
                 {scopeAllTasks ? t("randomizer.weightedNormScore") : t("randomizer.weightedScore")}
               </span>
-              <span className="text-2xl font-mono font-bold text-emerald-400 mt-1 block">
+              <span className="text-2xl font-mono font-bold text-emerald mt-1 block tabular-nums">
                 {bestBucket.weightedScore.toFixed(1)}
                 {scopeAllTasks ? "%" : ""}
               </span>
-              <span className="text-[10px] text-text-faint mt-0.5 block">
+              <span className="text-[10px] text-text-faint mt-0.5 block tabular-nums">
                 {t("randomizer.rawAvg")}: {bestBucket.avgScore.toFixed(1)}
                 {scopeAllTasks ? "%" : " pts"}
               </span>
@@ -169,10 +169,10 @@ export function SensRandomizerAnalytics({
               <span className="text-[11px] font-semibold uppercase tracking-wider text-text-faint block">
                 {t("randomizer.consistencyScore")}
               </span>
-              <span className="text-2xl font-mono font-bold text-blue-400 mt-1 block">
+              <span className="text-2xl font-mono font-bold text-score mt-1 block tabular-nums">
                 {bestBucket.consistency !== null ? `${bestBucket.consistency.toFixed(1)}%` : t("randomizer.naSingle")}
               </span>
-              <span className="text-[10px] text-text-faint mt-0.5 block">
+              <span className="text-[10px] text-text-faint mt-0.5 block tabular-nums">
                 {bestBucket.stdDev !== null
                   ? `σ = ±${bestBucket.stdDev.toFixed(1)}`
                   : t("randomizer.needsMultipleRuns")}
@@ -183,10 +183,10 @@ export function SensRandomizerAnalytics({
               <span className="text-[11px] font-semibold uppercase tracking-wider text-text-faint block">
                 {t("randomizer.sampleSize")}
               </span>
-              <span className="text-2xl font-mono font-bold text-text-main mt-1 block">
+              <span className="text-2xl font-mono font-bold text-text-main mt-1 block tabular-nums">
                 {bestBucket.count}
               </span>
-              <span className="text-[10px] text-text-faint mt-0.5 block">
+              <span className="text-[10px] text-text-faint mt-0.5 block tabular-nums">
                 {t("randomizer.totalDataset")}: {analysis.totalRuns}
               </span>
             </div>
@@ -196,14 +196,14 @@ export function SensRandomizerAnalytics({
 
       {/* Experimental Sensitivity Predictor Card */}
       {prediction && (
-        <div className="panel p-4 sm:p-5 rounded-2xl border border-edge bg-surface/60 space-y-4">
+        <div className="glass-panel p-4 sm:p-5 space-y-4">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-edge pb-4">
             <div>
               <div className="flex items-center gap-2">
-                <span className="text-xs font-bold uppercase tracking-wider text-blue-400">
+                <span className="text-xs font-bold uppercase tracking-wider text-score">
                   {t("randomizer.predictorTitle")}
                 </span>
-                <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.2 rounded font-mono font-bold bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.2 rounded font-mono font-bold bg-score-soft text-score border border-score/20">
                   {t("randomizer.predictorTag")}
                 </span>
               </div>
@@ -215,10 +215,10 @@ export function SensRandomizerAnalytics({
             <button
               type="button"
               onClick={() => onApplySens(prediction.predictedSens)}
-              className="minimal-btn px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider rounded-xl shadow-sm flex items-center gap-1.5 self-stretch sm:self-auto justify-center"
+              className="px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider rounded-xl shadow-xs flex items-center gap-1.5 self-stretch sm:self-auto justify-center bg-score text-primary-foreground hover:brightness-105 press cursor-pointer"
             >
               <span>{t("randomizer.applySensBtn")}</span>
-              <span className="font-mono text-primary-foreground opacity-90 underline underline-offset-2">
+              <span className="font-mono text-primary-foreground opacity-90 underline underline-offset-2 tabular-nums">
                 {prediction.label}
               </span>
             </button>
@@ -231,7 +231,7 @@ export function SensRandomizerAnalytics({
                 {t("randomizer.predictorSens")}
               </span>
               <div className="flex items-baseline gap-1 mt-1">
-                <span className="text-2xl font-mono font-bold text-blue-400 tabular-nums">
+                <span className="text-2xl font-mono font-bold text-score tabular-nums">
                   {prediction.predictedSens.toFixed(1)}
                 </span>
                 <span className="text-xs font-mono text-text-secondary">cm/360</span>
@@ -253,7 +253,7 @@ export function SensRandomizerAnalytics({
               <span className="text-[11px] font-semibold uppercase tracking-wider text-text-faint block">
                 {t("randomizer.predictorObserved")}
               </span>
-              <span className="text-xl font-mono font-bold text-emerald-400 mt-1 block tabular-nums">
+              <span className="text-xl font-mono font-bold text-emerald mt-1 block tabular-nums">
                 {prediction.empiricalSens.toFixed(1)} cm
               </span>
             </div>
@@ -263,7 +263,7 @@ export function SensRandomizerAnalytics({
               <span className="text-[11px] font-semibold uppercase tracking-wider text-text-faint block">
                 {t("randomizer.predictorBasis")}
               </span>
-              <span className="text-xs font-mono font-bold text-blue-300 mt-1 block leading-tight">
+              <span className="text-xs font-mono font-bold text-score mt-1 block leading-tight tabular-nums">
                 {prediction.basis === "curvature_blend"
                   ? `${Math.round(prediction.teoricoWeight * 100)}% / ${Math.round(prediction.consistenciaWeight * 100)}%`
                   : t("randomizer.predictorBasisEmpirical")}
@@ -291,9 +291,9 @@ export function SensRandomizerAnalytics({
                     type="button"
                     onClick={() => handleSelectProfile(p)}
                     title={t(config.descKey as any)}
-                    className={`py-1.5 px-2 rounded-lg text-xs font-semibold transition-all text-center ${
+                    className={`py-1.5 px-2 rounded-lg text-xs font-semibold transition-all text-center press cursor-pointer ${
                       isActive
-                        ? "bg-surface text-text-main shadow-sm border border-edge-strong"
+                        ? "bg-surface text-text-main shadow-xs border border-edge-strong"
                         : "text-text-secondary hover:text-text-main"
                     }`}
                   >
@@ -311,25 +311,25 @@ export function SensRandomizerAnalytics({
                 {t("randomizer.colConfidence")}:
               </span>
               {prediction.confidence === "high" && (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-soft text-emerald border border-emerald-edge">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald" />
                   {t("randomizer.confidenceHigh")}
                 </span>
               )}
               {prediction.confidence === "medium" && (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/10 text-blue-400 border border-blue-500/20">
-                  <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />
+                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-score-soft text-score border border-score/20">
+                  <span className="w-1.5 h-1.5 rounded-full bg-score" />
                   {t("randomizer.confidenceMedium")}
                 </span>
               )}
               {prediction.confidence === "low" && (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-soft text-amber border border-amber-edge">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber" />
                   {t("randomizer.confidenceLow")}
                 </span>
               )}
               {prediction.confidence === "insufficient" && (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-surface-subtle text-text-faint border border-edge">
+                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-surface-subtle text-text-faint border border-edge">
                   <span className="w-1.5 h-1.5 rounded-full bg-text-faint" />
                   {t("randomizer.confInsufficient")}
                 </span>
@@ -337,9 +337,9 @@ export function SensRandomizerAnalytics({
             </div>
 
             {prediction.ci && prediction.ci.low != null && prediction.ci.high != null && (
-              <div className="text-[11px] font-mono text-purple-400">
+              <div className="text-[11px] font-mono text-accent">
                 <span className="text-text-faint font-sans mr-1">{t("randomizer.confidenceInterval")}:</span>
-                <strong>{prediction.ci.low.toFixed(1)}</strong> {t("randomizer.rangeTo")} <strong>{prediction.ci.high.toFixed(1)}</strong> cm
+                <strong className="tabular-nums">{prediction.ci.low.toFixed(1)}</strong> {t("randomizer.rangeTo")} <strong className="tabular-nums">{prediction.ci.high.toFixed(1)}</strong> cm
               </div>
             )}
           </div>
@@ -348,12 +348,12 @@ export function SensRandomizerAnalytics({
           {(prediction.confidence === "low" || prediction.confidence === "insufficient") &&
             prediction.reasons &&
             prediction.reasons.length > 0 && (
-              <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-300 space-y-1">
+              <div className="p-3 rounded-xl bg-amber-soft border border-amber-edge text-xs text-amber space-y-1">
                 <div className="font-semibold text-[11px] flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber" />
                   <span>{t("randomizer.reasonsTitle")}</span>
                 </div>
-                <ul className="list-disc list-inside space-y-0.5 text-[11px] text-amber-200/90 pl-1">
+                <ul className="list-disc list-inside space-y-0.5 text-[11px] text-amber/90 pl-1">
                   {prediction.reasons.map((rKey, idx) => (
                     <li key={idx}>{t(rKey as any)}</li>
                   ))}
@@ -383,7 +383,7 @@ export function SensRandomizerAnalytics({
 
       {/* Sensitivity Buckets Breakdown Table */}
       {analysis && analysis.buckets.length > 0 && (
-        <div className="panel p-4 sm:p-6 rounded-2xl space-y-4">
+        <div className="glass-panel p-4 sm:p-6 space-y-4">
           <div className="border-b border-edge pb-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
             <div>
               <h3 className="text-sm font-bold uppercase tracking-wider text-text-main">
@@ -395,7 +395,7 @@ export function SensRandomizerAnalytics({
             </div>
             <span className="text-xs text-text-faint">
               {t("randomizer.globalAverage")}:{" "}
-              <strong className="text-text-main font-mono">
+              <strong className="text-text-main font-mono tabular-nums">
                 {analysis.globalMeanScore.toFixed(1)}
                 {scopeAllTasks ? "%" : " pts"}
               </strong>
@@ -416,41 +416,41 @@ export function SensRandomizerAnalytics({
                   <th className="pb-3 pr-3 text-right">{t("randomizer.colAction")}</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-white/[0.04]">
+              <tbody className="divide-y divide-edge">
                 {analysis.buckets.map((b, idx) => {
                   const isTop = bestBucket && b.sens === bestBucket.sens;
                   return (
                     <tr
                       key={b.sens}
                       className={`hover:bg-surface-subtle/50 transition-colors ${
-                        isTop ? "bg-amber-500/[0.03] font-medium" : ""
+                        isTop ? "bg-amber-soft/30 font-medium" : ""
                       }`}
                     >
-                      <td className="py-3 pl-3 font-mono font-semibold text-text-main flex items-center gap-2">
+                      <td className="py-3 pl-3 font-mono font-semibold text-text-main flex items-center gap-2 tabular-nums">
                         {isTop && (
                           <span className="w-1.5 h-1.5 rounded-full bg-amber" />
                         )}
                         <span>{b.label}</span>
                         {idx === 0 && (
-                          <span className="text-[10px] px-1.5 py-0.2 rounded bg-amber-500/10 text-amber font-sans font-bold">
+                          <span className="text-[10px] px-1.5 py-0.2 rounded bg-amber-soft text-amber border border-amber-edge font-sans font-bold">
                             #1
                           </span>
                         )}
                       </td>
-                      <td className="py-3 px-3 font-mono text-text-secondary">{b.count}</td>
-                      <td className="py-3 px-3 font-mono font-bold text-emerald-400">
+                      <td className="py-3 px-3 font-mono text-text-secondary tabular-nums">{b.count}</td>
+                      <td className="py-3 px-3 font-mono font-bold text-emerald tabular-nums">
                         {b.weightedScore.toFixed(1)}
                         {scopeAllTasks ? "%" : ""}
                       </td>
-                      <td className="py-3 px-3 font-mono text-text-secondary">
+                      <td className="py-3 px-3 font-mono text-text-secondary tabular-nums">
                         {b.avgScore.toFixed(1)}
                         {scopeAllTasks ? "%" : ""}
                       </td>
-                      <td className="py-3 px-3 font-mono text-text-main font-semibold">
+                      <td className="py-3 px-3 font-mono text-text-main font-semibold tabular-nums">
                         {b.maxScore.toFixed(1)}
                         {scopeAllTasks ? "%" : ""}
                       </td>
-                      <td className="py-3 px-3 font-mono text-blue-400">
+                      <td className="py-3 px-3 font-mono text-score tabular-nums">
                         {b.consistency !== null ? `${b.consistency.toFixed(1)}%` : t("randomizer.naSingle")}
                       </td>
                       <td className="py-3 px-3">{renderConfidenceBadge(b)}</td>
@@ -458,7 +458,7 @@ export function SensRandomizerAnalytics({
                         <button
                           type="button"
                           onClick={() => onApplySens(b.sens)}
-                          className="text-[11px] font-semibold text-text-secondary hover:text-text-main hover:underline"
+                          className="text-[11px] font-semibold text-text-secondary hover:text-text-main hover:underline press cursor-pointer"
                         >
                           {t("randomizer.applySens")}
                         </button>
@@ -474,7 +474,7 @@ export function SensRandomizerAnalytics({
 
       {/* Recent Runs History */}
       {recentRuns.length > 0 && (
-        <div className="panel p-4 sm:p-6 rounded-2xl space-y-4">
+        <div className="glass-panel p-4 sm:p-6 space-y-4">
           <div className="border-b border-edge pb-3">
             <h3 className="text-sm font-bold uppercase tracking-wider text-text-main">
               {t("randomizer.recentRunsTitle")}
@@ -495,18 +495,18 @@ export function SensRandomizerAnalytics({
                   <th className="pb-3 pr-3 text-right">{t("randomizer.colThreshold")}</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-white/[0.04]">
+              <tbody className="divide-y divide-edge">
                 {recentRuns.map((r, i) => (
                   <tr key={i} className="hover:bg-surface-subtle/50 transition-colors">
-                    <td className="py-3 pl-3 font-mono text-text-faint">{r.date || "-"}</td>
+                    <td className="py-3 pl-3 font-mono text-text-faint tabular-nums">{r.date || "-"}</td>
                     <td className="py-3 px-3 font-medium text-text-main">{r.scenario || "-"}</td>
-                    <td className="py-3 px-3 font-mono font-semibold text-blue-400">
+                    <td className="py-3 px-3 font-mono font-semibold text-score tabular-nums">
                       {r.sens.toFixed(1)} cm
                     </td>
-                    <td className="py-3 px-3 font-mono font-bold text-text-main">
+                    <td className="py-3 px-3 font-mono font-bold text-text-main tabular-nums">
                       {scopeAllTasks ? `${r.normScore?.toFixed(1)}%` : r.rawScore ?? r.score}
                     </td>
-                    <td className="py-3 pr-3 text-right font-mono text-amber">
+                    <td className="py-3 pr-3 text-right font-mono text-amber tabular-nums">
                       {r.threshold ?? "-"}
                     </td>
                   </tr>

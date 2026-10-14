@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -13,7 +13,7 @@ import { Line } from "react-chartjs-2";
 import { ChartLineUp } from "@phosphor-icons/react";
 import type { Task } from "@/lib/types";
 import { summarizeDays } from "@/lib/day-summary";
-import { useTheme } from "@/lib/theme";
+import { useTheme, getStoredTheme, APP_THEMES, type AppTheme } from "@/lib/theme";
 import { useI18n } from "@/lib/i18n";
 import { Tooltip as UiTooltip } from "@/components/ui/Tooltip";
 import { cn } from "@/lib/utils";
@@ -115,7 +115,35 @@ export function ProgressChart({ activeTask }: ProgressChartProps) {
   const [hiddenSeries, setHiddenSeries] = useState<Set<number>>(new Set());
   const { resolvedTheme } = useTheme();
   const { t } = useI18n();
-  const c = COLORS[resolvedTheme === "light" ? "light" : "dark"];
+
+  const [appTheme, setAppTheme] = useState<AppTheme>(getStoredTheme);
+
+  useEffect(() => {
+    const checkTheme = () => {
+      setAppTheme(getStoredTheme());
+    };
+    checkTheme();
+    const observer = new MutationObserver(checkTheme);
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["data-theme"],
+    });
+    return () => observer.disconnect();
+  }, []);
+
+  const themeConfig = APP_THEMES.find((item) => item.id === appTheme) ?? APP_THEMES[0];
+  const accentColor = themeConfig.color;
+
+  const baseC = COLORS[resolvedTheme === "light" ? "light" : "dark"];
+  const c = useMemo(() => {
+    if (resolvedTheme === "light") return baseC;
+    return {
+      ...baseC,
+      line: accentColor,
+      lineFill: `${accentColor}14`,
+      bandFill: `${accentColor}1f`,
+    };
+  }, [baseC, accentColor, resolvedTheme]);
 
   const allSummaries = useMemo(
     () => summarizeDays(activeTask),
@@ -336,8 +364,8 @@ export function ProgressChart({ activeTask }: ProgressChartProps) {
 
   if (!activeChart) {
     return (
-      <div className="p-8 h-72 rounded-xl flex flex-col items-center justify-center text-text-faint text-xs bg-surface border border-edge shadow-xs">
-        <span className="p-3 rounded-md bg-surface-subtle border border-edge mb-3 opacity-60">
+      <div className="p-8 h-72 rounded-2xl flex flex-col items-center justify-center text-text-faint text-xs liquid-glass-panel shadow-xs">
+        <span className="p-3 rounded-xl liquid-glass-control mb-3 opacity-60">
           <ChartLineUp size={28} weight="duotone" />
         </span>
         <span className="font-mono uppercase tracking-widest text-[10px]">
@@ -348,11 +376,11 @@ export function ProgressChart({ activeTask }: ProgressChartProps) {
   }
 
   return (
-    <div className="p-3.5 sm:p-5 rounded-xl bg-surface border border-edge shadow-xs">
+    <div className="p-4 sm:p-6 rounded-2xl liquid-glass-panel shadow-xs">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-4 sm:mb-5">
         <div className="flex items-center gap-2.5">
-          <div className="w-6 h-6 rounded-md bg-surface-subtle text-text-secondary border border-edge flex items-center justify-center">
-            <ChartLineUp size={13} weight="bold" className="text-score" />
+          <div className="w-7 h-7 rounded-lg bg-score-soft text-score border border-score/25 flex items-center justify-center shadow-xs">
+            <ChartLineUp size={14} weight="bold" />
           </div>
           <div>
             <h2 className="text-xs font-semibold uppercase tracking-wider text-text-main font-mono">
@@ -366,14 +394,14 @@ export function ProgressChart({ activeTask }: ProgressChartProps) {
 
         <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
           {/* Toggle Segmentado: Dia | Run */}
-          <div className="flex items-center p-0.5 rounded-md bg-surface-subtle border border-edge">
+          <div className="flex items-center p-0.5 rounded-lg liquid-glass-control">
             <button
               type="button"
               onClick={() => setViewMode("day")}
               className={cn(
-                "px-2 sm:px-2.5 py-1 text-[10px] font-mono font-medium rounded transition-colors cursor-pointer",
+                "px-2.5 py-1 text-[10px] font-mono font-medium rounded-md transition-all cursor-pointer press",
                 viewMode === "day"
-                  ? "bg-surface text-score shadow-xs border border-edge font-bold"
+                  ? "bg-surface-elevated text-score shadow-xs border border-edge font-bold"
                   : "text-text-faint hover:text-text-secondary"
               )}
             >
@@ -383,9 +411,9 @@ export function ProgressChart({ activeTask }: ProgressChartProps) {
               type="button"
               onClick={() => setViewMode("run")}
               className={cn(
-                "px-2 sm:px-2.5 py-1 text-[10px] font-mono font-medium rounded transition-colors cursor-pointer",
+                "px-2.5 py-1 text-[10px] font-mono font-medium rounded-md transition-all cursor-pointer press",
                 viewMode === "run"
-                  ? "bg-surface text-score shadow-xs border border-edge font-bold"
+                  ? "bg-surface-elevated text-score shadow-xs border border-edge font-bold"
                   : "text-text-faint hover:text-text-secondary"
               )}
             >
@@ -394,7 +422,7 @@ export function ProgressChart({ activeTask }: ProgressChartProps) {
           </div>
 
           {/* Filtro de Período: 7D | 30D | 90D | Tudo */}
-          <div className="flex items-center p-0.5 rounded-md bg-surface-subtle border border-edge">
+          <div className="flex items-center p-0.5 rounded-lg liquid-glass-control">
             {(["7D", "30D", "90D", "all"] as Period[]).map((p) => {
               const label =
                 p === "7D"
@@ -410,9 +438,9 @@ export function ProgressChart({ activeTask }: ProgressChartProps) {
                   type="button"
                   onClick={() => setSelectedPeriod(p)}
                   className={cn(
-                    "px-2 py-1 text-[10px] font-mono font-medium rounded transition-colors cursor-pointer",
+                    "px-2 py-1 text-[10px] font-mono font-medium rounded-md transition-all cursor-pointer press",
                     activePeriod === p
-                      ? "bg-surface text-text-main shadow-xs border border-edge"
+                      ? "bg-surface-elevated text-text-main shadow-xs border border-edge font-bold"
                       : "text-text-faint hover:text-text-secondary"
                   )}
                 >
@@ -429,10 +457,10 @@ export function ProgressChart({ activeTask }: ProgressChartProps) {
                 type="button"
                 onClick={() => toggleSeries(0)}
                 className={cn(
-                  "flex items-center gap-1 px-1.5 py-0.5 rounded transition-all cursor-pointer",
+                  "flex items-center gap-1 px-2 py-1 rounded-md transition-all cursor-pointer press",
                   hiddenSeries.has(0)
                     ? "opacity-35 line-through hover:opacity-60"
-                    : "text-text-main hover:bg-surface-subtle"
+                    : "text-text-main hover:bg-surface-subtle border border-transparent hover:border-edge"
                 )}
               >
                 <span className="w-3 h-1 rounded-sm bg-score inline-block shrink-0" />
@@ -445,10 +473,10 @@ export function ProgressChart({ activeTask }: ProgressChartProps) {
                 type="button"
                 onClick={() => toggleSeries(1)}
                 className={cn(
-                  "flex items-center gap-1 px-1.5 py-0.5 rounded transition-all cursor-pointer",
+                  "flex items-center gap-1 px-2 py-1 rounded-md transition-all cursor-pointer press",
                   hiddenSeries.has(1)
                     ? "opacity-35 line-through hover:opacity-60"
-                    : "text-text-secondary hover:bg-surface-subtle"
+                    : "text-text-secondary hover:bg-surface-subtle border border-transparent hover:border-edge"
                 )}
               >
                 <span className="w-3 border-t border-dashed border-text-faint inline-block shrink-0" />
@@ -461,10 +489,10 @@ export function ProgressChart({ activeTask }: ProgressChartProps) {
                 type="button"
                 onClick={() => setShowMovingAvg((prev) => !prev)}
                 className={cn(
-                  "flex items-center gap-1 px-1.5 py-0.5 rounded transition-all cursor-pointer",
+                  "flex items-center gap-1 px-2 py-1 rounded-md transition-all cursor-pointer press",
                   !showMovingAvg || hiddenSeries.has(2)
                     ? "opacity-35 line-through hover:opacity-60"
-                    : "text-text-faint hover:bg-surface-subtle"
+                    : "text-text-faint hover:bg-surface-subtle border border-transparent hover:border-edge"
                 )}
               >
                 <span className="w-3 border-t border-dotted border-text-faint/60 inline-block shrink-0" />

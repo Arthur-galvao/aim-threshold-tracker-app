@@ -8,7 +8,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "test": "node --test test/sens-analytics.test.ts test/playlist-sync.test.ts test/metric-deltas.test.ts test/threshold.test.ts test/day-summary.test.ts test/sens-lattice.test.ts test/run-points.test.ts test/scenario-centers.test.ts test/sens-model.test.ts test/randomizer-draft.test.ts test/real-data-acceptance.test.ts",
+    "test": "node --test test/sens-analytics.test.ts test/playlist-sync.test.ts test/metric-deltas.test.ts test/threshold.test.ts test/day-summary.test.ts test/sens-lattice.test.ts test/run-points.test.ts test/scenario-centers.test.ts test/sens-model.test.ts test/randomizer-draft.test.ts test/real-data-acceptance.test.ts test/v2-glass-hud.test.ts",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build"

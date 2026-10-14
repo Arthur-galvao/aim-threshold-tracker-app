@@ -44,15 +44,18 @@ export function Dialog({
       }}
     >
       <BaseDialog.Portal>
-        <BaseDialog.Backdrop className="fixed inset-0 z-50 modal-scrim transition-opacity duration-200 animate-fade-in" />
+        <BaseDialog.Backdrop className="fixed inset-0 z-50 modal-scrim transition-opacity duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] data-[starting-style]:opacity-0 data-[ending-style]:opacity-0" />
         <BaseDialog.Popup
           className={cn(
-            "fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 lg:p-6 overflow-hidden pointer-events-none focus:outline-none"
+            "fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 lg:p-6 overflow-hidden pointer-events-none focus:outline-none transition-opacity duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] data-[starting-style]:opacity-0 data-[ending-style]:opacity-0 group"
           )}
         >
           <div
             className={cn(
-              "pointer-events-auto relative w-full panel p-4 sm:p-6 rounded-2xl shadow-overlay border border-edge bg-surface z-10 max-h-[92vh] sm:max-h-[88vh] flex flex-col animate-pop-in",
+              "pointer-events-auto relative w-full glass-floating p-4 sm:p-6 z-10 max-h-[92vh] sm:max-h-[88vh] flex flex-col",
+              "transition-all duration-200 ease-[cubic-bezier(0.16,1,0.3,1)]",
+              "group-data-[starting-style]:scale-[0.96] group-data-[starting-style]:opacity-0 group-data-[starting-style]:blur-[4px]",
+              "group-data-[ending-style]:scale-[0.96] group-data-[ending-style]:opacity-0 group-data-[ending-style]:blur-[4px]",
               maxWidthClasses,
               className
             )}

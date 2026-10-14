@@ -53,7 +53,7 @@ export function DashboardPlaylistRunner({ runner, tasks, mouseDpi }: DashboardPl
 
   if (isFinished) {
     return (
-      <div className="p-3.5 sm:p-4 rounded-xl border border-emerald-edge bg-emerald-soft/50 flex flex-col sm:flex-row items-center justify-between gap-3 animate-fadeIn">
+      <div className="p-3.5 sm:p-4 rounded-2xl border border-emerald-edge bg-emerald-soft/50 flex flex-col sm:flex-row items-center justify-between gap-3 animate-fadeIn">
         <div className="flex items-center gap-3 min-w-0">
           <div className="w-8 h-8 rounded-full bg-emerald-soft text-emerald border border-emerald-edge flex items-center justify-center shrink-0">
             <Check size={16} weight="bold" />
@@ -73,6 +73,7 @@ export function DashboardPlaylistRunner({ runner, tasks, mouseDpi }: DashboardPl
             variant="primary"
             onClick={runner.restart}
             icon={<ArrowCounterClockwise size={13} weight="bold" />}
+            className="press"
           >
             {t("runner.restart")}
           </Button>
@@ -80,6 +81,7 @@ export function DashboardPlaylistRunner({ runner, tasks, mouseDpi }: DashboardPl
             size="sm"
             variant="secondary"
             onClick={runner.stop}
+            className="press"
           >
             {t("modal.cancel")}
           </Button>
@@ -92,11 +94,11 @@ export function DashboardPlaylistRunner({ runner, tasks, mouseDpi }: DashboardPl
   const isLastStep = currentStepIndex === activePlaylist.items.length - 1;
 
   return (
-    <div className="p-3.5 sm:p-4 rounded-xl bg-[#12141e]/70 space-y-2.5 animate-fadeIn">
+    <div className="p-3.5 sm:p-4 rounded-2xl glass-panel border border-score/30 shadow-xs space-y-2.5 animate-fadeIn">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
         {/* Left: Playlist & Step Info */}
         <div className="flex items-center gap-2.5 min-w-0">
-          <div className="w-7 h-7 rounded-md bg-score-soft text-score border border-score/30 flex items-center justify-center shrink-0">
+          <div className="w-7 h-7 rounded-lg bg-score-soft text-score border border-score/30 flex items-center justify-center shrink-0">
             <Play size={14} weight="bold" />
           </div>
 
@@ -105,7 +107,7 @@ export function DashboardPlaylistRunner({ runner, tasks, mouseDpi }: DashboardPl
               <span className="text-xs font-bold text-text-main truncate max-w-[200px]" title={activePlaylist.name}>
                 {activePlaylist.name}
               </span>
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-score-soft border border-score/20 text-score font-mono">
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-score-soft border border-score/20 text-score font-mono tabular-nums">
                 {t("runner.progress", {
                   current: currentStepIndex + 1,
                   total: activePlaylist.items.length,
@@ -116,7 +118,7 @@ export function DashboardPlaylistRunner({ runner, tasks, mouseDpi }: DashboardPl
               <span>{currentTask ? currentTask.name : "Cenário"}</span>
               {idealSens && (
                 <span
-                  className="text-[10px] px-1.5 py-0.5 rounded-full bg-surface text-score border border-edge font-mono font-medium flex items-center gap-1"
+                  className="text-[10px] px-1.5 py-0.5 rounded-full bg-surface text-score border border-edge font-mono font-medium flex items-center gap-1 tabular-nums"
                   title={idealSens.source === "empirical" ? t("randomizer.idealSensSourceEmpirical") : t("randomizer.idealSensSourceViscose")}
                 >
                   <span>{recSens} cm</span>
@@ -131,7 +133,7 @@ export function DashboardPlaylistRunner({ runner, tasks, mouseDpi }: DashboardPl
 
         {/* Right: Progress Metric & Controls */}
         <div className="flex items-center gap-2.5 justify-between sm:justify-end shrink-0 w-full sm:w-auto">
-          <div className="px-2.5 py-1 rounded-md bg-surface border border-edge text-[11px] font-mono text-text-main tabular-nums">
+          <div className="px-2.5 py-1 rounded-lg bg-surface border border-edge text-[11px] font-mono text-text-main tabular-nums">
             {progressData.label}
           </div>
 
@@ -141,7 +143,7 @@ export function DashboardPlaylistRunner({ runner, tasks, mouseDpi }: DashboardPl
               onClick={runner.previous}
               disabled={isFirstStep}
               title={t("runner.previous")}
-              className="p-1.5 rounded-md border border-edge text-text-secondary hover:text-text-main hover:bg-surface-hover disabled:opacity-30 disabled:pointer-events-none transition-all cursor-pointer"
+              className="p-1.5 rounded-lg border border-edge text-text-secondary hover:text-text-main hover:bg-surface-hover disabled:opacity-30 disabled:pointer-events-none transition-all cursor-pointer press"
             >
               <CaretLeft size={13} weight="bold" />
             </button>
@@ -151,7 +153,7 @@ export function DashboardPlaylistRunner({ runner, tasks, mouseDpi }: DashboardPl
               variant="primary"
               onClick={runner.next}
               title={isLastStep ? t("runner.finish") : t("runner.next")}
-              className="h-7 px-2.5 text-xs"
+              className="h-7 px-2.5 text-xs press"
             >
               <span>{isLastStep ? t("runner.finish") : t("runner.next")}</span>
               <CaretRight size={12} weight="bold" className="ml-1" />
@@ -161,7 +163,7 @@ export function DashboardPlaylistRunner({ runner, tasks, mouseDpi }: DashboardPl
               type="button"
               onClick={runner.stop}
               title={t("runner.exit")}
-              className="p-1.5 rounded-md border border-edge text-text-faint hover:text-red hover:bg-red-soft transition-colors cursor-pointer"
+              className="p-1.5 rounded-lg border border-edge text-text-faint hover:text-red hover:bg-red-soft transition-colors cursor-pointer press"
             >
               <X size={13} weight="bold" />
             </button>

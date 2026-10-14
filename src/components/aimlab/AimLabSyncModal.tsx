@@ -34,47 +34,50 @@ export function AimLabSyncModal({ open, onClose, onImportComplete }: AimLabSyncM
       onClose={onClose}
       title="Aim Lab Integration"
       maxWidth="md"
+      className="glass-floating"
     >
-      <div className="space-y-6">
-        <p className="text-[11px] text-text-muted">
+      <div className="space-y-5">
+        <p className="text-xs text-text-secondary leading-relaxed">
           Sincronize seu histórico de treino do Aim Lab. Você pode buscar o banco de dados local automaticamente ou fazer o upload do arquivo CSV exportado pelo jogo.
         </p>
 
         {error && (
-          <div className="p-3 bg-red/10 border border-red/20 rounded text-[11px] text-red font-mono">
+          <div className="p-3 bg-red-soft border border-red-edge rounded-xl text-xs text-red font-mono">
             {error}
           </div>
         )}
 
-        <div className="space-y-4">
-          <div className="p-4 border border-edge bg-surface-subtle/30 rounded-md">
-            <h4 className="text-[11px] font-mono font-bold text-text-main mb-2 flex items-center gap-2">
-              <Database size={14} /> Opção 2: Auto-Sync (Local SQLite)
+        <div className="space-y-3">
+          <div className="p-4 sm:p-5 border border-edge bg-surface-subtle/60 rounded-2xl enter space-y-3" style={{ "--i": 0 } as React.CSSProperties}>
+            <h4 className="text-xs font-semibold text-text-main flex items-center gap-2">
+              <Database size={15} className="text-score" />
+              <span>Opção 2: Auto-Sync (Local SQLite)</span>
             </h4>
-            <p className="text-[11px] text-text-muted mb-4">
-              Busca o arquivo <code className="text-text-main">Klutch.bytes</code> do Aim Lab e extrai todas as pontuações salvadas localmente. Pode não recuperar a sensibilidade de runs antigas.
+            <p className="text-[11px] text-text-secondary leading-relaxed">
+              Busca o arquivo <code className="text-text-main font-mono bg-surface px-1.5 py-0.5 rounded border border-edge">Klutch.bytes</code> do Aim Lab e extrai todas as pontuações salvas localmente.
             </p>
             <Button
               variant="primary"
               size="md"
               onClick={handleAutoSync}
               disabled={loading}
-              className="w-full"
+              className="w-full press"
               icon={<DownloadSimple size={14} weight="bold" />}
             >
               {loading ? "Sincronizando..." : "Sincronizar LocalDB Agora"}
             </Button>
           </div>
 
-          <div className="p-4 border border-edge bg-surface-subtle/30 rounded-md">
-            <h4 className="text-[11px] font-mono font-bold text-text-main mb-2 flex items-center gap-2">
-              <UploadSimple size={14} /> Opção 1: Importar CSV Manual
+          <div className="p-4 sm:p-5 border border-edge bg-surface-subtle/60 rounded-2xl enter space-y-3" style={{ "--i": 1 } as React.CSSProperties}>
+            <h4 className="text-xs font-semibold text-text-main flex items-center gap-2">
+              <UploadSimple size={15} className="text-score" />
+              <span>Opção 1: Importar CSV Manual</span>
             </h4>
-            <p className="text-[11px] text-text-muted mb-4">
+            <p className="text-[11px] text-text-secondary leading-relaxed">
               Faça o download do seu histórico pelo perfil do Aim Lab na nuvem e importe o arquivo CSV aqui para uma cópia completa dos seus dados.
             </p>
             
-            <label className={`w-full inline-flex items-center justify-center font-sans tracking-tight cursor-pointer select-none h-8 px-3 text-[10px] font-mono tracking-widest uppercase gap-2 rounded-lg font-medium bg-surface-subtle text-text-main border border-edge hover:bg-surface-hover transition-all duration-150 ${loading ? 'opacity-50 pointer-events-none' : ''}`}>
+            <label className={`w-full press inline-flex items-center justify-center font-sans tracking-tight cursor-pointer select-none h-9 px-3.5 text-xs gap-2 rounded-xl font-medium bg-surface-subtle text-text-main border border-edge hover:bg-surface-hover hover:border-edge-strong transition-all ${loading ? 'opacity-50 pointer-events-none' : ''}`}>
               <UploadSimple size={14} weight="bold" />
               <span>{loading ? "Processando..." : "Selecionar arquivo .csv"}</span>
               <input
@@ -84,7 +87,6 @@ export function AimLabSyncModal({ open, onClose, onImportComplete }: AimLabSyncM
                 onChange={async (e) => {
                   const file = e.target.files?.[0];
                   if (file) {
-                    // Extract path using Tauri's extended File object
                     const filePath = (file as any).path;
                     if (filePath) {
                       try {

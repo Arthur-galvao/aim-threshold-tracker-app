@@ -131,28 +131,28 @@ export function CategorySensCard({
     switch (confidence) {
       case "high":
         return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-soft text-emerald border border-emerald-edge">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald" />
             {t("randomizer.confidenceHigh")}
           </span>
         );
       case "medium":
         return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/10 text-blue-400 border border-blue-500/20">
-            <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />
+          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-score-soft text-score border border-score/20">
+            <span className="w-1.5 h-1.5 rounded-full bg-score" />
             {t("randomizer.confidenceMedium")}
           </span>
         );
       case "low":
         return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20">
-            <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-soft text-amber border border-amber-edge">
+            <span className="w-1.5 h-1.5 rounded-full bg-amber" />
             {t("randomizer.confidenceLow")}
           </span>
         );
       default:
         return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-surface-subtle text-text-faint border border-edge">
+          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-surface-subtle text-text-faint border border-edge">
             <span className="w-1.5 h-1.5 rounded-full bg-text-faint" />
             {t("randomizer.confInsufficient")}
           </span>
@@ -161,7 +161,7 @@ export function CategorySensCard({
   };
 
   return (
-    <div className="panel p-4 sm:p-6 rounded-2xl border-edge-strong relative overflow-hidden space-y-4">
+    <div className="glass-panel p-4 sm:p-6 relative overflow-hidden space-y-4">
       <div className="border-b border-edge pb-4">
         <h3 className="text-base font-bold text-text-main">
           {t("categorySens.title")}
@@ -193,12 +193,13 @@ export function CategorySensCard({
               </tr>
             </thead>
             <tbody className="divide-y divide-edge">
-              {categoryGroups.map((item) => {
+              {categoryGroups.map((item, index) => {
                 const isPredicted = item.displaySens.source === "predicted";
                 return (
                   <tr
                     key={item.key}
-                    className="hover:bg-surface-hover transition-colors"
+                    className="hover:bg-surface-hover transition-colors enter"
+                    style={{ animationDelay: `${index * 30}ms` }}
                   >
                     <td className="py-3 px-3">
                       <div className="font-semibold text-text-main">
@@ -211,28 +212,28 @@ export function CategorySensCard({
 
                     <td className="py-3 px-3">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-mono font-bold text-sm text-text-main">
+                        <span className="font-mono font-bold text-sm text-text-main tabular-nums">
                           {formatSensitivity(item.displaySens.value, dpi)}
                         </span>
                         {isPredicted ? (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold bg-emerald-soft text-emerald border border-emerald-edge">
                             {t("categorySens.sourcePredicted")}
                           </span>
                         ) : (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold bg-purple-500/10 text-purple-300 border border-purple-500/20">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold bg-accent-soft text-accent border border-accent/20">
                             {t("categorySens.sourceViscose")}
                           </span>
                         )}
                       </div>
                     </td>
 
-                    <td className="py-3 px-3 font-mono text-text-secondary">
+                    <td className="py-3 px-3 font-mono text-text-secondary tabular-nums">
                       {item.viscoseSens !== null
                         ? formatSensitivity(item.viscoseSens, dpi)
                         : "-"}
                     </td>
 
-                    <td className="py-3 px-3 text-text-secondary">
+                    <td className="py-3 px-3 text-text-secondary tabular-nums">
                       {t("categorySens.scenariosRuns", {
                         scenarios: item.scenariosCount,
                         runs: item.totalRuns,
@@ -250,7 +251,7 @@ export function CategorySensCard({
                             <button
                               type="button"
                               onClick={() => onViewInChart(item.key)}
-                              className="px-2.5 py-1 text-[11px] font-semibold rounded-lg bg-surface-subtle hover:bg-surface-hover border border-edge text-text-main transition-colors whitespace-nowrap"
+                              className="px-2.5 py-1 text-[11px] font-semibold rounded-lg bg-surface-subtle hover:bg-surface-hover border border-edge text-text-main transition-colors whitespace-nowrap press"
                             >
                               {t("categorySens.viewInChart")}
                             </button>
@@ -265,7 +266,7 @@ export function CategorySensCard({
                                   .filter(Boolean);
                                 void onApplySens(item.displaySens.value, scenarioNames);
                               }}
-                              className="px-2.5 py-1 text-[11px] font-semibold rounded-lg bg-surface-subtle hover:bg-surface-hover border border-edge text-text-main transition-colors whitespace-nowrap"
+                              className="px-2.5 py-1 text-[11px] font-semibold rounded-lg bg-surface-subtle hover:bg-surface-hover border border-edge text-text-main transition-colors whitespace-nowrap press"
                             >
                               {t("categorySens.applySens")}
                             </button>

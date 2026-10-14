@@ -6,26 +6,33 @@ import { RandomizerProvider, useSensRandomizer } from "@/hooks/useSensRandomizer
 import { useScenarioCentersSync } from "@/hooks/useScenarioCentersSync";
 import { invoke } from "@tauri-apps/api/core";
 import { I18nProvider, useI18n } from "@/lib/i18n";
-
-import { Header } from "@/components/Header";
 import { ScenarioList } from "@/components/ScenarioList";
-import { MetricsCards } from "@/components/MetricsCards";
-import { ProgressChart } from "@/components/ProgressChart";
-import { HistoryTable, copyEscalateToClipboard } from "@/components/HistoryTable";
+import { LiquidAeroBackdrop } from "@/components/layout/LiquidAeroBackdrop";
+import { copyEscalateToClipboard } from "@/components/HistoryTable";
 import { SessionModal } from "@/components/SessionModal";
 import { SensRandomizerView } from "@/components/SensRandomizerView";
 import { PlaylistRunnerView } from "@/components/playlist/PlaylistRunnerView";
 import { PlaylistManagerModal } from "@/components/playlist/PlaylistManagerModal";
 import { DashboardPlaylistRunner } from "@/components/playlist/DashboardPlaylistRunner";
-import { NewTaskModal } from "@/components/NewTaskModal";
+import { ScenarioDialog } from "@/components/dialogs/ScenarioDialog";
 import { SettingsModal } from "@/components/SettingsModal";
 import { AimLabSyncModal } from "@/components/aimlab/AimLabSyncModal";
-import { Toast } from "@/components/Toast";
+import { useWindowActivityGuard } from "@/hooks/useWindowActivityGuard";
+import { TrackerWorkspaceProvider } from "@/context/TrackerWorkspaceContext";
+import { WorkspaceShell } from "@/components/layout/WorkspaceShell";
+import { CommandBar } from "@/components/layout/CommandBar";
+import { TelemetryBento } from "@/components/bento/TelemetryBento";
+import { RatchetAnalyticsStage } from "@/components/analytics/RatchetAnalyticsStage";
+import { SessionQuickComposer } from "@/components/composer/SessionQuickComposer";
+import { SessionLedger } from "@/components/ledger/SessionLedger";
+import { TelemetryToast } from "@/components/telemetry/TelemetryToast";
 import type { AppSettings, Playlist } from "@/lib/types";
 import { getSettings, saveSettings } from "@/lib/tauri-bridge";
 import { getStoredTheme, applyTheme, type AppTheme } from "@/lib/theme";
 
 function Dashboard() {
+  useWindowActivityGuard();
+
   const {
     appData,
     activeTask,
@@ -201,8 +208,8 @@ function Dashboard() {
   );
 
   return (
-    <div className="relative min-h-screen h-screen bg-base text-text-main flex flex-row overflow-hidden selection:bg-score/25 selection:text-score">
-      <div className="dot-bg" aria-hidden="true" />
+    <div className="relative min-h-screen h-screen bg-transparent text-text-main flex flex-row overflow-hidden selection:bg-score/25 selection:text-score">
+      <LiquidAeroBackdrop />
 
       {/* Pane 1: Scenario Navigation Sidebar */}
       <ScenarioList
@@ -230,65 +237,59 @@ function Dashboard() {
         onToggleSidebar={() => setSidebarCollapsed((prev) => !prev)}
       />
 
-      {/* Pane 3: Main Workspace Stage */}
+      {/* Pane 3: Main Workspace Stage (Single Master Top CommandBar) */}
       <div className="flex-1 min-w-0 flex flex-col h-screen overflow-y-auto custom-scrollbar z-10">
-        <Header
-          activeTab={activeTab}
-          onTabChange={setActiveTab}
-          rawaccelAvailable={rawaccelAvailable}
-          onOpenSettings={() => setSettingsOpen(true)}
-          onOpenAimlab={() => setAimlabOpen(true)}
-          watcherStatus={watcherStatus}
-          onNewSession={() => setSessionModalOpen(true)}
-          currentTheme={theme}
-          onThemeChange={setTheme}
-          onToggleSidebar={() => setSidebarCollapsed((prev) => !prev)}
-        />
-
-        <main className="flex-1 p-3.5 sm:p-5 lg:p-6 max-w-[1600px] w-full mx-auto">
+        <main className="flex-1 w-full mx-auto">
           <AnimatePresence mode="wait">
             <motion.div
               key={activeTab}
-              initial={{ opacity: 0, y: 4 }}
+              initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -4 }}
-              transition={{ duration: 0.15, ease: "easeOut" }}
-              className="space-y-4 sm:space-y-5"
+              transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+              className="w-full"
             >
               {activeTab === "dashboard" ? (
-                <>
-                  {/* Active Playlist Runner Banner in Dashboard */}
-                  <DashboardPlaylistRunner
-                    runner={playlistRunner}
-                    tasks={appData.tasks}
-                    mouseDpi={randomizerSettings.mouseDpi}
+                <WorkspaceShell>
+                  {/* Master Single Top HUD: Liquid Glass CommandBar */}
+                  <CommandBar
+                    onNewScenario={() => setNewTaskOpen(true)}
+                    onOpenSettings={() => setSettingsOpen(true)}
                   />
 
-                  {/* Top Full-Width KPI Metrics Cards */}
+                  {/* Active Playlist Runner Banner in Dashboard (only if active) */}
+                  {playlistRunner.isRunning && (
+                    <DashboardPlaylistRunner
+                      runner={playlistRunner}
+                      tasks={appData.tasks}
+                      mouseDpi={randomizerSettings.mouseDpi}
+                    />
+                  )}
+
+                  {/* Top Full-Width KPI Metrics Cards / Telemetry Bento (Directly below navbar with 24px gap) */}
                   <section aria-label="KPI Metrics">
-                    <MetricsCards
-                      activeTask={activeTask}
-                      allTasks={appData.tasks}
-                      mouseDpi={randomizerSettings.mouseDpi}
-                    />
+                    <TelemetryBento mouseDpi={randomizerSettings.mouseDpi} />
                   </section>
 
-                  {/* Full-Width Telemetry Data Chart ("Data Chart" in mockup) */}
-                  <section aria-label="Telemetry Chart">
-                    <ProgressChart activeTask={activeTask} />
-                  </section>
+                  {/* Tactical 2-Column Analytics Stage & Quick Composer (24px gap) */}
+                  <div className="grid grid-cols-12 gap-6 items-stretch">
+                    <section aria-label="Telemetry Chart" className="col-span-12 xl:col-span-8">
+                      <RatchetAnalyticsStage />
+                    </section>
+                    <section aria-label="Session Quick Composer" className="col-span-12 xl:col-span-4">
+                      <SessionQuickComposer defaultSens={activeTask?.sessions?.slice(-1)[0]?.sens} />
+                    </section>
+                  </div>
 
-                  {/* Full-Width Scenario History Table ("Scenario Table" in mockup) */}
+                  {/* Full-Width Scenario History Ledger (24px gap) */}
                   <section aria-label="Session History">
-                    <HistoryTable
-                      activeTask={activeTask}
+                    <SessionLedger
                       mouseDpi={randomizerSettings.mouseDpi}
-                      onDeleteSession={deleteSession}
                       onCopyEscalate={handleCopyEscalate}
-                      onNewSession={() => setSessionModalOpen(true)}
+                      onDeleteSession={deleteSession}
                     />
                   </section>
-                </>
+                </WorkspaceShell>
               ) : activeTab === "randomizer" ? (
                 <SensRandomizerView
                   activeTask={activeTask}
@@ -315,10 +316,10 @@ function Dashboard() {
           </AnimatePresence>
         </main>
 
-        <footer className="py-4 px-6 text-center text-xs text-text-faint border-t border-edge bg-[#07080c]/60">
+        <footer className="py-4 px-6 text-center text-xs text-text-faint border-t border-edge bg-surface/40 backdrop-blur-md">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-2 max-w-[1550px] mx-auto">
             <span className="opacity-80">{t("app.footer")}</span>
-            <span className="font-medium text-[11px] px-2 py-0.5 rounded-full bg-surface-subtle text-text-secondary border border-edge">
+            <span className="font-medium text-[11px] px-2.5 py-0.5 rounded-full bg-surface-subtle text-text-secondary border border-edge">
               {t("app.footerFov")}
             </span>
           </div>
@@ -333,9 +334,9 @@ function Dashboard() {
         onSubmit={addManualSessions}
       />
 
-      <NewTaskModal
+      <ScenarioDialog
         open={newTaskOpen}
-        onClose={() => setNewTaskOpen(false)}
+        onOpenChange={setNewTaskOpen}
         onCreate={createTask}
       />
 
@@ -393,7 +394,7 @@ function Dashboard() {
         }}
       />
 
-      <Toast />
+      <TelemetryToast />
     </div>
   );
 }
@@ -402,9 +403,11 @@ export default function App() {
   return (
     <I18nProvider>
       <AppProvider>
-        <RandomizerProvider>
-          <Dashboard />
-        </RandomizerProvider>
+        <TrackerWorkspaceProvider>
+          <RandomizerProvider>
+            <Dashboard />
+          </RandomizerProvider>
+        </TrackerWorkspaceProvider>
       </AppProvider>
     </I18nProvider>
   );

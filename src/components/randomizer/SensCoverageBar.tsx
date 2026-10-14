@@ -70,21 +70,21 @@ export function SensCoverageBar({
   }
 
   return (
-    <div className="p-3 rounded-xl bg-surface-subtle/50 border border-edge space-y-2">
+    <div className="p-3.5 rounded-2xl bg-surface-subtle/50 border border-edge space-y-2">
       <div className="flex items-center justify-between text-[11px]">
         <div className="flex items-center gap-1.5 font-semibold text-text-secondary uppercase tracking-wider">
           <span>{t("randomizer.coverageTitle") ?? "Cobertura da Grade"}</span>
-          <span className="text-[10px] text-text-faint font-mono font-normal">
+          <span className="text-[10px] text-text-faint font-mono font-normal tabular-nums">
             ({coverageData.items.length} {t("randomizer.gridPoints")?.toLowerCase() ?? "pontos"})
           </span>
         </div>
-        <div className="flex items-center gap-2 text-[10px] font-mono">
+        <div className="flex items-center gap-2 text-[10px] font-mono tabular-nums">
           {coverageData.zeroCountPoints > 0 ? (
-            <span className="text-amber-400 font-medium">
+            <span className="text-amber font-medium">
               {coverageData.zeroCountPoints} {coverageData.zeroCountPoints === 1 ? "ponto sem runs" : "pontos sem runs"}
             </span>
           ) : (
-            <span className="text-emerald-400 font-medium">
+            <span className="text-emerald font-medium">
               100% coberto
             </span>
           )}
@@ -99,20 +99,20 @@ export function SensCoverageBar({
               key={item.k}
               className={`p-1.5 rounded-lg border text-center transition-all ${
                 isZero
-                  ? "bg-amber-500/5 border-amber-500/25 text-amber-300/80"
+                  ? "bg-amber-soft/50 border-amber-edge text-amber"
                   : "bg-surface border-edge text-text-main shadow-xs"
               }`}
               title={`${item.cm.toFixed(1)} cm: ${item.count} run(s)`}
             >
-              <div className="text-[10px] font-mono font-bold leading-tight">
+              <div className="text-[10px] font-mono font-bold leading-tight tabular-nums">
                 {item.cm.toFixed(1)}
               </div>
               <div className="flex items-center justify-center gap-1 mt-0.5">
                 <span
-                  className={`text-[9px] font-mono font-semibold px-1 py-0.2 rounded ${
+                  className={`text-[9px] font-mono font-semibold px-1 py-0.2 rounded tabular-nums ${
                     isZero
-                      ? "text-amber-400 bg-amber-400/10"
-                      : "text-blue-400 bg-blue-400/10"
+                      ? "text-amber bg-amber-soft"
+                      : "text-score bg-score-soft"
                   }`}
                 >
                   {item.count} {item.count === 1 ? "run" : "runs"}

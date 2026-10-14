@@ -9,46 +9,45 @@ export interface SpotlightCardProps extends React.HTMLAttributes<HTMLDivElement>
 export function SpotlightCard({
   children,
   className,
-  spotlightColor = "rgba(255, 255, 255, 0.04)",
+  spotlightColor = "rgba(var(--score-rgb) / 0.12)",
   isFeatured = false,
   ...props
 }: SpotlightCardProps) {
   const divRef = React.useRef<HTMLDivElement>(null);
-  const [position, setPosition] = React.useState<{ x: number; y: number }>({ x: 0, y: 0 });
-  const [opacity, setOpacity] = React.useState(0);
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!divRef.current) return;
-    const rect = divRef.current.getBoundingClientRect();
-    setPosition({ x: e.clientX - rect.left, y: e.clientY - rect.top });
-  };
-
-  const handleMouseEnter = () => {
-    setOpacity(1);
-  };
-
-  const handleMouseLeave = () => {
-    setOpacity(0);
+    const el = divRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    el.style.setProperty("--mouse-x", `${x}px`);
+    el.style.setProperty("--mouse-y", `${y}px`);
   };
 
   return (
     <div
       ref={divRef}
       onMouseMove={handleMouseMove}
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
       className={cn(
-        "relative overflow-hidden rounded-xl border border-edge bg-surface shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:border-edge-strong",
+        "group/spotlight relative overflow-hidden glass-panel transition-all duration-200 hover:border-[var(--glass-edge-strong)] hover:shadow-md",
+        isFeatured && "border-score/40 shadow-score/5",
         className
       )}
+      style={
+        {
+          "--mouse-x": "50%",
+          "--mouse-y": "50%",
+          "--spotlight-color": spotlightColor,
+        } as React.CSSProperties
+      }
       {...props}
     >
-      {/* Subtle pointer spotlight */}
+      {/* High-performance pure CSS Spotlight Layer (Zero React re-renders) */}
       <div
-        className="pointer-events-none absolute -inset-px opacity-0 transition-opacity duration-300"
+        className="pointer-events-none absolute -inset-px rounded-[inherit] opacity-0 transition-opacity duration-300 group-hover/spotlight:opacity-100"
         style={{
-          opacity,
-          background: `radial-gradient(400px circle at ${position.x}px ${position.y}px, ${spotlightColor}, transparent 70%)`,
+          background: `radial-gradient(380px circle at var(--mouse-x) var(--mouse-y), var(--spotlight-color), transparent 70%)`,
         }}
         aria-hidden="true"
       />
@@ -71,8 +70,8 @@ export function BorderBeam({
   size = 120,
   duration = 12,
   delay = 0,
-  colorFrom = "#38bdf8",
-  colorTo = "#0284c7",
+  colorFrom = "var(--score)",
+  colorTo = "transparent",
 }: BorderBeamProps) {
   return (
     <div

@@ -53,7 +53,7 @@ export const Slider = React.forwardRef<HTMLDivElement, SliderProps>(
             <BaseSlider.Indicator className="absolute h-full bg-score rounded-full" />
           </BaseSlider.Track>
           <BaseSlider.Thumb
-            className="block w-4 h-4 rounded-full bg-text-main border-2 border-score shadow-panel focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-score transition-transform hover:scale-110 active:scale-95 cursor-grab active:cursor-grabbing"
+            className="block w-4 h-4 rounded-full bg-surface border-2 border-score shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-score focus-visible:ring-offset-1 transition-transform duration-200 ease-[cubic-bezier(0.34,1.56,0.64,1)] hover:scale-125 active:scale-135 cursor-grab active:cursor-grabbing"
             aria-label={ariaLabel}
           />
         </BaseSlider.Control>

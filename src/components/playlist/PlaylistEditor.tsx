@@ -143,7 +143,7 @@ export function PlaylistEditor({
     <div className="space-y-5">
       {/* Name Input */}
       <div>
-        <label className="block text-xs font-semibold uppercase tracking-wider text-text-secondary mb-1.5">
+        <label className="block text-xs font-semibold uppercase tracking-wider text-text-secondary mb-1.5 px-0.5">
           {t("playlist.name")}
         </label>
         <input
@@ -151,17 +151,17 @@ export function PlaylistEditor({
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder={t("playlist.namePh")}
-          className="minimal-input text-sm w-full font-medium"
+          className="glass-input text-sm w-full font-medium"
         />
       </div>
 
       {/* Header controls for items */}
       <div className="flex items-center justify-between gap-2 pt-2 border-t border-edge">
         <div className="flex items-center gap-2">
-          <span className="text-xs font-bold uppercase tracking-wider text-text-main">
+          <span className="text-xs font-semibold uppercase tracking-wider text-text-main">
             {t("scenarioList.title")}
           </span>
-          <span className="text-[11px] px-2 py-0.5 rounded-full bg-surface-subtle text-text-secondary border border-edge font-medium">
+          <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-surface-subtle text-text-secondary border border-edge font-medium tabular-nums">
             {t("playlist.itemsCount", { n: items.length })}
           </span>
         </div>
@@ -171,10 +171,10 @@ export function PlaylistEditor({
           onClick={handleSuggestOrder}
           title={t("playlist.orderSuggestTooltip")}
           disabled={items.length < 2}
-          className="minimal-btn-secondary px-3 py-1.5 text-xs font-medium gap-1.5 text-text-secondary hover:text-text-main border-edge rounded-full disabled:opacity-40 disabled:cursor-not-allowed"
+          className="press px-3 py-1.5 text-xs font-medium gap-1.5 text-text-secondary hover:text-text-main border border-edge hover:border-edge-strong bg-surface rounded-full disabled:opacity-40 disabled:cursor-not-allowed flex items-center transition-all cursor-pointer"
         >
           <svg
-            className="w-3.5 h-3.5 text-blue-400"
+            className="w-3.5 h-3.5 text-score"
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"
@@ -190,9 +190,9 @@ export function PlaylistEditor({
       </div>
 
       {/* Drag & Drop Items List */}
-      <div className="space-y-2 max-h-[320px] overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-surface-hover scrollbar-track-transparent">
+      <div className="space-y-2.5 max-h-[320px] overflow-y-auto pr-1 custom-scrollbar">
         {items.length === 0 ? (
-          <div className="py-8 text-center text-xs text-text-faint border border-dashed border-edge rounded-xl">
+          <div className="py-8 text-center text-xs text-text-faint border border-dashed border-edge rounded-2xl">
             {t("playlist.validationEmpty")}
           </div>
         ) : (
@@ -212,12 +212,13 @@ export function PlaylistEditor({
                 onDragOver={(e) => handleDragOver(e, index)}
                 onDrop={() => handleDrop(index)}
                 onDragEnd={handleDragEnd}
-                className={`p-3 rounded-xl border text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-all cursor-move ${
+                style={{ "--i": index } as React.CSSProperties}
+                className={`p-3.5 rounded-2xl border text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-all cursor-move enter ${
                   isDragging
-                    ? "opacity-30 border-dashed border-blue-500 bg-surface-subtle"
+                    ? "opacity-30 border-dashed border-score bg-surface-subtle"
                     : isOver
-                    ? "border-blue-500 bg-blue-500/10 shadow-sm"
-                    : "bg-surface border-edge hover:border-white/20"
+                    ? "border-score bg-score-soft shadow-xs"
+                    : "glass-card-interactive border-edge"
                 }`}
               >
                 {/* Drag handle & Scenario info */}
@@ -241,7 +242,7 @@ export function PlaylistEditor({
                     </svg>
                   </div>
 
-                  <span className="w-5 h-5 rounded-full bg-surface-subtle border border-edge text-[10px] font-mono flex items-center justify-center text-text-faint shrink-0">
+                  <span className="w-5 h-5 rounded-full bg-surface-subtle border border-edge text-[10px] font-mono flex items-center justify-center text-text-faint shrink-0 tabular-nums">
                     {index + 1}
                   </span>
 
@@ -257,7 +258,7 @@ export function PlaylistEditor({
                         {recSens && (
                           <>
                             <span>·</span>
-                            <span className="font-mono">{recSens}cm</span>
+                            <span className="font-mono tabular-nums">{recSens}cm</span>
                           </>
                         )}
                       </div>
@@ -268,7 +269,7 @@ export function PlaylistEditor({
                 {/* Target configuration */}
                 <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
                   {/* Mode toggle */}
-                  <div className="flex items-center bg-surface-subtle p-0.5 rounded-lg border border-edge">
+                  <div className="flex items-center bg-surface-subtle p-0.5 rounded-xl border border-edge">
                     <button
                       type="button"
                       onClick={() =>
@@ -277,9 +278,9 @@ export function PlaylistEditor({
                           targetValue: item.targetMode === "reps" ? item.targetValue : 5,
                         })
                       }
-                      className={`px-2 py-1 rounded text-[11px] font-medium transition-all ${
+                      className={`press px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all ${
                         item.targetMode === "reps"
-                          ? "bg-blue-500 text-white shadow-xs"
+                          ? "bg-score text-primary-foreground shadow-xs font-semibold"
                           : "text-text-secondary hover:text-text-main"
                       }`}
                     >
@@ -293,9 +294,9 @@ export function PlaylistEditor({
                           targetValue: item.targetMode === "time" ? item.targetValue : 120,
                         })
                       }
-                      className={`px-2 py-1 rounded text-[11px] font-medium transition-all ${
+                      className={`press px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all ${
                         item.targetMode === "time"
-                          ? "bg-blue-500 text-white shadow-xs"
+                          ? "bg-score text-primary-foreground shadow-xs font-semibold"
                           : "text-text-secondary hover:text-text-main"
                       }`}
                     >
@@ -315,7 +316,7 @@ export function PlaylistEditor({
                         const val = Math.max(1, parseInt(e.target.value) || 1);
                         handleUpdateItem(index, { targetValue: val });
                       }}
-                      className="minimal-input text-xs py-1 px-2 w-16 text-center tabular-nums font-semibold"
+                      className="glass-input text-xs py-1 px-2 w-16 text-center tabular-nums font-semibold"
                     />
                     <span className="text-[10px] text-text-faint font-medium">
                       {item.targetMode === "reps"
@@ -329,7 +330,7 @@ export function PlaylistEditor({
                     type="button"
                     onClick={() => handleRemoveItem(index)}
                     title={t("playlist.removeItem")}
-                    className="p-1 rounded-full text-text-faint hover:text-red hover:bg-red-500/10 transition-colors ml-1"
+                    className="press p-1.5 rounded-full text-text-faint hover:text-red hover:bg-red-soft transition-colors ml-1 cursor-pointer"
                   >
                     <svg
                       className="w-3.5 h-3.5"
@@ -356,11 +357,11 @@ export function PlaylistEditor({
         <select
           value={selectedTaskToAdd}
           onChange={(e) => setSelectedTaskToAdd(e.target.value)}
-          className="minimal-input text-xs py-1.5 flex-1 cursor-pointer font-medium w-full sm:w-auto"
+          className="glass-input text-xs py-2 flex-1 cursor-pointer font-medium w-full sm:w-auto"
         >
           <option value="">{t("playlist.addScenarios")}...</option>
           {tasks.map((task) => (
-            <option key={task.id} value={task.id}>
+            <option key={task.id} value={task.id} className="bg-surface text-text-main">
               {task.name} ({task.category})
             </option>
           ))}
@@ -369,7 +370,7 @@ export function PlaylistEditor({
           type="button"
           onClick={() => handleAddItem(selectedTaskToAdd)}
           disabled={!selectedTaskToAdd}
-          className="minimal-btn-secondary px-3 py-1.5 text-xs font-medium border-edge rounded-xl disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
+          className="press px-3.5 py-2 text-xs font-semibold border border-edge hover:border-edge-strong bg-surface-subtle text-text-main rounded-xl disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap transition-all cursor-pointer"
         >
           + {t("playlist.addScenarios")}
         </button>
@@ -380,7 +381,7 @@ export function PlaylistEditor({
         <button
           type="button"
           onClick={onCancel}
-          className="minimal-btn-secondary px-4 py-2 text-xs font-semibold text-text-secondary hover:text-text-main border-edge rounded-xl"
+          className="press px-4 py-2 text-xs font-semibold text-text-secondary hover:text-text-main border border-edge bg-surface-subtle hover:bg-surface-hover rounded-xl transition-all cursor-pointer"
         >
           {t("playlist.cancel")}
         </button>
@@ -388,7 +389,7 @@ export function PlaylistEditor({
           type="button"
           onClick={handleSave}
           disabled={!isValid}
-          className="minimal-btn bg-blue-500 hover:bg-blue-600 text-white font-semibold px-5 py-2 rounded-xl text-xs shadow-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+          className="press bg-score hover:brightness-105 text-primary-foreground font-semibold px-5 py-2 rounded-xl text-xs shadow-xs transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
         >
           {t("playlist.save")}
         </button>

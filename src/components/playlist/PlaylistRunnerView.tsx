@@ -107,11 +107,14 @@ export function PlaylistRunnerView({
   if (!activePlaylist) {
     return (
       <div className="space-y-4">
-        <div className="panel p-5 rounded-[10px] flex flex-col sm:flex-row sm:items-center justify-between gap-4 border border-edge">
+        <div className="glass-panel p-5 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 enter" style={{ "--i": 0 } as React.CSSProperties}>
           <div>
-            <h2 className="text-[10px] font-mono font-bold uppercase tracking-widest text-text-main">
+            <h2 className="text-sm font-semibold text-text-main font-sans">
               {t("playlist.title")}
             </h2>
+            <p className="text-xs text-text-secondary mt-0.5">
+              {t("playlist.subtitle")}
+            </p>
           </div>
           <div className="flex items-center gap-2">
             {onSyncGames && (
@@ -119,7 +122,7 @@ export function PlaylistRunnerView({
                 type="button"
                 onClick={handleSync}
                 disabled={isSyncing}
-                className="bg-surface py-2 px-3.5 rounded-lg text-[10px] font-mono font-bold uppercase tracking-widest text-text-secondary hover:text-text-main border border-edge flex items-center gap-1.5 transition-all disabled:opacity-50"
+                className="press bg-surface-subtle py-2 px-3.5 rounded-xl text-xs font-semibold text-text-secondary hover:text-text-main border border-edge flex items-center gap-1.5 transition-all disabled:opacity-50 cursor-pointer"
                 title={t("playlist.syncGames")}
               >
                 <svg
@@ -133,82 +136,84 @@ export function PlaylistRunnerView({
                 >
                   <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67" />
                 </svg>
-                <span>{isSyncing ? "SYNCING..." : "SYNC KOVAAK"}</span>
+                <span>{isSyncing ? t("playlist.syncing") : t("playlist.syncGames")}</span>
               </button>
             )}
             <button
               type="button"
               onClick={onOpenManager}
-              className="bg-score hover:bg-score/90 text-surface font-mono font-bold uppercase tracking-widest py-2 px-4 rounded-lg text-[10px] flex items-center justify-center gap-2 shadow-sm transition-all"
+              className="press bg-score hover:brightness-105 text-primary-foreground font-semibold py-2 px-4 rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-xs transition-all cursor-pointer"
             >
-              <span className="text-[10px] leading-none">+</span>
-              <span>CREATE NEW</span>
+              <span>+</span>
+              <span>{t("playlist.createNew")}</span>
             </button>
           </div>
         </div>
 
         {playlists.length === 0 ? (
-          <div className="panel p-12 rounded-[10px] border border-edge text-center">
-            <h3 className="text-[10px] font-mono font-bold uppercase tracking-widest text-text-faint">
+          <div className="glass-panel p-12 rounded-2xl border border-dashed border-edge text-center enter" style={{ "--i": 1 } as React.CSSProperties}>
+            <p className="text-xs text-text-faint">
               {t("playlist.emptyList")}
-            </h3>
+            </p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {playlists.map((playlist) => {
+            {playlists.map((playlist, index) => {
               const stats = playlistStatsMap.get(playlist.id) ?? computePlaylistSensStats(playlist, tasks);
               const isPredicted = stats.displaySens.source === "predicted";
 
               return (
                 <div
                   key={playlist.id}
-                  className="panel p-4 rounded-[10px] border border-edge hover:border-edge-strong transition-all flex flex-col justify-between gap-4"
+                  style={{ "--i": index } as React.CSSProperties}
+                  className="glass-card-interactive p-5 rounded-2xl border border-edge flex flex-col justify-between gap-4 enter"
                 >
                   <div>
                     <div className="flex items-start justify-between gap-2">
-                      <h3 className="text-xs font-semibold text-text-main truncate">
+                      <h3 className="text-sm font-semibold text-text-main truncate">
                         {playlist.name}
                       </h3>
-                      <span className="text-[9px] px-1.5 rounded-sm bg-surface-subtle border border-edge text-text-faint font-mono font-bold">
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-surface-subtle border border-edge text-text-secondary font-mono font-medium tabular-nums">
                         {playlist.items.length}
                       </span>
                     </div>
 
-                    <div className="mt-3 flex flex-wrap gap-1">
+                    <div className="mt-3 flex flex-wrap gap-1.5">
                       {playlist.items.slice(0, 4).map((item, idx) => {
                         const task = taskMap.get(item.taskId);
                         return (
                           <span
                             key={item.id}
-                            className="px-1.5 py-0.5 rounded-sm bg-surface-subtle border border-edge text-[10px] font-mono text-text-secondary truncate max-w-[120px]"
+                            className="px-2 py-0.5 rounded-lg bg-surface-subtle border border-edge text-xs text-text-secondary truncate max-w-[130px]"
                           >
-                            {idx + 1}. {task ? task.name : `#${item.taskId}`}
+                            <span className="text-text-faint font-mono tabular-nums mr-1">{idx + 1}.</span>
+                            {task ? task.name : `#${item.taskId}`}
                           </span>
                         );
                       })}
                       {playlist.items.length > 4 && (
-                        <span className="px-1.5 py-0.5 rounded-sm bg-surface-subtle border border-edge text-[10px] font-mono text-text-faint">
+                        <span className="px-2 py-0.5 rounded-lg bg-surface-subtle border border-edge text-xs text-text-faint font-mono tabular-nums">
                           +{playlist.items.length - 4}
                         </span>
                       )}
                     </div>
 
                     {/* Recommended Sens Badge & Quick Apply */}
-                    <div className="mt-4 flex items-center justify-between gap-2">
+                    <div className="mt-4 flex items-center justify-between gap-2 pt-3 border-t border-edge">
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="text-[9px] font-mono font-bold uppercase tracking-widest text-text-secondary">
+                        <span className="text-[11px] text-text-secondary">
                           {t("playlist.recommendedSens")}:
                         </span>
-                        <span className="font-mono font-bold text-[11px] text-text-main">
+                        <span className="font-mono font-bold text-xs text-text-main tabular-nums">
                           {formatSensitivity(stats.displaySens.value, dpi)}
                         </span>
                         {isPredicted ? (
-                          <span className="text-[9px] px-1 rounded-sm font-semibold bg-emerald/10 text-emerald border border-emerald/20">
-                            PREDICTED
+                          <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold bg-emerald-soft text-emerald border border-emerald-edge">
+                            PRED
                           </span>
                         ) : (
-                          <span className="text-[9px] px-1 rounded-sm font-semibold bg-surface-subtle text-text-faint border border-edge">
-                            VISCOSE
+                          <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold bg-surface-subtle text-text-faint border border-edge">
+                            VISC
                           </span>
                         )}
                       </div>
@@ -216,7 +221,7 @@ export function PlaylistRunnerView({
                         <button
                           type="button"
                           onClick={() => void onApplySens(stats.displaySens.value)}
-                          className="px-2 py-0.5 text-[9px] font-mono font-bold uppercase tracking-widest rounded-sm bg-surface border border-edge hover:bg-surface-hover text-text-main transition-colors shrink-0"
+                          className="press px-2.5 py-1 text-[11px] font-semibold rounded-lg bg-surface-subtle border border-edge hover:bg-surface-hover text-text-main transition-all shrink-0 cursor-pointer"
                           title={t("playlist.applySens")}
                         >
                           APPLY
@@ -226,13 +231,13 @@ export function PlaylistRunnerView({
                   </div>
 
                   <div className="flex items-center justify-between pt-3 border-t border-edge">
-                    <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-text-faint">
+                    <span className="text-xs text-text-faint tabular-nums">
                       {new Date(playlist.createdAt).toLocaleDateString()}
                     </span>
                     <button
                       type="button"
                       onClick={() => runner.start(playlist)}
-                      className="bg-score hover:bg-score/90 text-surface font-mono font-bold uppercase tracking-widest py-1.5 px-3 rounded-lg text-[9px] flex items-center gap-1.5 shadow-sm transition-all"
+                      className="press bg-score hover:brightness-105 text-primary-foreground font-semibold py-1.5 px-3.5 rounded-xl text-xs flex items-center gap-1.5 shadow-xs transition-all cursor-pointer"
                     >
                       <span>START</span>
                     </button>
@@ -249,8 +254,8 @@ export function PlaylistRunnerView({
   // If finished
   if (runner.isFinished) {
     return (
-      <div className="panel p-8 sm:p-12 rounded-[10px] border border-edge text-center max-w-lg mx-auto space-y-6">
-        <div className="w-16 h-16 rounded-full bg-emerald/10 border border-emerald/30 text-emerald mx-auto flex items-center justify-center">
+      <div className="glass-panel p-8 sm:p-12 rounded-3xl border border-edge text-center max-w-lg mx-auto space-y-6 enter" style={{ "--i": 0 } as React.CSSProperties}>
+        <div className="w-16 h-16 rounded-full bg-emerald-soft border border-emerald-edge text-emerald mx-auto flex items-center justify-center">
           <svg
             className="w-8 h-8"
             viewBox="0 0 24 24"
@@ -265,26 +270,26 @@ export function PlaylistRunnerView({
         </div>
 
         <div>
-          <h2 className="text-[14px] font-mono font-bold uppercase tracking-widest text-text-main">
+          <h2 className="text-base font-semibold text-text-main font-sans">
             {t("runner.completed")}
           </h2>
-          <p className="text-[11px] font-mono text-text-faint mt-1.5 max-w-sm mx-auto uppercase tracking-widest">
+          <p className="text-xs text-text-secondary mt-1 max-w-sm mx-auto leading-relaxed">
             {t("runner.completedDesc")}
           </p>
         </div>
 
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-2.5 pt-2">
           <button
             type="button"
             onClick={runner.restart}
-            className="w-full sm:w-auto bg-score hover:bg-score/90 text-surface font-mono font-bold uppercase tracking-widest py-2 px-5 rounded-lg text-[10px] shadow-sm transition-all"
+            className="press w-full sm:w-auto bg-score hover:brightness-105 text-primary-foreground font-semibold py-2.5 px-5 rounded-xl text-xs shadow-xs transition-all cursor-pointer"
           >
             RESTART
           </button>
           <button
             type="button"
             onClick={runner.stop}
-            className="w-full sm:w-auto bg-surface hover:bg-surface-hover text-text-secondary hover:text-text-main font-mono font-bold uppercase tracking-widest py-2 px-5 rounded-lg text-[10px] border border-edge transition-all"
+            className="press w-full sm:w-auto bg-surface-subtle hover:bg-surface-hover text-text-main font-semibold py-2.5 px-5 rounded-xl text-xs border border-edge transition-all cursor-pointer"
           >
             CHOOSE OTHER
           </button>
@@ -296,9 +301,9 @@ export function PlaylistRunnerView({
   return (
     <div className="space-y-4">
       {/* Top Bar with Playlist title & exit button */}
-      <div className="panel p-4 sm:p-5 rounded-[10px] border border-edge flex items-center justify-between gap-4">
+      <div className="glass-panel p-4 sm:p-5 rounded-2xl border border-edge flex items-center justify-between gap-4 enter" style={{ "--i": 0 } as React.CSSProperties}>
         <div className="flex items-center gap-3 min-w-0">
-          <div className="w-8 h-8 rounded-md bg-score/10 border border-score/30 text-score flex items-center justify-center shrink-0">
+          <div className="w-9 h-9 rounded-xl bg-score-soft border border-score/30 text-score flex items-center justify-center shrink-0">
             <svg
               className="w-4 h-4"
               viewBox="0 0 24 24"
@@ -312,10 +317,10 @@ export function PlaylistRunnerView({
             </svg>
           </div>
           <div className="min-w-0">
-            <h2 className="text-[12px] font-mono font-bold uppercase tracking-widest text-text-main truncate">
+            <h2 className="text-sm font-semibold text-text-main truncate font-sans">
               {activePlaylist.name}
             </h2>
-            <span className="text-[10px] font-mono text-text-faint uppercase tracking-widest">
+            <span className="text-xs text-text-secondary tabular-nums">
               {t("runner.progress", {
                 current: currentStepIndex + 1,
                 total: activePlaylist.items.length,
@@ -328,14 +333,14 @@ export function PlaylistRunnerView({
           <button
             type="button"
             onClick={onOpenManager}
-            className="px-3 py-1.5 rounded-md text-[9px] font-mono font-bold uppercase tracking-widest bg-surface text-text-secondary hover:text-text-main border border-edge transition-colors hidden sm:inline-block"
+            className="press px-3 py-1.5 rounded-xl text-xs font-semibold bg-surface-subtle text-text-secondary hover:text-text-main border border-edge transition-all hidden sm:inline-block cursor-pointer"
           >
             EDIT
           </button>
           <button
             type="button"
             onClick={runner.stop}
-            className="px-3 py-1.5 rounded-md text-[9px] font-mono font-bold uppercase tracking-widest bg-surface text-text-faint hover:text-red hover:bg-red/10 border border-edge transition-colors"
+            className="press px-3 py-1.5 rounded-xl text-xs font-semibold bg-surface-subtle text-text-faint hover:text-red hover:bg-red-soft border border-edge transition-all cursor-pointer"
           >
             EXIT
           </button>
@@ -343,8 +348,8 @@ export function PlaylistRunnerView({
       </div>
 
       {/* Stepper Horizontal */}
-      <div className="panel p-4 rounded-[10px] border border-edge">
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin scrollbar-thumb-surface-hover scrollbar-track-transparent">
+      <div className="glass-panel p-4 rounded-2xl border border-edge enter" style={{ "--i": 1 } as React.CSSProperties}>
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 custom-scrollbar">
           {activePlaylist.items.map((item, index) => {
             const task = taskMap.get(item.taskId);
             const isCompleted = runner.completedStepIndices.has(index);
@@ -353,20 +358,20 @@ export function PlaylistRunnerView({
             return (
               <div
                 key={item.id}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-md border text-[10px] font-mono uppercase tracking-widest shrink-0 transition-all ${
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs shrink-0 transition-all ${
                   isCurrent
-                    ? "bg-score/10 text-score border-score/40 font-bold shadow-sm"
+                    ? "bg-score-soft text-score border-score/40 font-semibold shadow-xs"
                     : isCompleted
                     ? "bg-surface-subtle text-text-secondary border-edge opacity-80"
                     : "bg-surface text-text-faint border-edge opacity-50"
                 }`}
               >
                 <span
-                  className={`w-3.5 h-3.5 rounded-sm text-[9px] flex items-center justify-center font-mono ${
+                  className={`w-4 h-4 rounded-full text-[10px] flex items-center justify-center font-mono tabular-nums ${
                     isCurrent
-                      ? "bg-score text-surface font-bold"
+                      ? "bg-score text-primary-foreground font-bold"
                       : isCompleted
-                      ? "bg-emerald/20 text-emerald font-bold"
+                      ? "bg-emerald-soft text-emerald font-bold"
                       : "bg-surface-subtle border border-edge text-text-faint"
                   }`}
                 >
@@ -386,7 +391,7 @@ export function PlaylistRunnerView({
                     index + 1
                   )}
                 </span>
-                <span className="truncate max-w-[110px]">
+                <span className="truncate max-w-[120px]">
                   {task ? task.name : `#${item.taskId}`}
                 </span>
               </div>
@@ -396,34 +401,34 @@ export function PlaylistRunnerView({
       </div>
 
       {/* Current Scenario Card */}
-      <div className="panel p-4 sm:p-6 lg:p-8 rounded-[10px] border border-edge space-y-6">
+      <div className="glass-panel p-5 sm:p-7 rounded-2xl border border-edge space-y-6 enter" style={{ "--i": 2 } as React.CSSProperties}>
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-edge pb-5">
           <div>
-            <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-score">
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-score">
               {t("runner.currentScenario")}
             </span>
-            <h1 className="text-xl sm:text-2xl font-bold text-text-main mt-1 font-mono uppercase tracking-wider">
+            <h1 className="text-xl sm:text-2xl font-bold text-text-main mt-1 font-sans">
               {currentTask ? currentTask.name : `Task #${currentItem?.taskId}`}
             </h1>
             {currentTask && (
-              <div className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-widest text-text-faint mt-2 flex-wrap">
-                <span className="px-1.5 rounded-sm bg-surface-subtle border border-edge text-text-secondary font-bold">
+              <div className="flex items-center gap-2 text-xs text-text-secondary mt-2 flex-wrap">
+                <span className="px-2 py-0.5 rounded-lg bg-surface-subtle border border-edge font-medium">
                   {currentTask.category}
                 </span>
-                <span>/</span>
-                <span className="px-1.5 rounded-sm bg-surface-subtle border border-edge text-text-secondary font-bold">
+                <span className="text-text-faint">/</span>
+                <span className="px-2 py-0.5 rounded-lg bg-surface-subtle border border-edge font-medium">
                   {currentTask.subcategory}
                 </span>
 
                 {recSens && (
                   <>
-                    <span>/</span>
+                    <span className="text-text-faint">/</span>
                     <div className="inline-flex items-center gap-1.5 pl-1.5 border-l border-edge">
                       <span className="text-text-secondary">{t("runner.scenarioSens")}:</span>
-                      <span className="px-1.5 rounded-sm bg-score/10 text-score border border-score/20 font-bold flex items-center gap-1">
+                      <span className="px-2 py-0.5 rounded-lg bg-score-soft text-score border border-score/25 font-mono font-semibold flex items-center gap-1 tabular-nums">
                         <span>{recSens} cm</span>
                         {idealSens && (
-                          <span className="text-[8px] uppercase px-1 py-0.2 rounded bg-surface-subtle border border-edge text-text-faint font-normal">
+                          <span className="text-[9px] uppercase px-1 py-0.2 rounded bg-surface-subtle border border-edge text-text-faint font-normal">
                             {idealSens.source === "empirical" ? "EMP" : "VIS"}
                           </span>
                         )}
@@ -432,7 +437,7 @@ export function PlaylistRunnerView({
                         <button
                           type="button"
                           onClick={() => void onApplySens(recSens)}
-                          className="px-1.5 rounded-sm bg-surface hover:bg-surface-hover border border-edge text-text-main transition-colors"
+                          className="press px-2 py-0.5 rounded-lg bg-surface-subtle hover:bg-surface-hover border border-edge text-text-main transition-all text-xs font-semibold cursor-pointer"
                           title={t("runner.applySens")}
                         >
                           APPLY
@@ -444,18 +449,18 @@ export function PlaylistRunnerView({
 
                 {activePlaylistStats && (
                   <>
-                    <span>/</span>
+                    <span className="text-text-faint">/</span>
                     <div className="inline-flex items-center gap-1.5 pl-1.5 border-l border-edge">
                       <span className="text-text-secondary">{t("runner.playlistSens")}:</span>
-                      <span className="px-1.5 rounded-sm bg-purple-500/10 text-purple-300 border border-purple-500/20 font-bold">
+                      <span className="px-2 py-0.5 rounded-lg bg-accent/10 text-accent border border-accent/20 font-mono font-semibold tabular-nums">
                         {formatSensitivity(activePlaylistStats.displaySens.value, dpi)}
                       </span>
                       {isPlaylistPredicted ? (
-                        <span className="text-[9px] px-1 rounded-sm font-semibold bg-emerald/10 text-emerald border border-emerald/20">
+                        <span className="text-[10px] px-1.5 py-0.2 rounded-full font-semibold bg-emerald-soft text-emerald border border-emerald-edge">
                           PRED
                         </span>
                       ) : (
-                        <span className="text-[9px] px-1 rounded-sm font-semibold bg-surface-subtle text-text-faint border border-edge">
+                        <span className="text-[10px] px-1.5 py-0.2 rounded-full font-semibold bg-surface-subtle text-text-faint border border-edge">
                           VISC
                         </span>
                       )}
@@ -463,7 +468,7 @@ export function PlaylistRunnerView({
                         <button
                           type="button"
                           onClick={() => void onApplySens(activePlaylistStats.displaySens.value)}
-                          className="px-1.5 rounded-sm bg-surface hover:bg-surface-hover border border-edge text-text-main transition-colors"
+                          className="press px-2 py-0.5 rounded-lg bg-surface-subtle hover:bg-surface-hover border border-edge text-text-main transition-all text-xs font-semibold cursor-pointer"
                           title={t("runner.applySens")}
                         >
                           APPLY
@@ -476,12 +481,12 @@ export function PlaylistRunnerView({
             )}
           </div>
 
-          <div className="flex items-center gap-3 self-start lg:self-auto">
+          <div className="flex items-center gap-2.5 self-start lg:self-auto">
             {runner.currentStepIndex > 0 && (
               <button
                 type="button"
                 onClick={runner.previous}
-                className="bg-surface py-2 px-4 rounded-md text-[10px] font-mono font-bold uppercase tracking-widest text-text-secondary hover:text-text-main border border-edge transition-all"
+                className="press bg-surface-subtle py-2 px-4 rounded-xl text-xs font-semibold text-text-secondary hover:text-text-main border border-edge transition-all cursor-pointer"
               >
                 PREV
               </button>
@@ -490,7 +495,7 @@ export function PlaylistRunnerView({
             <button
               type="button"
               onClick={runner.next}
-              className="bg-score hover:bg-score/90 text-surface font-mono font-bold uppercase tracking-widest py-2 px-5 rounded-md text-[10px] flex items-center gap-2 shadow-sm transition-all"
+              className="press bg-score hover:brightness-105 text-primary-foreground font-semibold py-2 px-5 rounded-xl text-xs flex items-center gap-2 shadow-xs transition-all cursor-pointer"
             >
               <span>{isLastStep ? "FINISH" : "NEXT"}</span>
               <svg
@@ -511,22 +516,22 @@ export function PlaylistRunnerView({
         {/* Progress Bar & Target Display */}
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <span className="text-[12px] font-mono font-bold uppercase tracking-widest text-text-main">
+            <span className="text-sm font-semibold text-text-main tabular-nums font-mono">
               {progressLabel}
             </span>
-            <span className="font-mono text-[11px] font-bold text-text-secondary">
+            <span className="font-mono text-xs font-semibold text-text-secondary tabular-nums">
               {Math.round(progressPercentage)}%
             </span>
           </div>
 
-          <div className="w-full h-1.5 rounded-none bg-surface-subtle border border-edge overflow-hidden">
+          <div className="w-full h-2 rounded-full bg-surface-subtle border border-edge overflow-hidden">
             <div
-              className="h-full bg-score transition-all duration-300"
+              className="h-full bg-score rounded-full transition-all duration-300 ease-out"
               style={{ width: `${progressPercentage}%` }}
             />
           </div>
 
-          <p className="text-[9px] font-mono uppercase tracking-widest text-text-faint text-center sm:text-left">
+          <p className="text-[11px] text-text-faint text-center sm:text-left">
             {t("runner.autoAdvanceNote")}
           </p>
         </div>

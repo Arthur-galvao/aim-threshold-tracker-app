@@ -1,4 +1,5 @@
 import React from "react";
+import { cn } from "@/lib/utils";
 
 export interface SegmentedOption<T extends string> {
   value: T;
@@ -24,6 +25,32 @@ export function Segmented<T extends string>({
   className = "",
   variant = "pills",
 }: SegmentedProps<T>) {
+  const containerRef = React.useRef<HTMLDivElement>(null);
+  const [indicatorStyle, setIndicatorStyle] = React.useState<{
+    left: number;
+    width: number;
+  } | null>(null);
+
+  React.useEffect(() => {
+    const updateIndicator = () => {
+      if (!containerRef.current) return;
+      const activeEl = containerRef.current.querySelector<HTMLButtonElement>(
+        '[aria-selected="true"]'
+      );
+      if (activeEl) {
+        setIndicatorStyle({
+          left: activeEl.offsetLeft,
+          width: activeEl.offsetWidth,
+        });
+      }
+    };
+
+    updateIndicator();
+    const ro = new ResizeObserver(updateIndicator);
+    if (containerRef.current) ro.observe(containerRef.current);
+    return () => ro.disconnect();
+  }, [value, options]);
+
   const handleKeyDown = (e: React.KeyboardEvent, index: number) => {
     if (e.key === "ArrowRight") {
       e.preventDefault();
@@ -38,7 +65,24 @@ export function Segmented<T extends string>({
 
   if (variant === "underline") {
     return (
-      <div role="tablist" className={`inline-flex items-center gap-5 sm:gap-7 select-none ${className}`}>
+      <div
+        ref={containerRef}
+        role="tablist"
+        className={cn(
+          "relative inline-flex items-center gap-5 sm:gap-7 select-none pb-0.5",
+          className
+        )}
+      >
+        {indicatorStyle && (
+          <span
+            aria-hidden="true"
+            className="absolute bottom-0 h-0.5 bg-score rounded-full pointer-events-none transition-[left,width] duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] z-0"
+            style={{
+              left: `${indicatorStyle.left}px`,
+              width: `${indicatorStyle.width}px`,
+            }}
+          />
+        )}
         {options.map((opt, idx) => {
           const isActive = opt.value === value;
           return (
@@ -51,13 +95,14 @@ export function Segmented<T extends string>({
               title={opt.tooltip}
               onClick={() => !opt.disabled && onChange(opt.value)}
               onKeyDown={(e) => handleKeyDown(e, idx)}
-              className={`relative flex items-center gap-1.5 py-2 text-xs font-semibold uppercase tracking-wider transition-all duration-150 cursor-pointer ${
+              className={cn(
+                "relative z-10 flex items-center gap-1.5 py-2 text-xs font-semibold uppercase tracking-wider transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-score focus-visible:ring-offset-1 rounded-sm",
                 opt.disabled
                   ? "opacity-40 cursor-not-allowed text-text-faint"
                   : isActive
-                  ? "text-text-main after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[2px] after:bg-text-main"
+                  ? "text-text-main"
                   : "text-text-secondary hover:text-text-main"
-              }`}
+              )}
             >
               {opt.icon && <span className="shrink-0 flex items-center">{opt.icon}</span>}
               <span>{opt.label}</span>
@@ -71,9 +116,23 @@ export function Segmented<T extends string>({
 
   return (
     <div
+      ref={containerRef}
       role="tablist"
-      className={`inline-flex items-center p-1 bg-surface-subtle border border-edge rounded-lg select-none ${className}`}
+      className={cn(
+        "relative inline-flex items-center p-1 bg-[var(--glass-bg)] backdrop-blur-md border border-[var(--glass-edge)] rounded-[var(--r-control,14px)] select-none shadow-xs",
+        className
+      )}
     >
+      {indicatorStyle && (
+        <span
+          aria-hidden="true"
+          className="absolute top-1 bottom-1 rounded-[calc(var(--r-control,14px)-4px)] bg-surface text-text-main border border-edge shadow-sm pointer-events-none transition-[left,width] duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] z-0"
+          style={{
+            left: `${indicatorStyle.left}px`,
+            width: `${indicatorStyle.width}px`,
+          }}
+        />
+      )}
       {options.map((opt, idx) => {
         const isActive = opt.value === value;
         return (
@@ -86,13 +145,14 @@ export function Segmented<T extends string>({
             title={opt.tooltip}
             onClick={() => !opt.disabled && onChange(opt.value)}
             onKeyDown={(e) => handleKeyDown(e, idx)}
-            className={`relative flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-all duration-150 cursor-pointer ${
+            className={cn(
+              "relative z-10 flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-[calc(var(--r-control,14px)-4px)] transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-score focus-visible:ring-offset-1",
               opt.disabled
-                ? "opacity-45 cursor-not-allowed text-text-faint hover:bg-transparent"
+                ? "opacity-40 cursor-not-allowed text-text-faint"
                 : isActive
-                ? "bg-surface text-text-main font-semibold shadow-sm border border-edge"
-                : "text-text-secondary hover:text-text-main hover:bg-surface-hover/50"
-            }`}
+                ? "text-text-main font-semibold"
+                : "text-text-secondary hover:text-text-main"
+            )}
           >
             {opt.icon && <span className="shrink-0 flex items-center">{opt.icon}</span>}
             <span>{opt.label}</span>

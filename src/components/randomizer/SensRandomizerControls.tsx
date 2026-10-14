@@ -255,7 +255,7 @@ export function SensRandomizerControls({
   return (
     <div className="space-y-5">
       {/* Top Banner & Primary Actions */}
-      <div className="panel p-5 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+      <div className="glass-panel p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2.5">
             <h2 className="text-base font-bold text-text-main tracking-tight">
@@ -264,7 +264,7 @@ export function SensRandomizerControls({
             <span
               className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
                 settings.enabled
-                  ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                  ? "bg-emerald-soft text-emerald border-emerald-edge"
                   : "bg-surface-subtle text-text-faint border-edge"
               }`}
             >
@@ -281,7 +281,7 @@ export function SensRandomizerControls({
             type="button"
             onClick={onTriggerRandomize}
             disabled={!rawaccelAvailable}
-            className="minimal-btn-secondary px-3.5 py-1.5 text-xs font-semibold rounded-full flex items-center gap-1.5 justify-center flex-1 sm:flex-initial disabled:opacity-40 disabled:pointer-events-none"
+            className="minimal-btn-secondary px-3.5 py-1.5 text-xs font-semibold rounded-full flex items-center gap-1.5 justify-center flex-1 sm:flex-initial disabled:opacity-40 disabled:pointer-events-none press cursor-pointer"
             title={t("randomizer.rollNowTooltip")}
           >
             <svg
@@ -304,10 +304,10 @@ export function SensRandomizerControls({
             type="button"
             onClick={onToggleEnabled}
             disabled={!rawaccelAvailable}
-            className={`px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 justify-center transition-all flex-1 sm:flex-initial disabled:opacity-40 disabled:pointer-events-none shadow-sm ${
+            className={`px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 justify-center transition-all flex-1 sm:flex-initial disabled:opacity-40 disabled:pointer-events-none shadow-xs press cursor-pointer ${
               settings.enabled
-                ? "bg-rose-500/15 text-rose-400 border border-rose-500/30 hover:bg-rose-500/25"
-                : "minimal-btn"
+                ? "bg-red-soft text-red border border-red-edge hover:bg-red-soft/80"
+                : "bg-score text-primary-foreground hover:brightness-105"
             }`}
           >
             {settings.enabled ? t("randomizer.disableBtn") : t("randomizer.enableBtn")}
@@ -317,27 +317,27 @@ export function SensRandomizerControls({
 
       {/* Recenter Suggestion Banner (Manual mode only) */}
       {!draft.autoScenarioSens && recenterSuggestion && dismissedSuggestionCm !== recenterSuggestion.suggestedCm && (
-        <div className="p-3.5 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-300 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-sm">
+        <div className="p-3.5 rounded-2xl bg-score-soft border border-score/25 text-score text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
           <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-blue-400 flex-shrink-0" />
+            <span className="w-2 h-2 rounded-full bg-score flex-shrink-0" />
             <span>
               {t("randomizer.recenterSuggestion")}:{" "}
-              <strong className="text-blue-200">{recenterSuggestion.suggestedCm.toFixed(1)} cm</strong>{" "}
-              <span className="text-blue-400/80">({t("randomizer.recenterCurrent")}: {recenterSuggestion.currentCm.toFixed(1)} cm)</span>
+              <strong className="text-text-main tabular-nums">{recenterSuggestion.suggestedCm.toFixed(1)} cm</strong>{" "}
+              <span className="text-text-secondary tabular-nums">({t("randomizer.recenterCurrent")}: {recenterSuggestion.currentCm.toFixed(1)} cm)</span>
             </span>
           </div>
           <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
             <button
               type="button"
               onClick={() => setDismissedSuggestionCm(recenterSuggestion.suggestedCm)}
-              className="px-2.5 py-1 text-[11px] font-medium text-text-faint hover:text-text-secondary rounded-lg transition-colors"
+              className="px-2.5 py-1 text-[11px] font-medium text-text-faint hover:text-text-secondary rounded-lg transition-colors press cursor-pointer"
             >
               {t("randomizer.dismiss")}
             </button>
             <button
               type="button"
               onClick={handleApplyRecenter}
-              className="px-3 py-1 text-[11px] font-bold bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors shadow-sm"
+              className="px-3 py-1 text-[11px] font-bold bg-score hover:brightness-105 text-primary-foreground rounded-lg transition-all shadow-xs press cursor-pointer"
             >
               {t("randomizer.applySens")}
             </button>
@@ -347,9 +347,9 @@ export function SensRandomizerControls({
 
       {/* Raw Accel GUI Running Warning Banner */}
       {randomizerState.rawaccelGuiRunning && (
-        <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs flex items-center gap-2.5 shadow-sm">
+        <div className="p-3.5 rounded-2xl bg-amber-soft border border-amber-edge text-amber text-xs flex items-center gap-2.5 shadow-xs">
           <svg
-            className="w-4 h-4 flex-shrink-0 text-amber-400"
+            className="w-4 h-4 flex-shrink-0 text-amber"
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"
@@ -368,7 +368,7 @@ export function SensRandomizerControls({
       {/* Main 2-Column Grid: Config & Telemetry */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-5 items-start">
         {/* Left Column: Parameter Configuration */}
-        <div className="panel p-4 sm:p-5 rounded-2xl space-y-4">
+        <div className="glass-panel p-4 sm:p-5 space-y-4">
           <div className="border-b border-edge pb-2.5">
             <h3 className="text-xs font-bold uppercase tracking-wider text-text-main">
               {t("randomizer.paramsTitle")}
@@ -396,7 +396,7 @@ export function SensRandomizerControls({
                     {t("randomizer.idealSensLabel")}
                   </span>
                   <div className="flex items-center gap-1.5 mt-0.5 justify-end">
-                    <span className="text-xs font-mono font-bold text-score">
+                    <span className="text-xs font-mono font-bold text-score tabular-nums">
                       {idealSens.value} cm
                     </span>
                     <span
@@ -432,7 +432,7 @@ export function SensRandomizerControls({
                 type="checkbox"
                 checked={draft.autoScenarioSens}
                 onChange={(e) => void handleToggleAutoScenario(e.target.checked)}
-                className="w-4 h-4 rounded border-edge-strong bg-surface text-accent cursor-pointer accent-blue-500 shrink-0"
+                className="w-4 h-4 rounded border-edge-strong bg-surface text-score cursor-pointer accent-score shrink-0"
               />
             </label>
           </div>
@@ -443,7 +443,7 @@ export function SensRandomizerControls({
               <label className="text-[11px] font-semibold uppercase tracking-wider text-text-faint">
                 {t("randomizer.mouseDpi")}
               </label>
-              <span className="text-[10px] text-accent font-mono font-bold">
+              <span className="text-[10px] text-score font-mono font-bold tabular-nums">
                 {parsedDpi} DPI
               </span>
             </div>
@@ -453,9 +453,9 @@ export function SensRandomizerControls({
                   key={preset}
                   type="button"
                   onClick={() => void handleSelectDpiPreset(preset)}
-                  className={`px-2.5 py-1 rounded text-[11px] font-mono font-semibold transition-colors ${
+                  className={`px-2.5 py-1 rounded text-[11px] font-mono font-semibold transition-colors press cursor-pointer tabular-nums ${
                     parsedDpi === preset && draft.mouseDpi === String(preset)
-                      ? "bg-accent text-white"
+                      ? "bg-score text-primary-foreground"
                       : "bg-surface border border-edge text-text-secondary hover:text-text-main hover:bg-surface-hover"
                   }`}
                 >
@@ -476,14 +476,14 @@ export function SensRandomizerControls({
                       (e.target as HTMLInputElement).blur();
                     }
                   }}
-                  className="w-16 minimal-input py-1 px-2 text-[11px] font-mono font-medium text-right"
+                  className="w-16 glass-input py-1 px-2 text-[11px] font-mono font-medium text-right tabular-nums"
                   aria-label={t("randomizer.mouseDpi")}
                 />
                 <span className="ml-1 text-[10px] font-mono text-text-muted uppercase">DPI</span>
               </div>
             </div>
             {getFieldError("mouseDpi") && (
-              <span className="text-[11px] text-rose-400 mt-1 block font-medium">
+              <span className="text-[11px] text-red mt-1 block font-medium">
                 {getFieldError("mouseDpi")}
               </span>
             )}
@@ -511,14 +511,14 @@ export function SensRandomizerControls({
                     setDraft((prev) => updateDraftField(prev, "baseSens", val));
                   }
                 }}
-                className="minimal-input text-xs font-mono font-medium pl-3 pr-16 py-2 tabular-nums"
+                className="glass-input text-xs font-mono font-medium pl-3 pr-16 py-2 tabular-nums"
               />
               <span className="absolute right-2 text-[10px] font-mono text-text-faint uppercase pointer-events-none">
                 cm/360
               </span>
             </div>
             {getFieldError("baseSens") && (
-              <span className="text-[11px] text-rose-400 mt-1 block font-medium">
+              <span className="text-[11px] text-red mt-1 block font-medium">
                 {getFieldError("baseSens")}
               </span>
             )}
@@ -529,11 +529,11 @@ export function SensRandomizerControls({
               <div className="flex items-center gap-3">
                 <span>
                   <span className="text-text-faint">Val:</span>{" "}
-                  <strong className="text-text-main">{inGameValorant.toFixed(3)}</strong>
+                  <strong className="text-text-main tabular-nums">{inGameValorant.toFixed(3)}</strong>
                 </span>
                 <span>
                   <span className="text-text-faint">Source:</span>{" "}
-                  <strong className="text-text-main">{inGameSource.toFixed(3)}</strong>
+                  <strong className="text-text-main tabular-nums">{inGameSource.toFixed(3)}</strong>
                 </span>
               </div>
             </div>
@@ -551,7 +551,7 @@ export function SensRandomizerControls({
                 </span>
               </div>
               <div className="flex items-center gap-1">
-                <span className="text-xs font-mono font-bold text-text-main">
+                <span className="text-xs font-mono font-bold text-text-main tabular-nums">
                   ±{draft.spreadPercent}%
                 </span>
               </div>
@@ -570,11 +570,11 @@ export function SensRandomizerControls({
                   const val = Number(e.target.value);
                   setDraft((prev) => updateDraftField(prev, "spreadPercent", val));
                 }}
-                className="w-full accent-blue-500 cursor-pointer h-1.5 bg-surface rounded-lg border border-edge"
+                className="w-full accent-score cursor-pointer h-1.5 bg-surface rounded-lg border border-edge"
               />
             </div>
             {getFieldError("spreadPercent") && (
-              <span className="text-[11px] text-rose-400 mt-1 block font-medium">
+              <span className="text-[11px] text-red mt-1 block font-medium">
                 {getFieldError("spreadPercent")}
               </span>
             )}
@@ -586,7 +586,7 @@ export function SensRandomizerControls({
                   key={preset}
                   type="button"
                   onClick={() => void handleSelectSpreadPreset(preset)}
-                  className={`text-[10px] font-mono font-semibold px-2 py-0.5 rounded-full border transition-all ${
+                  className={`text-[10px] font-mono font-semibold px-2 py-0.5 rounded-full border transition-all press cursor-pointer tabular-nums ${
                     draft.spreadPercent === preset
                       ? "bg-score-soft text-score border-score/30"
                       : "bg-surface hover:bg-surface-hover text-text-secondary border-edge"
@@ -600,7 +600,7 @@ export function SensRandomizerControls({
             {/* Real-time Calculated Range */}
             <div className="pt-1 border-t border-edge flex items-center justify-between text-[11px] flex-wrap gap-1">
               <span className="text-text-faint">{t("randomizer.spreadCalculatedRange")}</span>
-              <span className="font-mono font-semibold text-text-main whitespace-nowrap">
+              <span className="font-mono font-semibold text-text-main whitespace-nowrap tabular-nums">
                 {draft.rangeMode === "cm360"
                   ? `${calculatedRange.minCm.toFixed(1)} cm - ${calculatedRange.maxCm.toFixed(1)} cm`
                   : `${calculatedRange.minMult.toFixed(2)}x - ${calculatedRange.maxMult.toFixed(2)}x`}
@@ -617,9 +617,9 @@ export function SensRandomizerControls({
               <button
                 type="button"
                 onClick={() => void handleSelectRangeMode("cm360")}
-                className={`py-1.5 px-3 rounded-lg text-xs font-semibold transition-all ${
+                className={`py-1.5 px-3 rounded-lg text-xs font-semibold transition-all press cursor-pointer ${
                   draft.rangeMode === "cm360"
-                    ? "bg-surface text-text-main shadow-sm border border-edge-strong"
+                    ? "bg-surface text-text-main shadow-xs border border-edge-strong"
                     : "text-text-secondary hover:text-text-main"
                 }`}
               >
@@ -628,9 +628,9 @@ export function SensRandomizerControls({
               <button
                 type="button"
                 onClick={() => void handleSelectRangeMode("multiplier")}
-                className={`py-1.5 px-3 rounded-lg text-xs font-semibold transition-all ${
+                className={`py-1.5 px-3 rounded-lg text-xs font-semibold transition-all press cursor-pointer ${
                   draft.rangeMode === "multiplier"
-                    ? "bg-surface text-text-main shadow-sm border border-edge-strong"
+                    ? "bg-surface text-text-main shadow-xs border border-edge-strong"
                     : "text-text-secondary hover:text-text-main"
                 }`}
               >
@@ -659,7 +659,7 @@ export function SensRandomizerControls({
                         setDraft((prev) => updateDraftField(prev, "minCm", val));
                       }
                     }}
-                    className="minimal-input text-xs font-mono font-medium px-3 py-2 tabular-nums disabled:opacity-60 disabled:cursor-not-allowed"
+                    className="glass-input text-xs font-mono font-medium px-3 py-2 tabular-nums disabled:opacity-60 disabled:cursor-not-allowed"
                   />
                 </div>
                 <div>
@@ -678,12 +678,12 @@ export function SensRandomizerControls({
                         setDraft((prev) => updateDraftField(prev, "maxCm", val));
                       }
                     }}
-                    className="minimal-input text-xs font-mono font-medium px-3 py-2 tabular-nums disabled:opacity-60 disabled:cursor-not-allowed"
+                    className="glass-input text-xs font-mono font-medium px-3 py-2 tabular-nums disabled:opacity-60 disabled:cursor-not-allowed"
                   />
                 </div>
               </div>
               {(getFieldError("minCm") || getFieldError("maxCm")) && (
-                <span className="text-[11px] text-rose-400 mt-1 block font-medium">
+                <span className="text-[11px] text-red mt-1 block font-medium">
                   {getFieldError("minCm") || getFieldError("maxCm")}
                 </span>
               )}
@@ -707,7 +707,7 @@ export function SensRandomizerControls({
                         setDraft((prev) => updateDraftField(prev, "minMult", val));
                       }
                     }}
-                    className="minimal-input text-xs font-mono font-medium px-3 py-2 tabular-nums disabled:opacity-60 disabled:cursor-not-allowed"
+                    className="glass-input text-xs font-mono font-medium px-3 py-2 tabular-nums disabled:opacity-60 disabled:cursor-not-allowed"
                   />
                 </div>
                 <div>
@@ -726,12 +726,12 @@ export function SensRandomizerControls({
                         setDraft((prev) => updateDraftField(prev, "maxMult", val));
                       }
                     }}
-                    className="minimal-input text-xs font-mono font-medium px-3 py-2 tabular-nums disabled:opacity-60 disabled:cursor-not-allowed"
+                    className="glass-input text-xs font-mono font-medium px-3 py-2 tabular-nums disabled:opacity-60 disabled:cursor-not-allowed"
                   />
                 </div>
               </div>
               {(getFieldError("minMult") || getFieldError("maxMult")) && (
-                <span className="text-[11px] text-rose-400 mt-1 block font-medium">
+                <span className="text-[11px] text-red mt-1 block font-medium">
                   {getFieldError("minMult") || getFieldError("maxMult")}
                 </span>
               )}
@@ -741,7 +741,7 @@ export function SensRandomizerControls({
           {/* Configured Range Summary */}
           <div className="px-3 py-1.5 rounded-lg bg-surface-subtle/70 border border-edge flex items-center justify-between text-[11px] flex-wrap gap-1">
             <span className="text-text-faint font-medium">{t("randomizer.configuredRange")}</span>
-            <span className="text-text-main font-mono font-semibold whitespace-nowrap">
+            <span className="text-text-main font-mono font-semibold whitespace-nowrap tabular-nums">
               {draft.rangeMode === "cm360"
                 ? `${(draft.autoScenarioSens ? calculatedRange.minCm : parsedMinCm).toFixed(1)} cm - ${(draft.autoScenarioSens ? calculatedRange.maxCm : parsedMaxCm).toFixed(1)} cm`
                 : `${(draft.autoScenarioSens ? calculatedRange.minMult : parsedMinMult).toFixed(2)}x - ${(draft.autoScenarioSens ? calculatedRange.maxMult : parsedMaxMult).toFixed(2)}x`}
@@ -755,7 +755,7 @@ export function SensRandomizerControls({
                 <span className="font-semibold text-text-faint uppercase tracking-wider">
                   {t("randomizer.gridPoints")} ({calculatedRange.gridCm.length})
                 </span>
-                <span className="text-[10px] text-text-faint font-mono">
+                <span className="text-[10px] text-text-faint font-mono tabular-nums">
                   {calculatedRange.gridCm[0].toFixed(1)} - {calculatedRange.gridCm[calculatedRange.gridCm.length - 1].toFixed(1)} cm
                 </span>
               </div>
@@ -763,7 +763,7 @@ export function SensRandomizerControls({
                 {calculatedRange.gridCm.map((cm, idx) => (
                   <span
                     key={idx}
-                    className="px-1.5 py-0.5 rounded text-[10px] font-mono font-medium bg-surface border border-edge text-text-secondary"
+                    className="px-1.5 py-0.5 rounded text-[10px] font-mono font-medium bg-surface border border-edge text-text-secondary tabular-nums"
                   >
                     {cm.toFixed(1)}
                   </span>
@@ -782,7 +782,7 @@ export function SensRandomizerControls({
               type="checkbox"
               checked={draft.avoidRepeats}
               onChange={(e) => void handleToggleAvoidRepeats(e.target.checked)}
-              className="w-3.5 h-3.5 rounded border-edge-strong bg-surface text-accent cursor-pointer accent-blue-500"
+              className="w-3.5 h-3.5 rounded border-edge-strong bg-surface text-score cursor-pointer accent-score"
             />
             <span className="font-medium text-text-main">
               {t("randomizer.avoidRepeats")}
@@ -792,13 +792,13 @@ export function SensRandomizerControls({
           {/* Save Button & Unsaved Changes Indicator */}
           <div className="space-y-2">
             {isDirty && (
-              <div className="flex items-center justify-between px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs">
+              <div className="flex items-center justify-between px-3 py-1.5 rounded-lg bg-amber-soft border border-amber-edge text-amber text-xs">
                 <div className="flex items-center gap-1.5 font-medium">
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber animate-pulse" />
                   <span>{t("randomizer.unsavedChanges")}</span>
                 </div>
                 {validationErrors.length > 0 && (
-                  <span className="text-[10px] text-rose-300 font-mono">
+                  <span className="text-[10px] text-red font-mono tabular-nums">
                     {validationErrors.length} {validationErrors.length === 1 ? "erro" : "erros"}
                   </span>
                 )}
@@ -809,7 +809,7 @@ export function SensRandomizerControls({
               type="button"
               onClick={() => void handleSave()}
               disabled={!canSave}
-              className="w-full py-2 px-4 minimal-btn text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer shadow-sm hover:opacity-90 active:scale-[0.99] transition-all disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none"
+              className="w-full py-2 px-4 rounded-xl bg-score text-primary-foreground text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer shadow-xs hover:brightness-105 press transition-all disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none"
             >
               <svg
                 className="w-3.5 h-3.5"
@@ -830,19 +830,19 @@ export function SensRandomizerControls({
         </div>
 
         {/* Right Column: Telemetry & Status */}
-        <div className="panel p-4 sm:p-5 rounded-2xl space-y-4">
+        <div className="glass-panel p-4 sm:p-5 space-y-4">
           <div className="border-b border-edge pb-2.5 flex items-center justify-between">
             <h3 className="text-xs font-bold uppercase tracking-wider text-text-main">
               {t("randomizer.telemetryTitle")}
             </h3>
             <span
-              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium ${
-                rawaccelAvailable ? "bg-emerald-500/10 text-emerald-400" : "bg-rose-500/10 text-rose-400"
+              className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium border ${
+                rawaccelAvailable ? "bg-emerald-soft text-emerald border-emerald-edge" : "bg-red-soft text-red border border-red-edge"
               }`}
             >
               <span
                 className={`w-1.5 h-1.5 rounded-full ${
-                  rawaccelAvailable ? "bg-emerald-400" : "bg-rose-400"
+                  rawaccelAvailable ? "bg-emerald" : "bg-red"
                 }`}
               />
               {rawaccelAvailable ? t("randomizer.ready") : t("randomizer.notReady")}
@@ -868,15 +868,15 @@ export function SensRandomizerControls({
                 {t("randomizer.activeMult")}
               </span>
               <div className="flex items-baseline gap-1.5 mt-0.5 justify-start sm:justify-end">
-                <span className="text-xl font-mono font-bold text-blue-400 tabular-nums">
+                <span className="text-xl font-mono font-bold text-score tabular-nums">
                   {randomizerState.activeMult.toFixed(2)}x
                 </span>
                 <span
-                  className={`text-[11px] font-mono font-semibold ${
+                  className={`text-[11px] font-mono font-semibold tabular-nums ${
                     multDeltaPercent > 0
-                      ? "text-emerald-400"
+                      ? "text-emerald"
                       : multDeltaPercent < 0
-                      ? "text-amber-400"
+                      ? "text-amber"
                       : "text-text-faint"
                   }`}
                 >
@@ -895,7 +895,7 @@ export function SensRandomizerControls({
                 <button
                   type="button"
                   onClick={onDetectPath}
-                  className="text-blue-400 hover:text-blue-300 underline font-sans"
+                  className="text-score hover:underline font-sans press cursor-pointer"
                 >
                   {t("randomizer.detectPath")}
                 </button>
@@ -915,7 +915,7 @@ export function SensRandomizerControls({
               type="button"
               onClick={() => onTestWriter()}
               disabled={testing || !rawaccelAvailable}
-              className="minimal-btn-secondary px-3 py-1.5 text-xs font-semibold rounded-lg flex items-center gap-1.5 disabled:opacity-40"
+              className="minimal-btn-secondary px-3 py-1.5 text-xs font-semibold rounded-lg flex items-center gap-1.5 disabled:opacity-40 press cursor-pointer"
             >
               {testing ? (
                 <>

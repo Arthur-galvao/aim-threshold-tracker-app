@@ -211,54 +211,64 @@ export function SensRandomizerView({
 
   return (
     <div className="space-y-6">
-      <SensRandomizerControls
-        settings={settings}
-        randomizerState={randomizerState}
-        rawaccelAvailable={rawaccelAvailable}
-        testing={testing}
-        onSaveSettings={saveSettings}
-        onToggleEnabled={toggleEnabled}
-        onTriggerRandomize={triggerRandomize}
-        onDetectPath={detectPath}
-        onTestWriter={testWriter}
-        activeTask={activeTask}
-        allTasks={allTasks}
-      />
+      <div className="enter" style={{ animationDelay: "0ms" }}>
+        <SensRandomizerControls
+          settings={settings}
+          randomizerState={randomizerState}
+          rawaccelAvailable={rawaccelAvailable}
+          testing={testing}
+          onSaveSettings={saveSettings}
+          onToggleEnabled={toggleEnabled}
+          onTriggerRandomize={triggerRandomize}
+          onDetectPath={detectPath}
+          onTestWriter={testWriter}
+          activeTask={activeTask}
+          allTasks={allTasks}
+        />
+      </div>
 
-      <SensRandomizerChart
-        relevantSessions={relevantSessions}
-        scopeFilter={scopeFilter}
-        onChangeScope={setScopeFilter}
-        playlists={playlists}
-        categories={availableCategories}
-        scopeTitle={scopeTitle}
-        theme={theme}
-        activeMinCm={settings.minCm}
-        activeMaxCm={settings.maxCm}
-      />
+      <div className="enter" style={{ animationDelay: "60ms" }}>
+        <SensRandomizerChart
+          relevantSessions={relevantSessions}
+          scopeFilter={scopeFilter}
+          onChangeScope={setScopeFilter}
+          playlists={playlists}
+          categories={availableCategories}
+          scopeTitle={scopeTitle}
+          theme={theme}
+          activeMinCm={settings.minCm}
+          activeMaxCm={settings.maxCm}
+        />
+      </div>
 
-      <SensRandomizerAnalytics
-        analysis={analysis}
-        relevantSessions={relevantSessions}
-        groupRuns={groupRuns}
-        scopeAllTasks={scopeFilter.mode !== "current"}
-        onApplySens={handleApplySens}
-      />
+      <div className="enter" style={{ animationDelay: "120ms" }}>
+        <SensRandomizerAnalytics
+          analysis={analysis}
+          relevantSessions={relevantSessions}
+          groupRuns={groupRuns}
+          scopeAllTasks={scopeFilter.mode !== "current"}
+          onApplySens={handleApplySens}
+        />
+      </div>
 
-      <PlaylistSensCard
-        playlists={playlists}
-        tasks={allTasks}
-        mouseDpi={settings.mouseDpi}
-        onApplySens={handleApplySens}
-        onViewInChart={handleViewPlaylistInChart}
-      />
+      <div className="enter" style={{ animationDelay: "180ms" }}>
+        <PlaylistSensCard
+          playlists={playlists}
+          tasks={allTasks}
+          mouseDpi={settings.mouseDpi}
+          onApplySens={handleApplySens}
+          onViewInChart={handleViewPlaylistInChart}
+        />
+      </div>
 
-      <CategorySensCard
-        tasks={allTasks}
-        mouseDpi={settings.mouseDpi}
-        onApplySens={handleApplySens}
-        onViewInChart={handleViewCategoryInChart}
-      />
+      <div className="enter" style={{ animationDelay: "240ms" }}>
+        <CategorySensCard
+          tasks={allTasks}
+          mouseDpi={settings.mouseDpi}
+          onApplySens={handleApplySens}
+          onViewInChart={handleViewCategoryInChart}
+        />
+      </div>
     </div>
   );
 }

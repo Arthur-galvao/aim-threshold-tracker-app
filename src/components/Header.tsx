@@ -36,8 +36,8 @@ export function Header({
   const { t } = useI18n();
 
   return (
-    <header className="sticky top-0 z-30 bg-base/95 backdrop-blur-md border-b border-edge transition-colors duration-150">
-      <div className="w-full px-2.5 sm:px-6 py-2 sm:py-2.5 min-h-[50px] sm:min-h-[54px] flex items-center justify-between gap-2 sm:gap-4">
+    <header className="sticky top-0 z-30 liquid-glass-panel border-b border-glass-edge shadow-xs transition-colors duration-150">
+      <div className="w-full px-3 sm:px-6 py-2 sm:py-2.5 min-h-[50px] sm:min-h-[54px] flex items-center justify-between gap-2 sm:gap-4">
         {/* Left: Sidebar Toggle, App Title and Pill Tabs */}
         <div className="flex items-center gap-1.5 sm:gap-3 md:gap-5 shrink-0 min-w-0">
           {onToggleSidebar && (
@@ -46,7 +46,7 @@ export function Header({
                 type="button"
                 onClick={onToggleSidebar}
                 aria-label="Toggle sidebar"
-                className="w-8 h-8 rounded-lg border border-edge bg-surface hover:bg-surface-hover text-text-secondary hover:text-text-main flex items-center justify-center transition-colors cursor-pointer shadow-xs md:hidden shrink-0"
+                className="w-8 h-8 rounded-xl border border-glass-edge bg-glass-bg hover:bg-glass-bg-elevated text-text-secondary hover:text-text-main flex items-center justify-center transition-all cursor-pointer shadow-xs press md:hidden shrink-0"
               >
                 <List size={16} weight="bold" />
               </button>
@@ -54,7 +54,7 @@ export function Header({
           )}
 
           <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
-            <div className="w-7 h-7 rounded-lg bg-score-soft border border-score/30 flex items-center justify-center text-score shrink-0">
+            <div className="w-7 h-7 rounded-xl bg-score-soft border border-score/30 flex items-center justify-center text-score shadow-xs shrink-0">
               <Target size={15} weight="bold" />
             </div>
             <div className="flex items-center gap-2 min-w-0">
@@ -62,8 +62,8 @@ export function Header({
                 <span className="hidden xl:inline">AIM THRESHOLD TRACKER</span>
                 <span className="xl:hidden">ATT</span>
               </span>
-              <span className="hidden sm:inline-block text-[10px] font-mono font-medium px-1.5 py-0.2 rounded bg-surface-subtle border border-edge text-text-faint">
-                v1.7.2
+              <span className="hidden sm:inline-block text-[10px] font-mono font-semibold px-2 py-0.5 rounded-full bg-glass-bg border border-glass-edge text-text-faint tabular-nums">
+                v1.9.1
               </span>
             </div>
           </div>
@@ -73,18 +73,18 @@ export function Header({
             onValueChange={(val) => onTabChange(val as "dashboard" | "randomizer" | "playlist")}
             className="w-auto shrink-0"
           >
-            <TabsList className="h-8 p-0.5 rounded-full bg-surface-subtle border border-edge gap-0.5">
+            <TabsList className="h-8 p-0.5 rounded-full bg-glass-bg border border-glass-edge gap-0.5">
               <TabsTrigger
                 value="dashboard"
                 layoutId="headerActiveTab"
-                className="h-7 px-2 sm:px-3.5 text-[11px] sm:text-xs rounded-full"
+                className="h-7 px-2.5 sm:px-3.5 text-[11px] sm:text-xs rounded-full press"
               >
                 {t("tab.dashboard")}
               </TabsTrigger>
               <TabsTrigger
                 value="playlist"
                 layoutId="headerActiveTab"
-                className="h-7 px-2 sm:px-3.5 text-[11px] sm:text-xs rounded-full"
+                className="h-7 px-2.5 sm:px-3.5 text-[11px] sm:text-xs rounded-full press"
               >
                 {t("tab.playlist")}
               </TabsTrigger>
@@ -92,7 +92,7 @@ export function Header({
                 value="randomizer"
                 layoutId="headerActiveTab"
                 disabled={!rawaccelAvailable}
-                className="h-7 px-2 sm:px-3.5 text-[11px] sm:text-xs rounded-full"
+                className="h-7 px-2.5 sm:px-3.5 text-[11px] sm:text-xs rounded-full press"
               >
                 {t("tab.randomizer")}
               </TabsTrigger>
@@ -104,13 +104,18 @@ export function Header({
         <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
           {/* Live Watcher Telemetry Status */}
           <Tooltip content={watcherStatus?.active ? t("header.watcherActive") : t("header.watcherInactive")}>
-            <div className="hidden 2xl:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-subtle border border-edge text-[11px] font-mono text-text-secondary select-none">
-              <span
-                className={cn(
-                  "w-1.5 h-1.5 rounded-full",
-                  watcherStatus?.active ? "bg-emerald animate-pulse" : "bg-text-faint/50"
+            <div className="hidden 2xl:flex items-center gap-1.5 px-3 py-1 rounded-full bg-glass-bg border border-glass-edge text-[11px] font-mono text-text-secondary select-none shadow-xs">
+              <span className="relative flex h-2 w-2 items-center justify-center">
+                {watcherStatus?.active && (
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald opacity-75" />
                 )}
-              />
+                <span
+                  className={cn(
+                    "relative inline-flex h-1.5 w-1.5 rounded-full",
+                    watcherStatus?.active ? "bg-emerald shadow-xs" : "bg-text-faint/50"
+                  )}
+                />
+              </span>
               <span className="text-[10px] uppercase font-semibold tracking-wider text-text-faint">
                 {watcherStatus?.active ? "LIVE" : "IDLE"}
               </span>
@@ -121,11 +126,11 @@ export function Header({
             <Tooltip content={t("session.title")}>
               <Button
                 size="sm"
-                variant="secondary"
+                variant="frosted"
                 onClick={onNewSession}
-                className="h-8 px-2 sm:px-2.5 2xl:px-3 text-[11px] font-mono rounded-lg bg-surface hover:bg-surface-hover border border-edge text-text-main flex items-center gap-1.5 cursor-pointer shadow-xs shrink-0"
+                className="h-8 px-2.5 2xl:px-3 text-[11px] font-mono rounded-xl flex items-center gap-1.5 cursor-pointer shrink-0 press"
               >
-                <NotePencil size={13} weight="bold" className="text-text-secondary" />
+                <NotePencil size={13} weight="bold" className="text-score" />
                 <span className="hidden 2xl:inline">+ {t("session.title")}</span>
               </Button>
             </Tooltip>
@@ -135,7 +140,7 @@ export function Header({
             <button
               type="button"
               onClick={onOpenAimlab}
-              className="w-8 h-8 rounded-lg border border-edge bg-surface hover:bg-surface-hover text-text-secondary hover:text-text-main flex items-center justify-center transition-colors cursor-pointer shadow-xs"
+              className="w-8 h-8 rounded-xl border border-glass-edge bg-glass-bg hover:bg-glass-bg-elevated text-text-secondary hover:text-text-main flex items-center justify-center transition-all cursor-pointer shadow-xs press"
             >
               <Crosshair size={14} weight="bold" />
             </button>
@@ -149,7 +154,7 @@ export function Header({
             <button
               type="button"
               onClick={onOpenSettings}
-              className="w-8 h-8 rounded-lg border border-edge bg-surface hover:bg-surface-hover text-text-secondary hover:text-text-main flex items-center justify-center transition-colors cursor-pointer shadow-xs"
+              className="w-8 h-8 rounded-xl border border-glass-edge bg-glass-bg hover:bg-glass-bg-elevated text-text-secondary hover:text-text-main flex items-center justify-center transition-all cursor-pointer shadow-xs press"
             >
               <Gear size={14} weight="bold" />
             </button>
