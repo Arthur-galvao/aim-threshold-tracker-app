@@ -1,0 +1,180 @@
+import { useState, useMemo } from "react";
+import {
+  ListBullets,
+  MagnifyingGlass,
+  CheckCircle,
+  Trophy,
+  ShieldCheck,
+} from "@phosphor-icons/react";
+import { useTrackerWorkspace } from "@/context/TrackerWorkspaceContext";
+import { VISCOSE_CATEGORIES } from "@/lib/viscose";
+import { useI18n } from "@/lib/i18n";
+import { Badge, EmptyState } from "@/components/ui";
+import { cn } from "@/lib/utils";
+
+export interface ScenarioBreakdownProps {
+  className?: string;
+  embedded?: boolean;
+}
+
+export function ScenarioBreakdown({ className, embedded = false }: ScenarioBreakdownProps) {
+  const { t } = useI18n();
+  const { state, actions } = useTrackerWorkspace();
+  const { tasks, activeTask } = state;
+
+  const [categoryFilter, setCategoryFilter] = useState<string>("All");
+  const [search, setSearch] = useState<string>("");
+
+  const categories = useMemo(() => {
+    return ["All", ...Object.keys(VISCOSE_CATEGORIES)];
+  }, []);
+
+  const filteredTasks = useMemo(() => {
+    return tasks.filter((task) => {
+      const matchCat = categoryFilter === "All" || task.category === categoryFilter;
+      const matchSearch =
+        search.trim() === "" ||
+        task.name.toLowerCase().includes(search.toLowerCase()) ||
+        task.subcategory.toLowerCase().includes(search.toLowerCase());
+      return matchCat && matchSearch;
+    });
+  }, [tasks, categoryFilter, search]);
+
+  return (
+    <div
+      className={cn(
+        embedded ? "flex flex-col h-full" : "liquid-surface p-5 flex flex-col",
+        className
+      )}
+    >
+      {/* Search & Category Bar */}
+      <div className="space-y-2.5 mb-3 select-none">
+        <div className="relative w-full">
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-text-faint pointer-events-none">
+            <MagnifyingGlass size={14} />
+          </span>
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder={t("dashboard.searchScenarios")}
+            className="w-full h-8 pl-8 pr-3 text-xs font-mono rounded-full field"
+          />
+        </div>
+
+        {/* Category Pills */}
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scroll-y select-none">
+          {categories.map((cat) => {
+            const isSelected = categoryFilter === cat;
+            return (
+              <button
+                key={cat}
+                type="button"
+                onClick={() => setCategoryFilter(cat)}
+                className={cn(
+                  "px-2.5 py-0.5 text-[11px] font-medium rounded-full transition-all shrink-0 cursor-pointer press",
+                  isSelected
+                    ? "bg-score-soft text-score border border-edge-strong font-semibold"
+                    : "liquid-well text-text-secondary hover:text-text-main"
+                )}
+              >
+                {cat === "All" ? t("dashboard.allCategories") : cat}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Scenario Cards Grid */}
+      {filteredTasks.length === 0 ? (
+        <EmptyState
+          icon={<ListBullets size={24} weight="regular" />}
+          title={t("task.none")}
+          description={t("dashboard.emptyDesc")}
+          className="min-h-[160px]"
+        />
+      ) : (
+        <div
+          className={cn(
+            "grid gap-2 max-h-[340px] overflow-y-auto scroll-y pr-1",
+            embedded ? "grid-cols-1" : "grid-cols-1 md:grid-cols-2"
+          )}
+        >
+          {filteredTasks.map((task) => {
+            const isActive = activeTask?.id === task.id;
+            const pb =
+              task.sessions && task.sessions.length > 0
+                ? Math.max(...task.sessions.map((s) => Number(s.pb) || 0))
+                : null;
+            const lastThreshold =
+              task.sessions && task.sessions.length > 0
+                ? task.sessions[task.sessions.length - 1].threshold
+                : null;
+
+            return (
+              <div
+                key={task.id}
+                role="button"
+                tabIndex={0}
+                onClick={() => actions.selectTask(task.id)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    actions.selectTask(task.id);
+                  }
+                }}
+                className={cn(
+                  "p-3 rounded-control border transition-all cursor-pointer flex flex-col justify-between gap-2 press select-none",
+                  isActive
+                    ? "glass-control border-emerald-edge shadow-1"
+                    : "glass-inset border-edge hover:border-edge-strong"
+                )}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="font-semibold text-xs text-text-main truncate max-w-[200px]" title={task.name}>
+                        {task.name}
+                      </span>
+                      {isActive && (
+                        <Badge variant="emerald" className="text-[10px]">
+                          <CheckCircle size={10} weight="fill" />
+                          <span>Ativo</span>
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1.5 mt-1">
+                      <Badge variant="neutral" className="text-[10px]">
+                        {task.category}
+                      </Badge>
+                      <span className="text-[10px] text-text-faint font-mono">
+                        {task.subcategory}
+                      </span>
+                    </div>
+                  </div>
+
+                  <span className="text-[11px] font-mono text-text-faint tabular shrink-0">
+                    {t("metric.sessionsCount", { n: task.sessions?.length ?? 0 })}
+                  </span>
+                </div>
+
+                <div className="pt-2 border-t border-edge flex items-center justify-between text-xs font-mono">
+                  <div className="flex items-center gap-1 text-score">
+                    <Trophy size={13} weight="regular" />
+                    <span className="font-bold tabular">{pb !== null ? `${pb} pts` : "—"}</span>
+                  </div>
+                  <div className="flex items-center gap-1 text-emerald">
+                    <ShieldCheck size={13} weight="regular" />
+                    <span className="font-semibold tabular">
+                      {lastThreshold !== null ? `${lastThreshold} pts` : "—"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}

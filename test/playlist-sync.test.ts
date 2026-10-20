@@ -455,30 +455,37 @@ describe("playlist-sync and detection", () => {
       const emojiRegex = /\p{Extended_Pictographic}/u;
 
       const i18nContent = fs.readFileSync(path.resolve("src/lib/i18n.tsx"), "utf-8");
-      const modalContent = fs.readFileSync(path.resolve("src/components/SettingsModal.tsx"), "utf-8");
+      const dialogContent = fs.readFileSync(path.resolve("src/components/dialogs/SettingsDialog.tsx"), "utf-8");
+      const automationContent = fs.readFileSync(path.resolve("src/components/dialogs/SettingsAutomationSection.tsx"), "utf-8");
 
       assert.equal(emojiRegex.test(i18nContent), false, "i18n.tsx contains visual emojis");
-      assert.equal(emojiRegex.test(modalContent), false, "SettingsModal.tsx contains visual emojis");
+      assert.equal(emojiRegex.test(dialogContent), false, "SettingsDialog.tsx contains visual emojis");
+      assert.equal(emojiRegex.test(automationContent), false, "SettingsAutomationSection.tsx contains visual emojis");
     });
 
     it("verifies SettingsModal provides automation controls and callbacks", () => {
-      const modalContent = fs.readFileSync(
-        path.resolve("src/components/SettingsModal.tsx"),
+      const dialogContent = fs.readFileSync(
+        path.resolve("src/components/dialogs/SettingsDialog.tsx"),
         "utf-8"
       );
+      const automationContent = fs.readFileSync(
+        path.resolve("src/components/dialogs/SettingsAutomationSection.tsx"),
+        "utf-8"
+      );
+      const combined = dialogContent + automationContent;
 
-      assert.ok(modalContent.includes("closeToTray"));
-      assert.ok(modalContent.includes("autoDetectPlaylist"));
-      assert.ok(modalContent.includes("notifyStepAdvance"));
-      assert.ok(modalContent.includes("onUpdateAppSettings"));
-      assert.ok(modalContent.includes("settings.automationSection"));
+      assert.ok(combined.includes("closeToTray"));
+      assert.ok(combined.includes("autoDetectPlaylist"));
+      assert.ok(combined.includes("notifyStepAdvance"));
+      assert.ok(combined.includes("onUpdateAppSettings"));
+      assert.ok(combined.includes("settings.automationSection"));
     });
   });
 
   describe("UI styling and CSS variable validity", () => {
     it("ensures CategorySensCard does not use invalid divide-edge opacity modifier", () => {
       const cardContent = fs.readFileSync(
-        path.resolve("src/components/CategorySensCard.tsx"),
+        path.resolve("src/components/views/randomizer/category-cards.tsx"),
         "utf-8"
       );
 

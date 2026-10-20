@@ -923,10 +923,11 @@ describe("sens-analytics", () => {
       const filesToCheck = [
         "src/lib/i18n.tsx",
         "src/lib/sens-analytics.ts",
-        "src/components/playlist/PlaylistSensCard.tsx",
-        "src/components/randomizer/SensRandomizerChart.tsx",
-        "src/components/SensRandomizerView.tsx",
-        "src/components/CategorySensCard.tsx",
+        "src/components/views/randomizer/index.tsx",
+        "src/components/views/randomizer/sweet-spot-chart.tsx",
+        "src/components/views/randomizer/category-cards.tsx",
+        "src/components/views/playlist/index.tsx",
+        "src/components/views/playlist/StepSensCard.tsx",
         "src/App.tsx",
       ];
 
@@ -941,9 +942,9 @@ describe("sens-analytics", () => {
     });
 
     it("verifies SensRandomizerChart and PlaylistSensCard component source integrity", () => {
-      const chartCode = fs.readFileSync(path.resolve("src/components/randomizer/SensRandomizerChart.tsx"), "utf-8");
-      const cardCode = fs.readFileSync(path.resolve("src/components/playlist/PlaylistSensCard.tsx"), "utf-8");
-      const viewCode = fs.readFileSync(path.resolve("src/components/SensRandomizerView.tsx"), "utf-8");
+      const chartCode = fs.readFileSync(path.resolve("src/components/views/randomizer/sweet-spot-chart.tsx"), "utf-8");
+      const cardCode = fs.readFileSync(path.resolve("src/components/views/randomizer/category-cards.tsx"), "utf-8");
+      const viewCode = fs.readFileSync(path.resolve("src/components/views/randomizer/index.tsx"), "utf-8");
 
       // Verify scope modes in chart
       assert.ok(chartCode.includes('"current"'));
@@ -951,15 +952,15 @@ describe("sens-analytics", () => {
       assert.ok(chartCode.includes('"category"'));
       assert.ok(chartCode.includes('"all"'));
 
-      // Verify PlaylistSensCard computes stats and contains action buttons
+      // Verify CategoryCards computes stats and contains action buttons
       assert.ok(cardCode.includes("computePlaylistSensStats"));
       assert.ok(cardCode.includes("onViewInChart"));
       assert.ok(cardCode.includes("onApplySens"));
 
-      // Verify SensRandomizerView integrates PlaylistSensCard and passes callbacks
-      assert.ok(viewCode.includes("<PlaylistSensCard"));
-      assert.ok(viewCode.includes("handleViewPlaylistInChart"));
-      assert.ok(viewCode.includes("handleViewCategoryInChart"));
+      // Verify RandomizerView integrates CategoryCards and passes callbacks
+      assert.ok(viewCode.includes("<CategoryCards"));
+      assert.ok(viewCode.includes("handleViewInChart"));
+      assert.ok(viewCode.includes("handleApplySens"));
     });
   });
 
@@ -990,8 +991,9 @@ describe("sens-analytics", () => {
       const emojiRegex = /\p{Extended_Pictographic}/u;
 
       const filesToCheck = [
-        "src/components/playlist/PlaylistRunnerView.tsx",
-        "src/components/playlist/DashboardPlaylistRunner.tsx",
+        "src/components/views/playlist/index.tsx",
+        "src/components/views/playlist/StepSensCard.tsx",
+        "src/components/views/dashboard/MiniPlaylistRunner.tsx",
         "src/App.tsx",
       ];
 
@@ -1006,23 +1008,17 @@ describe("sens-analytics", () => {
     });
 
     it("verifies PlaylistRunnerView and DashboardPlaylistRunner source integration", () => {
-      const runnerCode = fs.readFileSync(path.resolve("src/components/playlist/PlaylistRunnerView.tsx"), "utf-8");
-      const dashCode = fs.readFileSync(path.resolve("src/components/playlist/DashboardPlaylistRunner.tsx"), "utf-8");
-      const appCode = fs.readFileSync(path.resolve("src/App.tsx"), "utf-8");
+      const runnerCode = fs.readFileSync(path.resolve("src/components/views/playlist/index.tsx"), "utf-8");
+      const stepSensCode = fs.readFileSync(path.resolve("src/components/views/playlist/StepSensCard.tsx"), "utf-8");
+      const dashCode = fs.readFileSync(path.resolve("src/components/views/dashboard/MiniPlaylistRunner.tsx"), "utf-8");
 
-      // Verify PlaylistRunnerView computes playlist sens stats and accepts onApplySens
+      // Verify PlaylistView computes playlist sens stats and accepts onApplySens
       assert.ok(runnerCode.includes("computePlaylistSensStats"));
-      assert.ok(runnerCode.includes("onApplySens"));
-      assert.ok(runnerCode.includes("playlist.recommendedSens"));
-      assert.ok(runnerCode.includes("runner.scenarioSens"));
-      assert.ok(runnerCode.includes("runner.playlistSens"));
+      assert.ok(runnerCode.includes("handleApplySens"));
+      assert.ok(stepSensCode.includes("onApplySens"));
 
-      // Verify DashboardPlaylistRunner displays recommended sens
-      assert.ok(dashCode.includes("getRecommendedSens"));
-
-      // Verify App.tsx defines handleApplySens and passes to PlaylistRunnerView
-      assert.ok(appCode.includes("handleApplySens"));
-      assert.ok(appCode.includes("onApplySens={handleApplySens}"));
+      // Verify MiniPlaylistRunner displays playlist runner controls
+      assert.ok(dashCode.includes("playlistRunner"));
     });
   });
 

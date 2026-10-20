@@ -1,0 +1,339 @@
+import { useState, useMemo, useCallback } from "react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import { ChartScatter, Rows, SquaresFour } from "@phosphor-icons/react";
+import { useApp } from "@/hooks/useAppData";
+import { useSensRandomizer } from "@/hooks/useSensRandomizer";
+import { useI18n } from "@/lib/i18n";
+import type { Task } from "@/lib/types";
+import {
+  computeSweetSpotAnalytics,
+  type RunDataPoint,
+} from "@/lib/sens-analytics";
+import { buildRunPoints } from "@/lib/run-points";
+import { DEFAULT_CATEGORY, DEFAULT_SUBCATEGORY } from "@/lib/viscose";
+import { Segmented } from "@/components/ui";
+import { Controls } from "./controls";
+import { TelemetryCard } from "./telemetry-card";
+import {
+  SweetSpotChart,
+  type ChartScopeFilter,
+  type CategoryOption,
+} from "./sweet-spot-chart";
+import { Analytics } from "./analytics";
+import { CategoryCards } from "./category-cards";
+import { cn } from "@/lib/utils";
+
+export interface RandomizerViewProps {
+  className?: string;
+}
+
+type RandomizerTab = "chart" | "buckets" | "categories";
+
+export function RandomizerView({ className }: RandomizerViewProps) {
+  const { t } = useI18n();
+  const shouldReduceMotion = useReducedMotion();
+  const { appData, activeTask } = useApp();
+  const allTasks = appData.tasks;
+  const playlists = appData.playlists ?? [];
+
+  const {
+    settings,
+    randomizerState,
+    rawaccelAvailable,
+    testing,
+    saveSettings,
+    toggleEnabled,
+    triggerRandomize,
+    detectPath,
+    testWriter,
+  } = useSensRandomizer();
+
+  const [activeSubTab, setActiveSubTab] = useState<RandomizerTab>("chart");
+  const [scopeFilter, setScopeFilter] = useState<ChartScopeFilter>({
+    mode: "current",
+  });
+
+  // Unique categories derived from allTasks for category selector
+  const availableCategories = useMemo<CategoryOption[]>(() => {
+    const map = new Map<
+      string,
+      { category: string; subcategory: string; count: number }
+    >();
+
+    for (const task of allTasks) {
+      const cat = task.category || DEFAULT_CATEGORY;
+      const subcat = task.subcategory || DEFAULT_SUBCATEGORY;
+      const key = `${cat}__${subcat}`;
+      const existing = map.get(key);
+      if (existing) {
+        existing.count += 1;
+      } else {
+        map.set(key, { category: cat, subcategory: subcat, count: 1 });
+      }
+    }
+
+    return Array.from(map.entries()).map(([key, data]) => ({
+      key,
+      category: data.category,
+      subcategory: data.subcategory,
+      scenariosCount: data.count,
+    }));
+  }, [allTasks]);
+
+  // Derive human-readable scope title for chart
+  const scopeTitle = useMemo<string>(() => {
+    switch (scopeFilter.mode) {
+      case "current":
+        return activeTask?.name ?? t("randomizer.scopeCurrent");
+      case "all":
+        return t("randomizer.scopeAll");
+      case "playlist": {
+        const activePlId = scopeFilter.playlistId || playlists[0]?.id;
+        const pl = playlists.find((p) => p.id === activePlId);
+        return pl ? pl.name : t("randomizer.scopePlaylist");
+      }
+      case "category": {
+        const activeCatKey =
+          scopeFilter.categoryKey || availableCategories[0]?.key;
+        const cat = availableCategories.find((c) => c.key === activeCatKey);
+        return cat
+          ? `${cat.category} - ${cat.subcategory}`
+          : t("randomizer.scopeCategory");
+      }
+    }
+  }, [scopeFilter, activeTask, playlists, availableCategories, t]);
+
+  // Collect runs for analytics with per-scenario normalization according to active scope
+  const relevantSessions = useMemo<RunDataPoint[]>(() => {
+    let tasksToAnalyze: Task[] = [];
+    const isNormalized = scopeFilter.mode !== "current";
+
+    switch (scopeFilter.mode) {
+      case "current":
+        tasksToAnalyze = activeTask ? [activeTask] : allTasks;
+        break;
+
+      case "all":
+        tasksToAnalyze = allTasks;
+        break;
+
+      case "playlist": {
+        const activePlId = scopeFilter.playlistId || playlists[0]?.id;
+        const targetPlaylist = playlists.find((p) => p.id === activePlId);
+        if (targetPlaylist) {
+          const taskMap = new Map(allTasks.map((t) => [t.id, t]));
+          const seen = new Set<string>();
+          for (const item of targetPlaylist.items || []) {
+            const task = taskMap.get(item.taskId);
+            if (task && !seen.has(task.id)) {
+              seen.add(task.id);
+              tasksToAnalyze.push(task);
+            }
+          }
+        }
+        break;
+      }
+
+      case "category": {
+        const activeCatKey =
+          scopeFilter.categoryKey || availableCategories[0]?.key;
+        tasksToAnalyze = allTasks.filter((task) => {
+          const cat = task.category || DEFAULT_CATEGORY;
+          const subcat = task.subcategory || DEFAULT_SUBCATEGORY;
+          return `${cat}__${subcat}` === activeCatKey;
+        });
+        break;
+      }
+    }
+
+    const runPoints = buildRunPoints(tasksToAnalyze, { dpi: settings.mouseDpi });
+
+    return runPoints.map((p) => ({
+      scenario: p.scenario,
+      sens: p.sens,
+      rawScore: p.score,
+      normScore: p.rel,
+      score: isNormalized ? p.rel : p.score,
+      threshold: p.threshold,
+      date: p.date,
+    }));
+  }, [
+    scopeFilter,
+    activeTask,
+    allTasks,
+    playlists,
+    availableCategories,
+    settings.mouseDpi,
+  ]);
+
+  const analysis = useMemo(() => {
+    return computeSweetSpotAnalytics(relevantSessions);
+  }, [relevantSessions]);
+
+  const groupRuns = useMemo<RunDataPoint[] | undefined>(() => {
+    if (scopeFilter.mode !== "current" || !activeTask) return undefined;
+    const cat = activeTask.category || DEFAULT_CATEGORY;
+    const subcat = activeTask.subcategory || DEFAULT_SUBCATEGORY;
+    const categoryTasks = allTasks.filter(
+      (t) =>
+        (t.category || DEFAULT_CATEGORY) === cat &&
+        (t.subcategory || DEFAULT_SUBCATEGORY) === subcat
+    );
+    const runPoints = buildRunPoints(categoryTasks, { dpi: settings.mouseDpi });
+    return runPoints.map((p) => ({
+      scenario: p.scenario,
+      sens: p.sens,
+      rawScore: p.score,
+      normScore: p.rel,
+      score: p.rel,
+      threshold: p.threshold,
+      date: p.date,
+    }));
+  }, [scopeFilter.mode, activeTask, allTasks, settings.mouseDpi]);
+
+  const handleApplySens = useCallback(
+    async (sensCm: number, targetScenarios?: string[]) => {
+      const rounded = Number(sensCm.toFixed(1));
+      const overrides = { ...(settings.centerOverrides || {}) };
+      if (targetScenarios && targetScenarios.length > 0) {
+        for (const name of targetScenarios) {
+          if (name && name.trim()) {
+            overrides[name.trim().toLowerCase()] = rounded;
+          }
+        }
+      } else if (activeTask?.name) {
+        overrides[activeTask.name.trim().toLowerCase()] = rounded;
+      }
+      await saveSettings({
+        ...settings,
+        scenarioIdealCm: rounded,
+        centerOverrides: overrides,
+      });
+    },
+    [activeTask?.name, saveSettings, settings]
+  );
+
+  const handleViewInChart = useCallback(
+    (filter: { mode: "category" | "playlist"; id: string }) => {
+      if (filter.mode === "playlist") {
+        setScopeFilter({ mode: "playlist", playlistId: filter.id });
+      } else {
+        setScopeFilter({ mode: "category", categoryKey: filter.id });
+      }
+      setActiveSubTab("chart");
+    },
+    []
+  );
+
+  return (
+    <div className={cn("grid grid-cols-12 gap-4 pb-6", className)}>
+      {/* Row 1: Full-Width Live Sensitivity & RawAccel Command Ribbon */}
+      <TelemetryCard
+        settings={settings}
+        randomizerState={randomizerState}
+        rawaccelAvailable={rawaccelAvailable}
+        testing={testing}
+        onDetectPath={detectPath}
+        onTestWriter={testWriter}
+        onToggleEnabled={toggleEnabled}
+        onTriggerRandomize={triggerRandomize}
+        className="col-span-12"
+      />
+
+      {/* Row 2, Left Column (5 cols): Tactile Calibration & Range Controls */}
+      <div className="col-span-12 lg:col-span-5 flex flex-col">
+        <Controls
+          settings={settings}
+          randomizerState={randomizerState}
+          rawaccelAvailable={rawaccelAvailable}
+          testing={testing}
+          onSaveSettings={saveSettings}
+          onToggleEnabled={toggleEnabled}
+          onTriggerRandomize={triggerRandomize}
+          onDetectPath={detectPath}
+          onTestWriter={testWriter}
+          activeTask={activeTask}
+          allTasks={allTasks}
+          className="h-full"
+        />
+      </div>
+
+      {/* Row 2, Right Column (7 cols): Tabbed Analytical Stage (Zero Infinite Scroll) */}
+      <div className="col-span-12 lg:col-span-7 flex flex-col gap-3">
+        <div className="flex items-center justify-between gap-2">
+          <Segmented<RandomizerTab>
+            id="randomizer-analytics-stage"
+            size="sm"
+            value={activeSubTab}
+            onChange={setActiveSubTab}
+            options={[
+              {
+                value: "chart",
+                label: t("randomizer.sweetSpotTitle"),
+                icon: <ChartScatter size={14} weight="bold" />,
+              },
+              {
+                value: "buckets",
+                label: t("randomizer.predictorTitle"),
+                icon: <Rows size={14} weight="bold" />,
+              },
+              {
+                value: "categories",
+                label: t("categorySens.title"),
+                icon: <SquaresFour size={14} weight="bold" />,
+              },
+            ]}
+          />
+        </div>
+
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.div
+            key={activeSubTab}
+            initial={
+              shouldReduceMotion ? { opacity: 1 } : { opacity: 0, y: 4 }
+            }
+            animate={{ opacity: 1, y: 0 }}
+            exit={shouldReduceMotion ? { opacity: 1 } : { opacity: 0, y: -3 }}
+            transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
+            className="flex-1 min-h-0"
+          >
+            {activeSubTab === "chart" && (
+              <SweetSpotChart
+                relevantSessions={relevantSessions}
+                scopeFilter={scopeFilter}
+                onChangeScope={setScopeFilter}
+                playlists={playlists}
+                categories={availableCategories}
+                scopeTitle={scopeTitle}
+                activeMinCm={settings.minCm}
+                activeMaxCm={settings.maxCm}
+              />
+            )}
+
+            {activeSubTab === "buckets" && (
+              <Analytics
+                analysis={analysis}
+                relevantSessions={relevantSessions}
+                groupRuns={groupRuns}
+                scopeAllTasks={scopeFilter.mode !== "current"}
+                onApplySens={handleApplySens}
+              />
+            )}
+
+            {activeSubTab === "categories" && (
+              <CategoryCards
+                tasks={allTasks}
+                playlists={playlists}
+                mouseDpi={settings.mouseDpi}
+                onApplySens={handleApplySens}
+                onViewInChart={handleViewInChart}
+              />
+            )}
+          </motion.div>
+        </AnimatePresence>
+      </div>
+    </div>
+  );
+}
+
+export default RandomizerView;

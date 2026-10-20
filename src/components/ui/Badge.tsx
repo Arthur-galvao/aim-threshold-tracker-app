@@ -1,38 +1,32 @@
 import React from "react";
 import { cn } from "@/lib/utils";
 
+export type BadgeVariant = "neutral" | "score" | "emerald" | "amber" | "red";
+
 export interface BadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
-  variant?: "neutral" | "accent" | "amber" | "emerald" | "red" | "score";
-  size?: "sm" | "md";
+  variant?: BadgeVariant;
+  children: React.ReactNode;
 }
 
 export function Badge({
   variant = "neutral",
-  size = "md",
+  className,
   children,
-  className = "",
   ...props
 }: BadgeProps) {
-  const sizeClasses = {
-    sm: "text-[10px] px-2 py-0.5 rounded-full font-mono tracking-tight",
-    md: "text-xs px-2.5 py-0.5 rounded-full font-medium tracking-tight",
-  }[size];
-
-  const variantClasses = {
-    neutral: "bg-surface-subtle text-text-secondary border border-edge",
-    accent: "bg-accent-soft text-accent border border-accent-edge",
-    score: "bg-score-soft text-score border border-score/25",
-    amber: "bg-amber-soft text-amber border border-amber-edge",
-    emerald: "bg-emerald-soft text-emerald border border-emerald-edge",
-    red: "bg-red-soft text-red border border-red-edge",
-  }[variant];
+  const variantStyles: Record<BadgeVariant, string> = {
+    neutral: "bg-surface-subtle text-text-secondary border-edge",
+    score: "bg-score-soft text-score border-edge",
+    emerald: "bg-emerald-soft text-emerald border-emerald-edge",
+    amber: "bg-amber-soft text-amber border-amber-edge",
+    red: "bg-red-soft text-red border-red-edge",
+  };
 
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1 leading-none select-none",
-        sizeClasses,
-        variantClasses,
+        "inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-mono font-medium border tabular select-none",
+        variantStyles[variant],
         className
       )}
       {...props}

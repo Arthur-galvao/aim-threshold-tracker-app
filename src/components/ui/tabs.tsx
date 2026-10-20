@@ -1,127 +1,47 @@
-import * as React from "react";
+import React from "react";
 import { Tabs as BaseTabs } from "@base-ui/react";
-import { motion } from "motion/react";
 import { cn } from "@/lib/utils";
 
-interface TabsContextValue {
-  value: string;
-  onValueChange?: (value: string) => void;
-}
+export const Tabs = BaseTabs.Root;
 
-const TabsContext = React.createContext<TabsContextValue | undefined>(undefined);
-
-function useTabsContext() {
-  return React.useContext(TabsContext);
-}
-
-export interface TabsProps extends React.ComponentPropsWithoutRef<typeof BaseTabs.Root> {
-  value?: string;
-  defaultValue?: string;
-  onValueChange?: (value: string) => void;
-  className?: string;
-  children: React.ReactNode;
-}
-
-export const Tabs = React.forwardRef<HTMLDivElement, TabsProps>(
-  ({ value, defaultValue, onValueChange, className, children, ...props }, ref) => {
-    const [internalValue, setInternalValue] = React.useState<string>(defaultValue ?? "");
-    const activeValue = value !== undefined ? value : internalValue;
-
-    const handleValueChange = (val: string) => {
-      if (value === undefined) {
-        setInternalValue(val);
-      }
-      onValueChange?.(val);
-    };
-
-    return (
-      <TabsContext.Provider value={{ value: activeValue, onValueChange: handleValueChange }}>
-        <BaseTabs.Root
-          ref={ref}
-          value={activeValue}
-          onValueChange={(nextVal) => handleValueChange(String(nextVal))}
-          className={cn("w-full", className)}
-          {...props}
-        >
-          {children}
-        </BaseTabs.Root>
-      </TabsContext.Provider>
-    );
-  }
-);
-Tabs.displayName = "Tabs";
-
-export interface TabsListProps extends React.ComponentPropsWithoutRef<typeof BaseTabs.List> {
-  className?: string;
-}
-
-export const TabsList = React.forwardRef<HTMLDivElement, TabsListProps>(
-  ({ className, ...props }, ref) => (
-    <BaseTabs.List
-      ref={ref}
-      className={cn(
-        "inline-flex items-center justify-center rounded-[var(--r-control,14px)] bg-[var(--glass-bg)] backdrop-blur-md p-1 border border-[var(--glass-edge)] text-text-secondary select-none font-sans shadow-xs",
-        className
-      )}
-      {...props}
-    />
-  )
-);
+export const TabsList = React.forwardRef<
+  HTMLDivElement,
+  React.ComponentPropsWithoutRef<typeof BaseTabs.List>
+>(({ className, ...props }, ref) => (
+  <BaseTabs.List
+    ref={ref}
+    className={cn(
+      "glass-inset p-1 inline-flex items-center gap-1 rounded-control select-none",
+      className
+    )}
+    {...props}
+  />
+));
 TabsList.displayName = "TabsList";
 
-export interface TabsTriggerProps extends React.ComponentPropsWithoutRef<typeof BaseTabs.Tab> {
-  value: string;
-  layoutId?: string;
-  className?: string;
-  disabled?: boolean;
-}
+export const TabsTab = React.forwardRef<
+  HTMLButtonElement,
+  React.ComponentPropsWithoutRef<typeof BaseTabs.Tab>
+>(({ className, ...props }, ref) => (
+  <BaseTabs.Tab
+    ref={ref}
+    className={cn(
+      "relative inline-flex items-center justify-center gap-1.5 h-8 px-3 text-sm font-medium rounded-[10px] cursor-pointer transition-colors focus-visible:outline-none select-none text-text-secondary hover:text-text-main data-[active]:text-text-main data-[active]:font-semibold data-[active]:glass-control data-[active]:shadow-1 disabled:opacity-40 disabled:pointer-events-none",
+      className
+    )}
+    {...props}
+  />
+));
+TabsTab.displayName = "TabsTab";
 
-export const TabsTrigger = React.forwardRef<HTMLButtonElement, TabsTriggerProps>(
-  ({ value, layoutId = "activeTabIndicator", className, children, disabled, ...props }, ref) => {
-    const context = useTabsContext();
-    const isSelected = context?.value === value;
-
-    return (
-      <BaseTabs.Tab
-        ref={ref}
-        value={value}
-        disabled={disabled}
-        className={cn(
-          "relative inline-flex items-center justify-center whitespace-nowrap rounded-[calc(var(--r-control,14px)-4px)] px-3 py-1.5 text-xs font-mono font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-score focus-visible:ring-offset-1 disabled:pointer-events-none disabled:opacity-40 cursor-pointer z-10 select-none",
-          isSelected ? "text-text-main font-semibold" : "text-text-secondary hover:text-text-main",
-          className
-        )}
-        {...props}
-      >
-        {isSelected && (
-          <motion.div
-            layoutId={layoutId}
-            className="absolute inset-0 rounded-[inherit] bg-[var(--glass-bg-elevated)] backdrop-blur-md border border-[var(--glass-edge)] shadow-sm -z-10"
-            transition={{ type: "spring", stiffness: 400, damping: 28, mass: 0.8 }}
-          />
-        )}
-        {children}
-      </BaseTabs.Tab>
-    );
-  }
-);
-TabsTrigger.displayName = "TabsTrigger";
-
-export interface TabsContentProps extends React.ComponentPropsWithoutRef<typeof BaseTabs.Panel> {
-  value: string;
-  className?: string;
-}
-
-export const TabsContent = React.forwardRef<HTMLDivElement, TabsContentProps>(
-  ({ value, className, children, ...props }, ref) => (
-    <BaseTabs.Panel
-      ref={ref}
-      value={value}
-      className={cn("mt-4 focus-visible:outline-none", className)}
-      {...props}
-    >
-      {children}
-    </BaseTabs.Panel>
-  )
-);
-TabsContent.displayName = "TabsContent";
+export const TabsPanel = React.forwardRef<
+  HTMLDivElement,
+  React.ComponentPropsWithoutRef<typeof BaseTabs.Panel>
+>(({ className, ...props }, ref) => (
+  <BaseTabs.Panel
+    ref={ref}
+    className={cn("mt-3 focus-visible:outline-none", className)}
+    {...props}
+  />
+));
+TabsPanel.displayName = "TabsPanel";
