@@ -7,8 +7,10 @@ import { useI18n } from "@/lib/i18n";
 import type { Task } from "@/lib/types";
 import {
   computeSweetSpotAnalytics,
+  getScenarioIdealSens,
   type RunDataPoint,
 } from "@/lib/sens-analytics";
+import { resolveRangeCm } from "@/lib/sens-lattice";
 import { buildRunPoints } from "@/lib/run-points";
 import { DEFAULT_CATEGORY, DEFAULT_SUBCATEGORY } from "@/lib/viscose";
 import { Segmented } from "@/components/ui";
@@ -170,6 +172,17 @@ export function RandomizerView({ className }: RandomizerViewProps) {
     return computeSweetSpotAnalytics(relevantSessions);
   }, [relevantSessions]);
 
+  const idealSens = useMemo(() => {
+    return getScenarioIdealSens(activeTask, allTasks, settings.mouseDpi);
+  }, [activeTask, allTasks, settings.mouseDpi]);
+
+  const resolvedActiveRange = useMemo(() => {
+    return resolveRangeCm(
+      settings,
+      settings.autoScenarioSens && idealSens ? idealSens.value : null
+    );
+  }, [settings, idealSens]);
+
   const groupRuns = useMemo<RunDataPoint[] | undefined>(() => {
     if (scopeFilter.mode !== "current" || !activeTask) return undefined;
     const cat = activeTask.category || DEFAULT_CATEGORY;
@@ -303,8 +316,8 @@ export function RandomizerView({ className }: RandomizerViewProps) {
                 playlists={playlists}
                 categories={availableCategories}
                 scopeTitle={scopeTitle}
-                activeMinCm={settings.minCm}
-                activeMaxCm={settings.maxCm}
+                activeMinCm={resolvedActiveRange.minCm}
+                activeMaxCm={resolvedActiveRange.maxCm}
               />
             )}
 

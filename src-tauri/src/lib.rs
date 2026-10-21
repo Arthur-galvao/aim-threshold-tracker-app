@@ -138,7 +138,11 @@ fn start_watcher(app: AppHandle, state: State<'_, AppState>) -> Result<(), Strin
         settings
             .kovaak_stats_path
             .clone()
-            .ok_or_else(|| "Pasta do KovaaK's não configurada".to_string())?
+            .or_else(|| {
+                aimlab::find_active_aimlab_replay_dir()
+                    .map(|p| p.to_string_lossy().to_string())
+            })
+            .ok_or_else(|| "Pasta do KovaaK's ou Aim Lab não encontrada".to_string())?
     };
 
     if state.watcher.lock().unwrap().is_some() {
@@ -622,6 +626,3 @@ pub fn run() {
             }
         });
 }
-
-
-

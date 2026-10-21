@@ -239,4 +239,43 @@ describe("run-points constructor and baseline", () => {
     assert.equal(points[1].sessionId, "second");
     assert.equal(points[0].ts, points[1].ts);
   });
+
+  it("extracts intra-day timestamp from Aim Lab sourceFile and ISO dates", () => {
+    assert.equal(
+      runTimestamp({
+        date: "2026-06-13",
+        sourceFile: "AimLab_rA_Twoshot_Narrow_1181_2026-06-13_21:06:40",
+      }),
+      "20260613210640"
+    );
+    assert.equal(
+      runTimestamp({
+        date: "2026-06-13T21:05:29Z",
+        sourceFile: "AimLab_SQLite",
+      }),
+      "20260613210529"
+    );
+
+    const task = createMockTask("aimlab-same-day", [
+      {
+        id: "late",
+        date: "2026-06-13",
+        pb: 1181,
+        sens: 33.3,
+        sourceFile: "AimLab_rA_Twoshot_Narrow_1181_2026-06-13_21:06:40",
+      },
+      {
+        id: "early",
+        date: "2026-06-13",
+        pb: 1050,
+        sens: 33.3,
+        sourceFile: "AimLab_rA_Twoshot_Narrow_1050_2026-06-13_21:05:29",
+      },
+    ]);
+
+    const points = buildRunPoints([task], { dpi: 1600 });
+    assert.equal(points.length, 2);
+    assert.equal(points[0].sessionId, "early");
+    assert.equal(points[1].sessionId, "late");
+  });
 });

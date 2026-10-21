@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { computeRangePreview } from "@/lib/sens-lattice";
 import type { RandomizerSettings } from "./useSensRandomizer";
 
 export interface RangePreview {
@@ -10,13 +11,36 @@ export interface RangePreview {
   gridCm: number[];
 }
 
+const isTauri = () =>
+  typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+
 export function useRangePreview(
   settings: RandomizerSettings,
   centerCm?: number | null
-): RangePreview | null {
-  const [preview, setPreview] = useState<RangePreview | null>(null);
+): RangePreview {
+  const localFallback = useMemo(
+    () => computeRangePreview(settings, centerCm),
+    [
+      settings.baseSensCm,
+      settings.rangeMode,
+      settings.minCm,
+      settings.maxCm,
+      settings.minMult,
+      settings.maxMult,
+      settings.spreadPercent,
+      settings.autoScenarioSens,
+      settings.scenarioIdealCm,
+      centerCm,
+    ]
+  );
+
+  const [ipcPreview, setIpcPreview] = useState<RangePreview | null>(null);
 
   useEffect(() => {
+    if (!isTauri()) {
+      setIpcPreview(null);
+      return;
+    }
     let cancelled = false;
     const timer = setTimeout(async () => {
       try {
@@ -25,7 +49,7 @@ export function useRangePreview(
           centerCm: centerCm ?? null,
         });
         if (!cancelled) {
-          setPreview(res);
+          setIpcPreview(res);
         }
       } catch (err) {
         console.error("Falha ao obter preview de range:", err);
@@ -49,5 +73,5 @@ export function useRangePreview(
     centerCm,
   ]);
 
-  return preview;
+  return ipcPreview ?? localFallback;
 }

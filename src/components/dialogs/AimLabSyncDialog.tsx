@@ -8,7 +8,7 @@ import {
   DialogTitle,
   Button,
 } from "@/components/ui";
-import { syncAimlabSqlite, importAimlabCsv } from "@/lib/tauri-bridge";
+import { syncAimlabSqlite, importAimlabCsv, pickAimlabCsvFile } from "@/lib/tauri-bridge";
 import { useI18n } from "@/lib/i18n";
 
 export interface AimLabSyncDialogProps {
@@ -50,17 +50,7 @@ export function AimLabSyncDialog({
     }
   };
 
-  const handleCsvChange = async (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const filePath = (file as unknown as { path?: string }).path;
-    if (!filePath) {
-      setError("Não foi possível obter o caminho absoluto do arquivo no sistema.");
-      e.target.value = "";
-      return;
-    }
-
+  const runCsvImport = async (filePath: string) => {
     try {
       setLoading(true);
       setError(null);
@@ -80,8 +70,32 @@ export function AimLabSyncDialog({
       setError(String(err) || "Erro ao importar arquivo CSV do Aim Lab");
     } finally {
       setLoading(false);
-      e.target.value = "";
     }
+  };
+
+  const handlePickCsv = async () => {
+    try {
+      const picked = await pickAimlabCsvFile();
+      if (picked) {
+        await runCsvImport(picked);
+      }
+    } catch (err: unknown) {
+      setError(String(err) || "Erro ao abrir seletor de arquivo CSV");
+    }
+  };
+
+  const handleCsvChange = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const filePath = (file as unknown as { path?: string }).path;
+    e.target.value = "";
+    if (!filePath) {
+      setError("Não foi possível obter o caminho absoluto do arquivo no sistema.");
+      return;
+    }
+
+    await runCsvImport(filePath);
   };
 
   const handleClose = () => {
@@ -161,20 +175,23 @@ export function AimLabSyncDialog({
                 {t("aimlab.csvDesc")}
               </p>
 
-              <label
-                className={`glass-control w-full h-8 px-2.5 text-xs rounded-control gap-1.5 text-text-main inline-flex items-center justify-center font-medium select-none transition cursor-pointer press ${
-                  loading ? "opacity-50 pointer-events-none" : ""
-                }`}
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                loading={loading}
+                onClick={handlePickCsv}
+                className="w-full"
+                icon={<UploadSimple size={14} weight="bold" />}
               >
-                <UploadSimple size={14} weight="bold" />
-                <span>{loading ? t("aimlab.csvReading") : t("aimlab.csvBtn")}</span>
-                <input
-                  type="file"
-                  accept=".csv"
-                  className="hidden"
-                  onChange={handleCsvChange}
-                />
-              </label>
+                {loading ? t("aimlab.csvReading") : t("aimlab.csvBtn")}
+              </Button>
+              <input
+                type="file"
+                accept=".csv"
+                className="hidden"
+                onChange={handleCsvChange}
+              />
             </div>
 
             <div className="flex justify-end pt-2 border-t border-edge">

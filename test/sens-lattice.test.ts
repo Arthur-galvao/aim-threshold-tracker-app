@@ -7,6 +7,8 @@ import {
   latticeIndex,
   gridBounds,
   gridPoints,
+  resolveRangeCm,
+  computeRangePreview,
   MIN_CM,
   MIN_GRID_POINTS,
 } from "../src/lib/sens-lattice.ts";
@@ -69,5 +71,41 @@ describe("sens-lattice module", () => {
   it("gridBounds respects MIN_CM floor of 5.0 cm", () => {
     const [lo] = gridBounds(2.0, 6.0);
     assert(latticeCm(lo) >= MIN_CM);
+  });
+
+  it("resolveRangeCm and computeRangePreview match log-symmetric bounds in autoScenarioSens and multiplier modes", () => {
+    const autoRange = resolveRangeCm(
+      {
+        baseSensCm: 40,
+        rangeMode: "cm360",
+        minCm: 30,
+        maxCm: 50,
+        minMult: 0.8,
+        maxMult: 1.25,
+        spreadPercent: 25,
+        autoScenarioSens: true,
+        scenarioIdealCm: 50,
+      },
+      50
+    );
+    assert.equal(autoRange.minCm, 40); // 50 / 1.25
+    assert.equal(autoRange.maxCm, 62.5); // 50 * 1.25
+
+    const preview = computeRangePreview(
+      {
+        baseSensCm: 40,
+        rangeMode: "multiplier",
+        minCm: 30,
+        maxCm: 50,
+        minMult: 0.8,
+        maxMult: 1.25,
+        spreadPercent: 20,
+        autoScenarioSens: false,
+      },
+      null
+    );
+    assert.equal(preview.minCm, 32); // 40 / 1.25
+    assert.equal(preview.maxCm, 50); // 40 / 0.8
+    assert(preview.gridCm.length >= MIN_GRID_POINTS);
   });
 });

@@ -524,6 +524,10 @@ export const dict = {
     "playlist.jumpToStep": "Ir para etapa",
     "playlist.up": "Mover para cima",
     "playlist.down": "Mover para baixo",
+    "randomizer.zoneFine": "Reconsolidação Fina (Micro / Static)",
+    "randomizer.zoneContextual": "Interferência Contextual (Padrão GMP)",
+    "randomizer.zoneEnvelope": "Exploração de Envelope Motor",
+    "randomizer.zoneOutWarning": "Extremo fora do envelope Pirâmide (20–80 cm/360)",
   },
   en: {
     "app.footer": "Aim Threshold Tracker · based on Viscose & Escalate by uno neon",
@@ -1034,6 +1038,10 @@ export const dict = {
     "playlist.jumpToStep": "Jump to step",
     "playlist.up": "Move up",
     "playlist.down": "Move down",
+    "randomizer.zoneFine": "Fine Reconsolidation (Micro / Static)",
+    "randomizer.zoneContextual": "Contextual Interference (Standard GMP)",
+    "randomizer.zoneEnvelope": "Motor Envelope Exploration",
+    "randomizer.zoneOutWarning": "Extreme outside Pyramid envelope (20–80 cm/360)",
   },
 } as const;
 

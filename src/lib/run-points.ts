@@ -18,10 +18,14 @@ export interface RunPoint {
 }
 
 export const TS_RE = /(\d{4})\.(\d{2})\.(\d{2})-(\d{2})\.(\d{2})\.(\d{2})/;
+export const ISO_TS_RE = /(\d{4})-(\d{2})-(\d{2})[T_ ](\d{2}):(\d{2}):(\d{2})/;
 
 export function runTimestamp(sess: { date: string; sourceFile?: string }): string {
-  const m = sess.sourceFile?.match(TS_RE);
-  return m ? m.slice(1, 7).join("") : sess.date.replace(/-/g, "") + "000000";
+  const m =
+    sess.sourceFile?.match(TS_RE) ??
+    sess.sourceFile?.match(ISO_TS_RE) ??
+    sess.date?.match(ISO_TS_RE);
+  return m ? m.slice(1, 7).join("") : sess.date.replace(/-/g, "").slice(0, 8) + "000000";
 }
 
 function computeMedian(arr: number[]): number {

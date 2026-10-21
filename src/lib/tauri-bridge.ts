@@ -101,6 +101,18 @@ export async function pickStatsFolder(): Promise<string | null> {
   return selected ?? null;
 }
 
+export async function pickAimlabCsvFile(): Promise<string | null> {
+  if (!isTauri()) return null;
+  const selected = await open({
+    directory: false,
+    multiple: false,
+    title: "Selecione o arquivo CSV do Aim Lab",
+    filters: [{ name: "CSV", extensions: ["csv"] }],
+  });
+  if (Array.isArray(selected)) return selected[0] ?? null;
+  return selected ?? null;
+}
+
 export async function getSettings(): Promise<AppSettings> {
   if (!isTauri()) {
     if (typeof localStorage !== "undefined") {
@@ -230,4 +242,3 @@ export async function openExternalUrl(url: string): Promise<void> {
   }
   window.open(url, "_blank", "noopener,noreferrer");
 }
-

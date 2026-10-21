@@ -10,9 +10,11 @@ export interface RangePresetsProps {
   inGameValorant: number;
   inGameSource: number;
   parsedDpi: number;
+  minCm?: number;
+  maxCm?: number;
 }
 
-const SPREAD_PRESETS = [15, 20, 25, 30];
+const SPREAD_PRESETS = [10, 15, 20, 25, 30];
 const DPI_PRESETS = [400, 800, 1600, 3200];
 
 export function RangePresets({
@@ -23,16 +25,41 @@ export function RangePresets({
   inGameValorant,
   inGameSource,
   parsedDpi,
+  minCm,
+  maxCm,
 }: RangePresetsProps) {
   const { t } = useI18n();
 
+  const zoneLabel =
+    spreadPercent <= 12
+      ? t("randomizer.zoneFine")
+      : spreadPercent <= 22
+        ? t("randomizer.zoneContextual")
+        : t("randomizer.zoneEnvelope");
+
+  const isOutsideBiomechEnvelope =
+    (minCm !== undefined && minCm > 0 && minCm < 20) ||
+    (maxCm !== undefined && maxCm > 80);
+
   return (
     <div className="space-y-3">
-      {/* In-Game Previews */}
+      {/* In-Game Previews & Biomechanical Regime */}
       <div className="liquid-well p-3 rounded-control flex flex-col justify-center space-y-1.5">
-        <span className="text-[11px] text-text-faint font-medium">
-          {t("randomizer.inGameEquivalent")} ({parsedDpi} DPI)
-        </span>
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-[11px] text-text-faint font-medium">
+            {t("randomizer.inGameEquivalent")} ({parsedDpi} DPI)
+          </span>
+          <span
+            className={cn(
+              "text-[10px] font-mono px-1.5 py-0.5 rounded border",
+              isOutsideBiomechEnvelope
+                ? "text-amber bg-amber/10 border-amber/30"
+                : "text-score bg-score-soft border-score-edge"
+            )}
+          >
+            {isOutsideBiomechEnvelope ? t("randomizer.zoneOutWarning") : zoneLabel}
+          </span>
+        </div>
         <div className="flex items-center gap-4 text-xs font-mono tabular">
           <div className="flex items-baseline gap-1.5">
             <span className="text-text-faint">Val:</span>
@@ -74,7 +101,7 @@ export function RangePresets({
                   type="button"
                   onClick={() => onSelectSpread(p)}
                   className={cn(
-                    "flex-1 py-1.5 px-2 rounded-control text-xs font-mono tabular transition-all duration-150 cursor-pointer border hover:-translate-y-[1px] active:scale-[0.96] active:translate-y-0",
+                    "flex-1 py-1.5 px-1.5 rounded-control text-xs font-mono tabular transition-all duration-150 cursor-pointer border hover:-translate-y-[1px] active:scale-[0.96] active:translate-y-0",
                     active
                       ? "bg-score-soft border-score-edge text-text-main font-bold shadow-1"
                       : "liquid-well border-edge text-text-faint hover:text-text-main hover:border-edge-strong"

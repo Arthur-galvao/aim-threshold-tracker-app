@@ -568,6 +568,20 @@ describe("playlist-sync and detection", () => {
       assert.equal(tasks[1].name, "VT Kontr");
       // VT Kontr matches control tracking rule
       assert.equal(tasks[1].category, "Control Tracking");
+      assert.deepEqual(categorizeScenario("VT Adjustshot Micro Small"), { category: "Flick Tech", subcategory: "Micro" });
+      assert.deepEqual(categorizeScenario("rA Twoshot Narrow"), { category: "Flick Tech", subcategory: "Stability" });
+      assert.deepEqual(categorizeScenario("VT DotTS VALORANT Easy"), { category: "Flick Tech", subcategory: "Post-Flick" });
+      assert.deepEqual(categorizeScenario("SpiderShot"), { category: "Flick Tech", subcategory: "Speed" });
+      assert.deepEqual(categorizeScenario("VT Floating Dots"), { category: "Click Timing", subcategory: "Reading" });
+      assert.deepEqual(categorizeScenario("VT 1w4ts"), { category: "Click Timing", subcategory: "Stability" });
+      assert.deepEqual(categorizeScenario("1wall 6targets small"), { category: "Click Timing", subcategory: "Precision" });
+      assert.deepEqual(categorizeScenario("Smoothbot Unranked"), { category: "Control Tracking", subcategory: "Arm" });
+      assert.deepEqual(categorizeScenario("VT Controltrack Novice"), { category: "Control Tracking", subcategory: "Wrist" });
+      assert.deepEqual(categorizeScenario("Whisphere"), { category: "Control Tracking", subcategory: "Fingertip" });
+      assert.deepEqual(categorizeScenario("VT Suave"), { category: "Control Tracking", subcategory: "Blending" });
+      assert.deepEqual(categorizeScenario("Ground Plaza Voltaic"), { category: "Reactive Tracking", subcategory: "Control" });
+      assert.deepEqual(categorizeScenario("rA ReactiveXY Easy"), { category: "Reactive Tracking", subcategory: "Reading" });
+      assert.deepEqual(categorizeScenario("Bounce 180 Tracking Switching"), { category: "Reactive Tracking", subcategory: "Speed" });
     });
   });
 

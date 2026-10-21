@@ -53,11 +53,30 @@ pub fn spawn(app: AppHandle, path: PathBuf) -> Result<WatcherHandle, String> {
                 }
             };
 
-            if let Err(e) = watcher.watch(&path, RecursiveMode::NonRecursive) {
-                let _ = app.emit(
-                    "watcher_error",
-                    format!("Falha ao observar a pasta {}: {e}", path.display()),
-                );
+            let mut watched_any = false;
+            if path.exists() && path.is_dir() {
+                if let Err(e) = watcher.watch(&path, RecursiveMode::NonRecursive) {
+                    let _ = app.emit(
+                        "watcher_error",
+                        format!("Falha ao observar a pasta {}: {e}", path.display()),
+                    );
+                } else {
+                    watched_any = true;
+                }
+            }
+
+            if let Some(aimlab_replay_dir) = crate::aimlab::find_active_aimlab_replay_dir() {
+                if aimlab_replay_dir != path && aimlab_replay_dir.exists() && aimlab_replay_dir.is_dir() {
+                    if watcher
+                        .watch(&aimlab_replay_dir, RecursiveMode::NonRecursive)
+                        .is_ok()
+                    {
+                        watched_any = true;
+                    }
+                }
+            }
+
+            if !watched_any {
                 return;
             }
 
@@ -87,6 +106,11 @@ fn handle_event(app: &AppHandle, event: Event) {
             thread::spawn(move || {
                 let _ = process_new_csv(&app, &path);
             });
+        } else if is_aimlab_replay_json(&path) {
+            let app = app.clone();
+            thread::spawn(move || {
+                let _ = process_new_aimlab_replay(&app, &path);
+            });
         }
     }
 }
@@ -99,9 +123,92 @@ fn is_stats_csv(path: &Path) -> bool {
     name.ends_with(".csv") && name.contains("stats")
 }
 
+pub fn is_aimlab_replay_json(path: &Path) -> bool {
+    let is_json = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|s| s.eq_ignore_ascii_case("json"))
+        .unwrap_or(false);
+    if !is_json {
+        return false;
+    }
+    path.parent()
+        .and_then(|p| p.file_name())
+        .and_then(|n| n.to_str())
+        .map(|n| n.eq_ignore_ascii_case("replay"))
+        .unwrap_or(false)
+}
+
 #[allow(dead_code)]
 pub fn plan_roll(enabled: bool, dedupe_hit: bool) -> bool {
     enabled && !dedupe_hit
+}
+
+fn process_new_aimlab_replay(app: &AppHandle, path: &Path) -> Result<bool, String> {
+    let state: State<AppState> = app.state();
+    let file_name = path
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_default();
+
+    // 1. Dedupe by replay filename before any side effect
+    if !state.emitted.lock().unwrap().insert(format!("aimlab_replay_{file_name}")) {
+        return Ok(false);
+    }
+
+    // 2. Snapshot sensitivity used during the finished run
+    let (is_randomizer_enabled, active_sens, mouse_dpi) = {
+        let s = state.settings.lock().unwrap();
+        let r = state.randomizer_state.lock().unwrap();
+        (s.randomizer.enabled, r.active_sens_cm, s.mouse_dpi)
+    };
+
+    // 3. Wait for replay JSON flush and parse
+    let name_map = crate::aimlab::build_aimlab_scenario_map();
+    let mut parsed_run: Option<KovaakRun> = None;
+    for _ in 0..8 {
+        thread::sleep(Duration::from_millis(350));
+        if let Some(r) = crate::aimlab::parse_aimlab_replay_file(path, &name_map, mouse_dpi) {
+            parsed_run = Some(r);
+            break;
+        }
+    }
+
+    let mut run = match parsed_run {
+        Some(r) => r,
+        None => return Err(format!("Não foi possível ler o Replay do Aim Lab: {}", path.display())),
+    };
+
+    // 4. Roll next sensitivity via RawAccel serialized by roll_lock
+    if is_randomizer_enabled {
+        let _ = crate::randomizer::apply_next_sens(
+            app,
+            crate::randomizer::RollContext {
+                finished_scenario: Some(run.scenario.clone()),
+                reason: "run_end".into(),
+            },
+        );
+    }
+
+    let already_imported = {
+        let data = state.data.lock().unwrap();
+        has_source_file(&data.tasks, &run.source_file)
+    };
+    if already_imported {
+        return Ok(false);
+    }
+
+    if is_randomizer_enabled && active_sens > 0.0 {
+        run.sens = active_sens;
+    }
+
+    app.emit("new_run", &run).map_err(|e| e.to_string())?;
+
+    if is_randomizer_enabled {
+        crate::randomizer::record_last_run(app, &run.scenario, run.score);
+    }
+
+    Ok(true)
 }
 
 fn process_new_csv(app: &AppHandle, path: &Path) -> Result<bool, String> {
@@ -426,6 +533,16 @@ mod tests {
     }
 
     #[test]
+    fn test_is_aimlab_replay_json() {
+        let p1 = Path::new(r"C:\Users\Test\AppData\LocalLow\Statespace\aimlab_tb\Users\123\Replay\8699003e.json");
+        let p2 = Path::new(r"C:\Users\Test\AppData\LocalLow\Statespace\aimlab_tb\Users\123\Playlists\warmup.json");
+        let p3 = Path::new(r"C:\Users\Test\AppData\LocalLow\Statespace\aimlab_tb\Users\123\Replay\thumb.jpg");
+        assert!(is_aimlab_replay_json(p1));
+        assert!(!is_aimlab_replay_json(p2));
+        assert!(!is_aimlab_replay_json(p3));
+    }
+
+    #[test]
     fn test_migrate_preserves_randomized_and_cm_sens() {
         let mut data = AppData {
             active_task_id: Some("t1".into()),
@@ -438,7 +555,7 @@ mod tests {
                     Session {
                         id: "s1".into(),
                         date: "2026-09-18".into(),
-                        sens: 75.0, // Randomized sensitivity
+                        sens: 75.0,
                         pb: 120.0,
                         threshold: 110.0,
                         source_file: Some("run1.csv".into()),
@@ -446,7 +563,7 @@ mod tests {
                     Session {
                         id: "s2".into(),
                         date: "2026-09-18".into(),
-                        sens: 50.0, // Base sensitivity
+                        sens: 50.0,
                         pb: 115.0,
                         threshold: 110.0,
                         source_file: Some("run2.csv".into()),
@@ -475,7 +592,7 @@ mod tests {
                 sessions: vec![Session {
                     id: "s1".into(),
                     date: "2026-09-18".into(),
-                    sens: 0.24, // Legacy Valorant sensitivity (< 2.5)
+                    sens: 0.24,
                     pb: 120.0,
                     threshold: 110.0,
                     source_file: None,
@@ -539,5 +656,3 @@ mod tests {
         assert_eq!(parsed_dash, Some("VT Pasu - Small".to_string()));
     }
 }
-
-

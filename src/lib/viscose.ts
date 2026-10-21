@@ -35,33 +35,240 @@ interface ScenarioRule {
 }
 
 const SCENARIO_RULES: ScenarioRule[] = [
+  // 1. Control Tracking -> Fingertip (40 cm/360)
   {
-    test: (n) => n.includes("pasu"),
-    category: "Click Timing",
+    test: (n) =>
+      [
+        "fingertip",
+        "microtrack",
+        "clover",
+        "whisphere",
+        "preciseorb",
+        "thin track",
+        "thin aiming",
+      ].some((k) => n.includes(k)),
+    category: "Control Tracking",
+    subcategory: "Fingertip",
+  },
+  // 2. Control Tracking -> Blending (44 cm/360)
+  {
+    test: (n) =>
+      [
+        "suave",
+        "blending",
+        "controlsphere",
+        "sphere",
+        "flower",
+        "smoothness",
+      ].some((k) => n.includes(k)),
+    category: "Control Tracking",
+    subcategory: "Blending",
+  },
+  // 3. Control Tracking -> Arm (34 cm/360)
+  {
+    test: (n) =>
+      [
+        "smoothbot",
+        "pgti",
+        "air ",
+        "air_",
+        "air angelic",
+        "air voltaic",
+        "angelic",
+        "ufo",
+        "sky",
+        "omnitrack",
+        "centering i",
+        "arm track",
+      ].some((k) => n.includes(k)),
+    category: "Control Tracking",
+    subcategory: "Arm",
+  },
+  // 4. Reactive Tracking -> Speed (28 cm/360)
+  {
+    test: (n) =>
+      ["bounce 180 tracking", "fast strafes", "cfsi", "switching", "switch"].some((k) =>
+        n.includes(k)
+      ),
+    category: "Reactive Tracking",
+    subcategory: "Speed",
+  },
+  // 5. Control Tracking -> Wrist (44 cm/360)
+  {
+    test: (n) =>
+      [
+        "smooth",
+        "controltrack",
+        "vt contr",
+        "pilltrack",
+        "edgetrack",
+        "xy track",
+        "xytracks",
+        "tracking",
+        "centering",
+        "prediction",
+        "cata",
+        "control",
+        "pressure",
+        "kontr",
+        "contr",
+        "gentlesw",
+        "curveswi",
+        "dueltrac",
+        "droidtra",
+      ].some((k) => n.includes(k)),
+    category: "Control Tracking",
+    subcategory: "Wrist",
+  },
+  // 6. Reactive Tracking -> Control (34 cm/360)
+  {
+    test: (n) =>
+      [
+        "ground plaza",
+        "plaza",
+        "midrange",
+        "ra close",
+        "close fast",
+        "bouncetr",
+      ].some((k) => n.includes(k)),
+    category: "Reactive Tracking",
+    subcategory: "Control",
+  },
+  // 7. Reactive Tracking -> Reading (30 cm/360)
+  {
+    test: (n) =>
+      ["fuglaa", "reactive", "reactiv", "straf", "longstrafes", "tam", "aether"].some(
+        (k) => n.includes(k)
+      ),
+    category: "Reactive Tracking",
     subcategory: "Reading",
   },
+  // 8. Flick Tech -> Micro (65 cm/360)
+  {
+    test: (n) =>
+      [
+        "microshot",
+        "adjustshot",
+        "vt adjus",
+        "cartoonshot",
+        "vt carto",
+        "smallblinks",
+        "1w1ts",
+        "6 sphere",
+        "hipfire",
+        "cluster",
+        "berry",
+      ].some((k) => n.includes(k)) || /\bmicro\b/.test(n),
+    category: "Flick Tech",
+    subcategory: "Micro",
+  },
+  // 9. Flick Tech -> Post-Flick (44 cm/360)
+  {
+    test: (n) =>
+      [
+        "dotts",
+        "devts",
+        "patts",
+        "voxts",
+        "psalmts",
+        "evasive",
+        "kinda",
+        "pokeball",
+        "post-flick",
+      ].some((k) => n.includes(k)) || /\bkin\b/.test(n),
+    category: "Flick Tech",
+    subcategory: "Post-Flick",
+  },
+  // 10. Flick Tech -> Stability (55 cm/360)
+  {
+    test: (n) =>
+      [
+        "multiclick",
+        "hs strafe",
+        "vt hs st",
+        "angleshot",
+        "vt angle",
+        "peekshot",
+        "twoshot",
+        "ra twosh",
+        "vt twosh",
+        "fiveshot",
+        "vt fives",
+        "phaseshot",
+        "vt phase",
+      ].some((k) => n.includes(k)),
+    category: "Flick Tech",
+    subcategory: "Stability",
+  },
+  // 11. Click Timing -> Stability (50 cm/360)
+  {
+    test: (n) =>
+      [
+        "1w2ts",
+        "1w3ts",
+        "1w4ts",
+        "linear",
+        "siniclick",
+        "oneshot",
+        "vt onesh",
+        "pattarget click",
+      ].some((k) => n.includes(k)),
+    category: "Click Timing",
+    subcategory: "Stability",
+  },
+  // 12. Click Timing -> Precision (60 cm/360)
   {
     test: (n) =>
       /1w\d*te?s/.test(n) ||
-      ["1wall", "2wall", "3wall", "4wall", "5wall", "6wall"].some((w) =>
+      ["1wall", "2wall", "3wall", "4wall", "5wall", "6wall", "sixshot"].some((w) =>
         n.includes(w)
       ),
     category: "Click Timing",
     subcategory: "Precision",
   },
-  {
-    test: (n) => n.includes("microshot"),
-    category: "Flick Tech",
-    subcategory: "Micro",
-  },
+  // 13. Click Timing -> Reading (45 cm/360)
   {
     test: (n) =>
-      ["wall", "flick", "reflex", "vex", "fan the hammer", "pistol"].some((k) =>
-        n.includes(k)
-      ),
+      [
+        "pasu",
+        "floatshot",
+        "vt float",
+        "floating dots",
+        "popcorn",
+        "popshot",
+        "vt popsh",
+        "b180",
+        "bouncesh",
+        "flyshot",
+        "arc",
+      ].some((k) => n.includes(k)) || /ts\b/.test(n),
+    category: "Click Timing",
+    subcategory: "Reading",
+  },
+  // 14. Flick Tech -> Speed (45 cm/360)
+  {
+    test: (n) =>
+      [
+        "wall",
+        "flick",
+        "reflex",
+        "vex",
+        "fan the hammer",
+        "pistol",
+        "spidershot",
+        "gridshot",
+        "deepflic",
+      ].some((k) => n.includes(k)),
     category: "Flick Tech",
     subcategory: "Speed",
   },
+  // 15. Reactive Tracking -> Speed fallback
+  {
+    test: (n) => ["bounce", "ground"].some((k) => n.includes(k)),
+    category: "Reactive Tracking",
+    subcategory: "Speed",
+  },
+  // 15. General Click Timing -> Precision fallback for click/shot tasks
   {
     test: (n) =>
       ["click", "vbr", "target switch", "target_speed", "plink", "shot"].some(
@@ -69,50 +276,6 @@ const SCENARIO_RULES: ScenarioRule[] = [
       ),
     category: "Click Timing",
     subcategory: "Precision",
-  },
-  {
-    test: (n) => /ts\b/.test(n),
-    category: "Click Timing",
-    subcategory: "Reading",
-  },
-  {
-    test: (n) =>
-      ["fuglaa", "reactive", "straf", "longstrafes", "tam", "aether"].some(
-        (k) => n.includes(k)
-      ),
-    category: "Reactive Tracking",
-    subcategory: "Reading",
-  },
-  {
-    test: (n) =>
-      [
-        "smooth",
-        "angelic",
-        "ufo",
-        "pokeball",
-        "narrow",
-        "sphere",
-        "sky",
-        "flower",
-        "air ",
-        "air_",
-      ].some((k) => n.includes(k)),
-    category: "Control Tracking",
-    subcategory: "Wrist",
-  },
-  {
-    test: (n) =>
-      ["bounce", "ground", "switching", "switch"].some((k) => n.includes(k)),
-    category: "Reactive Tracking",
-    subcategory: "Speed",
-  },
-  {
-    test: (n) =>
-      ["tracking", "centering", "prediction", "cata", "control", "pressure", "kontr", "contr"].some(
-        (k) => n.includes(k)
-      ),
-    category: "Control Tracking",
-    subcategory: "Wrist",
   },
 ];
 

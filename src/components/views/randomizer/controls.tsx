@@ -120,15 +120,18 @@ export function Controls({
   }, [activeTask, parsedDpi]);
 
   const currentCenterCm = useMemo(() => {
+    if (draft.autoScenarioSens) {
+      return idealSens?.value ?? settings.scenarioIdealCm ?? parsedBase;
+    }
     if (draft.rangeMode === "multiplier") {
       const minM = parsedMinMult > 0 ? parsedMinMult : 0.75;
       const maxM = parsedMaxMult > minM ? parsedMaxMult : 1.35;
-      return parsedBase * Math.sqrt(minM * maxM);
+      return parsedBase / Math.sqrt(minM * maxM);
     }
     const minC = parsedMinCm > 0 ? parsedMinCm : 28;
     const maxC = parsedMaxCm > minC ? parsedMaxCm : 55;
     return Math.sqrt(minC * maxC);
-  }, [draft.rangeMode, parsedBase, parsedMinMult, parsedMaxMult, parsedMinCm, parsedMaxCm]);
+  }, [draft.autoScenarioSens, idealSens, settings.scenarioIdealCm, draft.rangeMode, parsedBase, parsedMinMult, parsedMaxMult, parsedMinCm, parsedMaxCm]);
 
   const recenterSuggestion = useMemo(() => {
     return suggestRecenter(localPrediction, currentCenterCm);
@@ -151,7 +154,7 @@ export function Controls({
       const currentMin = parsedMinMult > 0 ? parsedMinMult : 0.75;
       const currentMax = parsedMaxMult > currentMin ? parsedMaxMult : 1.35;
       const r = Math.sqrt(currentMax / currentMin);
-      const centerMult = suggested / (parsedBase || 40);
+      const centerMult = (parsedBase || 40) / suggested;
       const nextMin = Number((centerMult / r).toFixed(2));
       const nextMax = Number((centerMult * r).toFixed(2));
       setDraft((prev) => {
@@ -249,6 +252,8 @@ export function Controls({
           inGameValorant={inGameValorant}
           inGameSource={inGameSource}
           parsedDpi={parsedDpi}
+          minCm={calculatedRange.minCm}
+          maxCm={calculatedRange.maxCm}
         />
 
         {/* Auto Scenario Sens Switch & Avoid Repeats Switch */}
