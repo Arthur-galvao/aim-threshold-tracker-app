@@ -7,6 +7,29 @@ import {
 } from "@/lib/sens-analytics";
 import { latticeIndex } from "@/lib/sens-lattice";
 
+function getThemePalette() {
+  if (typeof document === "undefined") {
+    return {
+      score: "#5ec5ff",
+      scoreFill: "rgba(94, 197, 255, 0.26)",
+      emerald: "#4adea8",
+      amber: "#fbbf5a",
+      red: "#ff6b81",
+      textSecondary: "#a9b4c6",
+      textFaint: "#7a8699",
+    };
+  }
+  const style = getComputedStyle(document.documentElement);
+  const score = style.getPropertyValue("--score").trim() || "#5ec5ff";
+  const scoreFill = style.getPropertyValue("--score-soft").trim() || "rgba(94, 197, 255, 0.24)";
+  const emerald = style.getPropertyValue("--emerald").trim() || "#4adea8";
+  const amber = style.getPropertyValue("--amber").trim() || "#fbbf5a";
+  const red = style.getPropertyValue("--red").trim() || "#ff6b81";
+  const textSecondary = style.getPropertyValue("--text-secondary").trim() || "#a9b4c6";
+  const textFaint = style.getPropertyValue("--text-faint").trim() || "#7a8699";
+  return { score, scoreFill, emerald, amber, red, textSecondary, textFaint };
+}
+
 export interface BuildDatasetsParams {
   validRuns: RunDataPoint[];
   isNormalized: boolean;
@@ -36,6 +59,8 @@ export function buildChartDatasets({
   if (validRuns.length === 0) {
     return { datasets: [] };
   }
+
+  const palette = getThemePalette();
 
   const scatterPoints = validRuns.map((s) => ({
     x: s.sens,
@@ -91,8 +116,8 @@ export function buildChartDatasets({
       type: "scatter" as const,
       label: isNormalized ? labels.normPb : labels.rawScore,
       data: scatterPoints,
-      backgroundColor: "rgba(94, 197, 255, 0.25)",
-      borderColor: "rgb(94, 197, 255)",
+      backgroundColor: palette.scoreFill,
+      borderColor: palette.score,
       borderWidth: 1.5,
       pointRadius: 4.5,
       pointHoverRadius: 7,
@@ -104,9 +129,9 @@ export function buildChartDatasets({
       type: "line" as const,
       label: labels.chartKernel,
       data: kernelCurvePoints,
-      borderColor: "rgb(94, 197, 255)",
+      borderColor: palette.score,
       backgroundColor: "transparent",
-      borderWidth: 2,
+      borderWidth: 2.2,
       pointRadius: 0,
       fill: false,
       tension: 0.25,
@@ -118,7 +143,7 @@ export function buildChartDatasets({
       type: "line" as const,
       label: labels.chartTrend,
       data: quadCurvePoints,
-      borderColor: "rgb(251, 191, 90)",
+      borderColor: palette.amber,
       backgroundColor: "transparent",
       borderWidth: 2,
       borderDash: [5, 4],
@@ -164,13 +189,16 @@ export function buildChartDatasets({
   if (
     effectivePrediction &&
     effectivePrediction.vertexSens != null &&
+    effectivePrediction.vertexSens > 0 &&
     effectivePrediction.scoreEstimate != null
   ) {
     const yEst = effectivePrediction.scoreEstimate;
     if (
       effectivePrediction.ci &&
       effectivePrediction.ci.low != null &&
-      effectivePrediction.ci.high != null
+      effectivePrediction.ci.low > 0 &&
+      effectivePrediction.ci.high != null &&
+      effectivePrediction.ci.high > 0
     ) {
       datasets.push({
         type: "line" as const,
@@ -179,7 +207,7 @@ export function buildChartDatasets({
           { x: effectivePrediction.ci.low, y: yEst },
           { x: effectivePrediction.ci.high, y: yEst },
         ],
-        borderColor: "rgb(74, 222, 168)",
+        borderColor: palette.emerald,
         backgroundColor: "transparent",
         borderWidth: 3,
         pointRadius: 3,
@@ -191,8 +219,8 @@ export function buildChartDatasets({
       type: "scatter" as const,
       label: labels.predictorApex,
       data: [{ x: effectivePrediction.vertexSens, y: yEst }],
-      backgroundColor: "rgb(255, 107, 129)",
-      borderColor: "rgb(255, 107, 129)",
+      backgroundColor: palette.red,
+      borderColor: palette.red,
       pointRadius: 7,
       pointHoverRadius: 9,
       pointStyle: "rectRot",
@@ -213,26 +241,28 @@ export function buildChartOptions(
     chartTrendLabel: string;
   }
 ): ChartOptions<"scatter"> {
+  const palette = getThemePalette();
+
   return {
     responsive: true,
     maintainAspectRatio: false,
-    animation: { duration: 350 },
+    animation: { duration: 320 },
     plugins: {
       legend: {
         display: true,
         position: "top" as const,
         labels: {
-          color: "#a9b4c6",
+          color: palette.textSecondary,
           font: { size: 11, family: "Geist Variable, system-ui, sans-serif" },
           boxWidth: 10,
           usePointStyle: true,
         },
       },
       tooltip: {
-        backgroundColor: "rgba(26, 34, 52, 0.95)",
+        backgroundColor: "rgba(12, 16, 26, 0.92)",
         titleColor: "#f4f7fb",
-        bodyColor: "#a9b4c6",
-        borderColor: "rgba(255, 255, 255, 0.1)",
+        bodyColor: palette.textSecondary,
+        borderColor: "rgba(255, 255, 255, 0.14)",
         borderWidth: 1,
         padding: 10,
         cornerRadius: 12,
@@ -258,12 +288,12 @@ export function buildChartOptions(
         title: {
           display: true,
           text: labels.chartSensAxis,
-          color: "#7a8699",
+          color: palette.textFaint,
           font: { size: 11 },
         },
         grid: { color: "rgba(255, 255, 255, 0.05)" },
         ticks: {
-          color: "#a9b4c6",
+          color: palette.textSecondary,
           font: { family: "Geist Mono Variable, monospace" },
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           callback: (value: any) => `${Number(value).toFixed(0)}`,
@@ -273,12 +303,12 @@ export function buildChartOptions(
         title: {
           display: true,
           text: isNormalized ? labels.normPb : labels.rawScore,
-          color: "#7a8699",
+          color: palette.textFaint,
           font: { size: 11 },
         },
         grid: { color: "rgba(255, 255, 255, 0.05)" },
         ticks: {
-          color: "#a9b4c6",
+          color: palette.textSecondary,
           font: { family: "Geist Mono Variable, monospace" },
         },
       },

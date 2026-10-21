@@ -1,4 +1,5 @@
 import { useI18n } from "@/lib/i18n";
+import { NumberTicker } from "@/components/ui/NumberTicker";
 import { cn } from "@/lib/utils";
 
 export interface RangePresetsProps {
@@ -28,18 +29,27 @@ export function RangePresets({
   return (
     <div className="space-y-3">
       {/* In-Game Previews */}
-      <div className="glass-inset p-3 rounded-control flex flex-col justify-center space-y-1">
+      <div className="liquid-well p-3 rounded-control flex flex-col justify-center space-y-1.5">
         <span className="text-[11px] text-text-faint font-medium">
           {t("randomizer.inGameEquivalent")} ({parsedDpi} DPI)
         </span>
-        <div className="flex items-center gap-3 text-xs font-mono tabular">
-          <div>
-            <span className="text-text-faint mr-1">Val:</span>
-            <span className="font-semibold text-text-main">{inGameValorant}</span>
+        <div className="flex items-center gap-4 text-xs font-mono tabular">
+          <div className="flex items-baseline gap-1.5">
+            <span className="text-text-faint">Val:</span>
+            <NumberTicker
+              value={inGameValorant}
+              decimalPlaces={3}
+              className="font-semibold text-text-main"
+            />
           </div>
-          <div>
-            <span className="text-text-faint mr-1">Source:</span>
-            <span className="font-semibold text-text-main">{inGameSource}</span>
+          <div className="h-3 w-[1px] bg-edge" />
+          <div className="flex items-baseline gap-1.5">
+            <span className="text-text-faint">Source:</span>
+            <NumberTicker
+              value={inGameSource}
+              decimalPlaces={2}
+              className="font-semibold text-text-main"
+            />
           </div>
         </div>
       </div>
@@ -48,49 +58,63 @@ export function RangePresets({
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="space-y-1.5">
           <div className="flex items-center justify-between text-xs">
-            <span className="font-semibold text-text-secondary">{t("randomizer.spreadPercent")}</span>
-            <span className="font-mono text-text-faint tabular">±{spreadPercent}%</span>
+            <span className="font-semibold text-text-secondary">
+              {t("randomizer.spreadPercent")}
+            </span>
+            <span className="font-mono text-score font-semibold tabular">
+              ±{spreadPercent}%
+            </span>
           </div>
           <div className="flex items-center gap-1.5">
-            {SPREAD_PRESETS.map((p) => (
-              <button
-                key={p}
-                type="button"
-                onClick={() => onSelectSpread(p)}
-                className={cn(
-                  "flex-1 py-1 px-2 rounded-control text-xs font-mono tabular transition-all cursor-pointer press",
-                  spreadPercent === p
-                    ? "glass-control text-text-main font-bold border border-edge-strong shadow-1"
-                    : "text-text-faint hover:text-text-main"
-                )}
-              >
-                ±{p}%
-              </button>
-            ))}
+            {SPREAD_PRESETS.map((p) => {
+              const active = spreadPercent === p;
+              return (
+                <button
+                  key={p}
+                  type="button"
+                  onClick={() => onSelectSpread(p)}
+                  className={cn(
+                    "flex-1 py-1.5 px-2 rounded-control text-xs font-mono tabular transition-all duration-150 cursor-pointer border hover:-translate-y-[1px] active:scale-[0.96] active:translate-y-0",
+                    active
+                      ? "bg-score-soft border-score-edge text-text-main font-bold shadow-1"
+                      : "liquid-well border-edge text-text-faint hover:text-text-main hover:border-edge-strong"
+                  )}
+                >
+                  ±{p}%
+                </button>
+              );
+            })}
           </div>
         </div>
 
         <div className="space-y-1.5">
           <div className="flex items-center justify-between text-xs">
-            <span className="font-semibold text-text-secondary">{t("randomizer.mouseDpi")}</span>
-            <span className="font-mono text-text-faint tabular">{mouseDpi}</span>
+            <span className="font-semibold text-text-secondary">
+              {t("randomizer.mouseDpi")}
+            </span>
+            <span className="font-mono text-score font-semibold tabular">
+              {mouseDpi}
+            </span>
           </div>
           <div className="flex items-center gap-1.5">
-            {DPI_PRESETS.map((dpi) => (
-              <button
-                key={dpi}
-                type="button"
-                onClick={() => onSelectDpi(dpi)}
-                className={cn(
-                  "flex-1 py-1 px-2 rounded-control text-xs font-mono tabular transition-all cursor-pointer press",
-                  String(dpi) === mouseDpi
-                    ? "glass-control text-text-main font-bold border border-edge-strong shadow-1"
-                    : "text-text-faint hover:text-text-main"
-                )}
-              >
-                {dpi}
-              </button>
-            ))}
+            {DPI_PRESETS.map((dpi) => {
+              const active = String(dpi) === mouseDpi;
+              return (
+                <button
+                  key={dpi}
+                  type="button"
+                  onClick={() => onSelectDpi(dpi)}
+                  className={cn(
+                    "flex-1 py-1.5 px-2 rounded-control text-xs font-mono tabular transition-all duration-150 cursor-pointer border hover:-translate-y-[1px] active:scale-[0.96] active:translate-y-0",
+                    active
+                      ? "bg-score-soft border-score-edge text-text-main font-bold shadow-1"
+                      : "liquid-well border-edge text-text-faint hover:text-text-main hover:border-edge-strong"
+                  )}
+                >
+                  {dpi}
+                </button>
+              );
+            })}
           </div>
         </div>
       </div>

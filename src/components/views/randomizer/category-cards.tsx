@@ -148,19 +148,33 @@ export function CategoryCards({
     return <Badge variant={c.variant}>{t(c.textKey)}</Badge>;
   };
 
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    e.currentTarget.style.setProperty("--mx", `${e.clientX - rect.left}px`);
+    e.currentTarget.style.setProperty("--my", `${e.clientY - rect.top}px`);
+  };
+
   return (
-    <div style={style} className={cn("liquid-surface p-5 rounded-tile space-y-4", className)}>
+    <div
+      style={style}
+      onMouseMove={handleMouseMove}
+      className={cn(
+        "liquid-surface liquid-interactive p-5 rounded-tile space-y-4",
+        className
+      )}
+    >
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-edge">
         <div>
-          <h2 className="text-[13px] font-semibold text-text-secondary">
+          <h2 className="text-xs font-semibold text-text-main tracking-tight">
             {t("categorySens.title") || "Sensibilidade por Categoria e Playlists"}
           </h2>
-          <p className="text-xs text-text-faint mt-0.5">
+          <p className="text-[11px] text-text-faint mt-0.5">
             {t("categorySens.subtitle") || "Recomendações e benchmarking empírico por grupo motor"}
           </p>
         </div>
 
         <Segmented
+          id="category-playlist-sens-tab"
           options={[
             { value: "category", label: t("randomizer.scopeCategory") || "Categorias" },
             { value: "playlist", label: t("randomizer.scopePlaylist") || "Playlists" },
@@ -177,9 +191,14 @@ export function CategoryCards({
             {t("categorySens.empty") || "Nenhum dado por categoria registrado."}
           </div>
         ) : (
-          <div className="overflow-x-auto scroll-y liquid-well rounded-control p-1">
+          <div
+            tabIndex={0}
+            role="region"
+            aria-label={t("categorySens.title") || "Categorias"}
+            className="overflow-auto max-h-[420px] scroll-y liquid-well rounded-control p-1"
+          >
             <table className="w-full text-left text-xs border-collapse">
-              <thead>
+              <thead className="sticky top-0 z-10 bg-base/90 backdrop-blur-md">
                 <tr className="border-b border-edge text-[11px] font-semibold text-text-faint uppercase tracking-wider">
                   <th className="py-2.5 px-3">{t("modal.category") || "Categoria"}</th>
                   <th className="py-2.5 px-3">Cenários</th>
@@ -191,7 +210,7 @@ export function CategoryCards({
               </thead>
               <tbody className="divide-y divide-edge">
                 {categoryGroups.map((g) => (
-                  <tr key={g.key} className="hover:bg-surface-hover/40 transition">
+                  <tr key={g.key} className="hover:bg-surface-hover/40 transition-colors">
                     <td className="py-3 px-3">
                       <span className="font-semibold text-text-main block">{g.category}</span>
                       <span className="text-[11px] text-text-faint block">{g.subcategory}</span>
@@ -222,6 +241,7 @@ export function CategoryCards({
                           size="sm"
                           onClick={() => onViewInChart?.({ mode: "category", id: g.key })}
                           icon={<ChartLineUp size={13} />}
+                          className="rounded-full"
                         >
                           Gráfico
                         </Button>
@@ -230,6 +250,7 @@ export function CategoryCards({
                           size="sm"
                           onClick={() => void onApplySens?.(g.displaySens.value, g.taskNames)}
                           icon={<Check size={13} />}
+                          className="rounded-full"
                         >
                           {t("randomizer.applySens")}
                         </Button>
@@ -247,9 +268,14 @@ export function CategoryCards({
             {t("playlistSens.empty") || "Nenhuma playlist encontrada."}
           </div>
         ) : (
-          <div className="overflow-x-auto scroll-y liquid-well rounded-control p-1">
+          <div
+            tabIndex={0}
+            role="region"
+            aria-label={t("randomizer.scopePlaylist") || "Playlists"}
+            className="overflow-auto max-h-[420px] scroll-y liquid-well rounded-control p-1"
+          >
             <table className="w-full text-left text-xs border-collapse">
-              <thead>
+              <thead className="sticky top-0 z-10 bg-base/90 backdrop-blur-md">
                 <tr className="border-b border-edge text-[11px] font-semibold text-text-faint uppercase tracking-wider">
                   <th className="py-2.5 px-3">Playlist</th>
                   <th className="py-2.5 px-3">Cenários</th>
@@ -261,7 +287,7 @@ export function CategoryCards({
               </thead>
               <tbody className="divide-y divide-edge">
                 {playlistStatsList.map((pl) => (
-                  <tr key={pl.playlistId} className="hover:bg-surface-hover/40 transition">
+                  <tr key={pl.playlistId} className="hover:bg-surface-hover/40 transition-colors">
                     <td className="py-3 px-3">
                       <div className="flex items-center gap-1.5">
                         <Folder size={15} className="text-score shrink-0" />
@@ -278,7 +304,7 @@ export function CategoryCards({
                     </td>
                     <td className="py-3 px-3">
                       <span className="font-mono font-bold text-emerald tabular text-sm">
-                        {pl.displaySens?.value.toFixed(1)} cm
+                        {pl.displaySens ? `${pl.displaySens.value.toFixed(1)} cm` : "-"}
                       </span>
                     </td>
                     <td className="py-3 px-3">
@@ -291,6 +317,7 @@ export function CategoryCards({
                           size="sm"
                           onClick={() => onViewInChart?.({ mode: "playlist", id: pl.playlistId })}
                           icon={<ChartLineUp size={13} />}
+                          className="rounded-full"
                         >
                           Gráfico
                         </Button>
@@ -300,6 +327,7 @@ export function CategoryCards({
                             size="sm"
                             onClick={() => void onApplySens?.(pl.displaySens!.value)}
                             icon={<Check size={13} />}
+                            className="rounded-full"
                           >
                             {t("randomizer.applySens")}
                           </Button>

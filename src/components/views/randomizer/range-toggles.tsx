@@ -1,4 +1,5 @@
 import { useI18n } from "@/lib/i18n";
+import { NumberTicker } from "@/components/ui/NumberTicker";
 import { Switch } from "@/components/ui/Switch";
 
 export interface RangeTogglesProps {
@@ -27,7 +28,7 @@ export function RangeToggles({
   return (
     <div className="space-y-3">
       <div className="space-y-2 pt-2 border-t border-edge">
-        <div className="flex items-center justify-between p-2.5 rounded-control glass-control">
+        <div className="flex items-center justify-between p-2.5 rounded-control liquid-well hover:border-edge-strong transition-colors">
           <div>
             <span className="text-xs font-semibold text-text-main block">
               {t("randomizer.autoScenarioSens")}
@@ -42,7 +43,7 @@ export function RangeToggles({
           />
         </div>
 
-        <div className="flex items-center justify-between p-2.5 rounded-control glass-control">
+        <div className="flex items-center justify-between p-2.5 rounded-control liquid-well hover:border-edge-strong transition-colors">
           <span className="text-xs font-semibold text-text-main">
             {t("randomizer.avoidRepeats")}
           </span>
@@ -54,11 +55,15 @@ export function RangeToggles({
       </div>
 
       {/* Range preview info */}
-      <div className="glass-inset p-3 rounded-control text-xs flex items-center justify-between font-mono tabular text-text-faint">
+      <div className="liquid-well p-3 rounded-control text-xs flex items-center justify-between font-mono tabular text-text-faint">
         <span>{t("randomizer.spreadCalculatedRange")}</span>
-        <span className="text-text-main font-semibold">
-          {minCm.toFixed(1)} - {maxCm.toFixed(1)} cm
-          {gridPointsCount > 0 && ` (${gridPointsCount} pts)`}
+        <span className="text-text-main font-semibold flex items-baseline gap-1">
+          <NumberTicker value={minCm} decimalPlaces={1} />
+          <span>-</span>
+          <NumberTicker value={maxCm} decimalPlaces={1} suffix=" cm" />
+          {gridPointsCount > 0 && (
+            <span className="text-text-faint ml-1">({gridPointsCount} pts)</span>
+          )}
         </span>
       </div>
     </div>

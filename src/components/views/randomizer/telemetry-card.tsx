@@ -41,9 +41,17 @@ export function TelemetryCard({
 }: TelemetryCardProps) {
   const { t } = useI18n();
 
+  const safeActiveSensCm = Number.isFinite(randomizerState?.activeSensCm)
+    ? randomizerState.activeSensCm
+    : settings?.baseSensCm || 40.0;
+
+  const safeActiveMult = Number.isFinite(randomizerState?.activeMult)
+    ? randomizerState.activeMult
+    : 1.0;
+
   const multDeltaPercent = useMemo(() => {
-    return (randomizerState.activeMult - 1.0) * 100;
-  }, [randomizerState.activeMult]);
+    return (safeActiveMult - 1.0) * 100;
+  }, [safeActiveMult]);
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -65,7 +73,8 @@ export function TelemetryCard({
         <div className="lg:col-span-4 flex items-center justify-between lg:justify-start gap-3.5">
           {onToggleEnabled && (
             <Switch
-              checked={settings.enabled}
+              checked={Boolean(settings?.enabled)}
+              disabled={!rawaccelAvailable}
               onCheckedChange={() => void onToggleEnabled()}
               aria-label={t("randomizer.enable")}
             />
@@ -98,7 +107,7 @@ export function TelemetryCard({
               </Badge>
             </div>
             <p className="text-[11px] text-text-faint truncate mt-0.5 font-mono">
-              {settings.rawaccelDir || t("randomizer.noPathDetected")}
+              {settings?.rawaccelDir || t("randomizer.noPathDetected")}
             </p>
           </div>
         </div>
@@ -111,7 +120,7 @@ export function TelemetryCard({
             </span>
             <div className="flex items-baseline gap-1.5 mt-0.5">
               <NumberTicker
-                value={randomizerState.activeSensCm}
+                value={safeActiveSensCm}
                 decimalPlaces={1}
                 className="text-2xl font-bold text-text-main tabular"
               />
@@ -128,9 +137,12 @@ export function TelemetryCard({
               {t("randomizer.activeMult")}
             </span>
             <div className="flex items-baseline justify-end gap-1.5 mt-0.5">
-              <span className="text-xl font-mono font-bold text-score tabular">
-                {randomizerState.activeMult.toFixed(2)}x
-              </span>
+              <NumberTicker
+                value={safeActiveMult}
+                decimalPlaces={2}
+                suffix="x"
+                className="text-xl font-mono font-bold text-score tabular"
+              />
               <span
                 className={cn(
                   "text-xs font-mono font-semibold tabular",
@@ -178,7 +190,7 @@ export function TelemetryCard({
             <Button
               variant="primary"
               size="sm"
-              disabled={!settings.enabled || !rawaccelAvailable}
+              disabled={!settings?.enabled || !rawaccelAvailable}
               onClick={() => void onTriggerRandomize()}
               icon={<Shuffle size={14} weight="bold" />}
               className="rounded-full"
@@ -190,7 +202,7 @@ export function TelemetryCard({
       </div>
 
       {/* Warning banner if RawAccel GUI is open */}
-      {randomizerState.rawaccelGuiRunning && (
+      {randomizerState?.rawaccelGuiRunning && (
         <div className="px-3.5 py-2 rounded-control bg-amber-soft border border-amber-edge text-xs text-amber flex items-center gap-2">
           <WarningCircle size={15} weight="fill" className="shrink-0" />
           <span className="font-medium">

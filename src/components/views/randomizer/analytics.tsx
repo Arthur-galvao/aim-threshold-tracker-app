@@ -12,6 +12,8 @@ import {
 } from "@/lib/sens-analytics";
 import { Button } from "@/components/ui/Button";
 import { Badge, type BadgeVariant } from "@/components/ui/Badge";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { NumberTicker } from "@/components/ui/NumberTicker";
 import { Segmented } from "@/components/ui/Segmented";
 import { BucketsTable } from "./buckets-table";
 import { cn } from "@/lib/utils";
@@ -79,15 +81,47 @@ export function Analytics({
     label: t(PREDICTOR_PROFILES[p].labelKey as Key),
   }));
 
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    e.currentTarget.style.setProperty("--mx", `${e.clientX - rect.left}px`);
+    e.currentTarget.style.setProperty("--my", `${e.clientY - rect.top}px`);
+  };
+
+  const hasAnyData =
+    Boolean(analysis && bestBucket) ||
+    Boolean(prediction) ||
+    Boolean(analysis && analysis.buckets.length > 0);
+
+  if (!hasAnyData) {
+    return (
+      <div
+        style={style}
+        onMouseMove={handleMouseMove}
+        className={cn(
+          "liquid-surface liquid-interactive p-8 rounded-tile",
+          className
+        )}
+      >
+        <EmptyState
+          title={t("randomizer.predictorTitle")}
+          description={t("randomizer.chartEmpty")}
+        />
+      </div>
+    );
+  }
+
   return (
     <div style={style} className={cn("space-y-4", className)}>
       {/* Sweet Spot Recommendation Hero Card */}
       {analysis && bestBucket && (
-        <div className="glass p-5 rounded-tile space-y-4">
+        <div
+          onMouseMove={handleMouseMove}
+          className="liquid-surface liquid-interactive p-5 rounded-tile space-y-4"
+        >
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-3 border-b border-edge">
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-[13px] font-semibold text-text-secondary">
+                <h2 className="text-xs font-semibold text-text-main tracking-tight">
                   {t("randomizer.sweetSpotTitle")}
                 </h2>
                 {getConfidenceBadge(bestBucket.confidenceLevel)}
@@ -95,7 +129,7 @@ export function Analytics({
                   <Badge variant="amber">{t("randomizer.badgeProvisional")}</Badge>
                 )}
               </div>
-              <p className="text-xs text-text-faint mt-0.5">
+              <p className="text-[11px] text-text-faint mt-0.5">
                 {analysis.isProvisional
                   ? t("randomizer.sampleSizeExplanation", { n: analysis.minEligibleRuns })
                   : t("randomizer.sweetSpotSubtitle")}
@@ -107,6 +141,7 @@ export function Analytics({
               size="sm"
               onClick={() => void onApplySens(bestBucket.sens)}
               icon={<Check size={14} />}
+              className="rounded-full"
             >
               <span>{t("randomizer.applySensBtn")}</span>
               <span className="font-mono tabular">({bestBucket.label})</span>
@@ -114,7 +149,7 @@ export function Analytics({
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <div className="glass-inset p-3.5 rounded-control">
+            <div className="liquid-well p-3.5 rounded-control hover:border-edge-strong transition-colors">
               <span className="text-[11px] text-text-faint font-medium block">
                 {t("randomizer.optimalSens")}
               </span>
@@ -123,39 +158,51 @@ export function Analytics({
               </span>
             </div>
 
-            <div className="glass-inset p-3.5 rounded-control">
+            <div className="liquid-well p-3.5 rounded-control hover:border-edge-strong transition-colors">
               <span className="text-[11px] text-text-faint font-medium block">
                 {scopeAllTasks ? t("randomizer.weightedNormScore") : t("randomizer.weightedScore")}
               </span>
-              <span className="text-2xl font-mono font-bold text-emerald mt-1 block tabular">
-                {bestBucket.weightedScore.toFixed(1)}
-                {scopeAllTasks ? "%" : ""}
-              </span>
+              <NumberTicker
+                value={bestBucket.weightedScore}
+                decimalPlaces={1}
+                suffix={scopeAllTasks ? "%" : ""}
+                className="text-2xl font-mono font-bold text-emerald mt-1 block tabular"
+              />
               <span className="text-[11px] text-text-faint font-mono tabular block mt-0.5">
                 {t("randomizer.rawAvg")}: {bestBucket.avgScore.toFixed(1)}
                 {scopeAllTasks ? "%" : " pts"}
               </span>
             </div>
 
-            <div className="glass-inset p-3.5 rounded-control">
+            <div className="liquid-well p-3.5 rounded-control hover:border-edge-strong transition-colors">
               <span className="text-[11px] text-text-faint font-medium block">
                 {t("randomizer.consistencyScore")}
               </span>
-              <span className="text-2xl font-mono font-bold text-score mt-1 block tabular">
-                {bestBucket.consistency !== null ? `${bestBucket.consistency.toFixed(1)}%` : t("randomizer.naSingle")}
-              </span>
+              {bestBucket.consistency !== null ? (
+                <NumberTicker
+                  value={bestBucket.consistency}
+                  decimalPlaces={1}
+                  suffix="%"
+                  className="text-2xl font-mono font-bold text-score mt-1 block tabular"
+                />
+              ) : (
+                <span className="text-2xl font-mono font-bold text-score mt-1 block tabular">
+                  {t("randomizer.naSingle")}
+                </span>
+              )}
               <span className="text-[11px] text-text-faint font-mono tabular block mt-0.5">
                 {bestBucket.stdDev !== null ? `σ = ±${bestBucket.stdDev.toFixed(1)}` : t("randomizer.needsMultipleRuns")}
               </span>
             </div>
 
-            <div className="glass-inset p-3.5 rounded-control">
+            <div className="liquid-well p-3.5 rounded-control hover:border-edge-strong transition-colors">
               <span className="text-[11px] text-text-faint font-medium block">
                 {t("randomizer.sampleSize")}
               </span>
-              <span className="text-2xl font-mono font-bold text-text-main mt-1 block tabular">
-                {bestBucket.count}
-              </span>
+              <NumberTicker
+                value={bestBucket.count}
+                className="text-2xl font-mono font-bold text-text-main mt-1 block tabular"
+              />
               <span className="text-[11px] text-text-faint font-mono tabular block mt-0.5">
                 {t("randomizer.totalDataset")}: {analysis.totalRuns}
               </span>
@@ -166,17 +213,20 @@ export function Analytics({
 
       {/* Experimental Sensitivity Predictor Card */}
       {prediction && (
-        <div className="glass p-5 rounded-tile space-y-4">
+        <div
+          onMouseMove={handleMouseMove}
+          className="liquid-surface liquid-interactive p-5 rounded-tile space-y-4"
+        >
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-3 border-b border-edge">
             <div>
               <div className="flex items-center gap-2">
                 <Sparkle size={15} weight="fill" className="text-score" />
-                <h2 className="text-[13px] font-semibold text-text-secondary">
+                <h2 className="text-xs font-semibold text-text-main tracking-tight">
                   {t("randomizer.predictorTitle")}
                 </h2>
                 {getConfidenceBadge(prediction.confidence)}
               </div>
-              <p className="text-xs text-text-faint mt-0.5">
+              <p className="text-[11px] text-text-faint mt-0.5">
                 {t("randomizer.predictorSubtitle")}
               </p>
             </div>
@@ -186,6 +236,7 @@ export function Analytics({
               size="sm"
               onClick={() => void onApplySens(prediction.predictedSens)}
               icon={<Check size={14} />}
+              className="rounded-full"
             >
               <span>{t("randomizer.applySensBtn")}</span>
               <span className="font-mono tabular">({prediction.label})</span>
@@ -193,19 +244,21 @@ export function Analytics({
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <div className="glass-inset p-3.5 rounded-control">
+            <div className="liquid-well p-3.5 rounded-control hover:border-edge-strong transition-colors">
               <span className="text-[11px] text-text-faint font-medium block">
                 {t("randomizer.predictorSens")}
               </span>
               <div className="flex items-baseline gap-1 mt-1">
-                <span className="text-2xl font-mono font-bold text-score tabular">
-                  {prediction.predictedSens.toFixed(1)}
-                </span>
+                <NumberTicker
+                  value={prediction.predictedSens}
+                  decimalPlaces={1}
+                  className="text-2xl font-mono font-bold text-score tabular"
+                />
                 <span className="text-xs font-mono text-text-secondary">cm/360</span>
               </div>
             </div>
 
-            <div className="glass-inset p-3.5 rounded-control">
+            <div className="liquid-well p-3.5 rounded-control hover:border-edge-strong transition-colors">
               <span className="text-[11px] text-text-faint font-medium block">
                 {t("randomizer.predictorApex")}
               </span>
@@ -214,16 +267,19 @@ export function Analytics({
               </span>
             </div>
 
-            <div className="glass-inset p-3.5 rounded-control">
+            <div className="liquid-well p-3.5 rounded-control hover:border-edge-strong transition-colors">
               <span className="text-[11px] text-text-faint font-medium block">
                 {t("randomizer.predictorObserved")}
               </span>
-              <span className="text-xl font-mono font-bold text-emerald mt-1 block tabular">
-                {prediction.empiricalSens.toFixed(1)} cm
-              </span>
+              <NumberTicker
+                value={prediction.empiricalSens}
+                decimalPlaces={1}
+                suffix=" cm"
+                className="text-xl font-mono font-bold text-emerald mt-1 block tabular"
+              />
             </div>
 
-            <div className="glass-inset p-3.5 rounded-control">
+            <div className="liquid-well p-3.5 rounded-control hover:border-edge-strong transition-colors">
               <span className="text-[11px] text-text-faint font-medium block">
                 {t("randomizer.predictorBasis")}
               </span>
@@ -241,6 +297,7 @@ export function Analytics({
               {t("randomizer.predictorProfile")}
             </span>
             <Segmented
+              id="predictor-profile-selector"
               options={profileOptions}
               value={selectedProfile}
               onChange={handleSelectProfile}
@@ -250,7 +307,7 @@ export function Analytics({
 
           {/* Confidence Interval & Uncertainty reasons */}
           {prediction.ci && prediction.ci.low != null && prediction.ci.high != null && (
-            <div className="text-xs font-mono text-text-secondary glass-inset p-2.5 rounded-control flex items-center justify-between">
+            <div className="text-xs font-mono text-text-secondary liquid-well p-2.5 rounded-control flex items-center justify-between">
               <span className="text-text-faint">{t("randomizer.confidenceInterval")}:</span>
               <span className="text-score font-semibold tabular">
                 {prediction.ci.low.toFixed(1)} cm - {prediction.ci.high.toFixed(1)} cm
@@ -261,7 +318,7 @@ export function Analytics({
           {(prediction.confidence === "low" || prediction.confidence === "insufficient") &&
             prediction.reasons &&
             prediction.reasons.length > 0 && (
-              <div className="p-3 rounded-control bg-amber-soft border border-amber-edge text-xs text-amber space-y-1">
+              <div className="p-3 rounded-control liquid-well bg-amber-soft/50 border border-amber-edge text-xs text-amber space-y-1">
                 <div className="font-semibold flex items-center gap-1.5">
                   <Info size={14} weight="fill" />
                   <span>{t("randomizer.reasonsTitle")}</span>

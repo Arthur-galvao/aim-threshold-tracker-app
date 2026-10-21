@@ -58,11 +58,14 @@ export function CoverageBar({
     }
 
     const zeroCountPoints = items.filter((i) => i.count === 0).length;
+    const coveredCount = items.length - zeroCountPoints;
+    const coveragePct = items.length > 0 ? Math.round((coveredCount / items.length) * 100) : 0;
 
     return {
       items,
       totalRuns: relevantSessions.length,
       zeroCountPoints,
+      coveragePct,
     };
   }, [relevantSessions, minCm, maxCm]);
 
@@ -73,7 +76,7 @@ export function CoverageBar({
   const isFull = coverageData.zeroCountPoints === 0 && coverageData.items.length > 0;
 
   return (
-    <div className={cn("glass-inset p-3.5 rounded-tile space-y-2.5", className)}>
+    <div className={cn("liquid-well p-3.5 rounded-tile space-y-2.5", className)}>
       <div className="flex items-center justify-between text-xs">
         <div className="flex items-center gap-2 font-medium text-text-secondary">
           <span>{t("randomizer.coverageTitle") || "Cobertura da Grade"}</span>
@@ -91,7 +94,7 @@ export function CoverageBar({
             <span className="text-amber font-medium flex items-center gap-1.5">
               <span className="w-1.5 h-1.5 rounded-full bg-amber" />
               {coverageData.zeroCountPoints}{" "}
-              {coverageData.zeroCountPoints === 1 ? "ponto sem runs" : "pontos sem runs"}
+              {coverageData.zeroCountPoints === 1 ? "ponto sem runs" : "pontos sem runs"} ({coverageData.coveragePct}%)
             </span>
           )}
         </div>
@@ -104,10 +107,10 @@ export function CoverageBar({
             <div
               key={item.k}
               className={cn(
-                "p-2 rounded-control border text-center transition-all",
+                "p-2 rounded-control border text-center transition-all duration-150 hover:-translate-y-[1px]",
                 isZero
-                  ? "bg-amber-soft border-amber-edge text-amber"
-                  : "glass-control border-edge text-text-main"
+                  ? "bg-amber-soft/50 border-amber-edge text-amber"
+                  : "liquid-pill border-edge text-text-main hover:border-score-edge"
               )}
               title={`${item.cm.toFixed(1)} cm: ${item.count} run(s)`}
             >

@@ -18,15 +18,16 @@ export function NumberTicker({
   suffix = "",
   className,
 }: NumberTickerProps) {
-  const [displayValue, setDisplayValue] = useState<number>(value);
+  const safeValue = Number.isFinite(value) ? value : 0;
+  const [displayValue, setDisplayValue] = useState<number>(safeValue);
   const [isTicking, setIsTicking] = useState(false);
-  const startValueRef = useRef<number>(value);
+  const startValueRef = useRef<number>(safeValue);
   const startTimeRef = useRef<number | null>(null);
   const animFrameRef = useRef<number | null>(null);
 
   useEffect(() => {
-    const startVal = displayValue;
-    const endVal = value;
+    const startVal = Number.isFinite(displayValue) ? displayValue : safeValue;
+    const endVal = safeValue;
     if (startVal === endVal) return;
 
     startValueRef.current = startVal;
@@ -59,9 +60,10 @@ export function NumberTicker({
         cancelAnimationFrame(animFrameRef.current);
       }
     };
-  }, [value, duration]);
+  }, [safeValue, duration]);
 
-  const formatted = displayValue.toLocaleString(undefined, {
+  const safeDisplay = Number.isFinite(displayValue) ? displayValue : safeValue;
+  const formatted = safeDisplay.toLocaleString(undefined, {
     minimumFractionDigits: decimalPlaces,
     maximumFractionDigits: decimalPlaces,
   });

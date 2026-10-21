@@ -97,14 +97,6 @@ function AppContent() {
     playlistRunner.predictNextScenarioName,
   ]);
 
-  // Safety lock guard: se RawAccel não estiver disponível, impede navegação para o randomizer
-  useEffect(() => {
-    if (!rawaccelAvailable && activeTab === "randomizer") {
-      setActiveTab("dashboard");
-      showToast(t("toast.randomizerLocked") || "RawAccel não disponível", "error");
-    }
-  }, [rawaccelAvailable, activeTab, showToast, t]);
-
   const handleDetectPath = useCallback(async () => {
     const detected = await detectKovaakPath();
     if (!detected) {

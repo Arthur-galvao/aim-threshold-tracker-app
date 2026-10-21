@@ -34,14 +34,26 @@ export function BucketsTable({
 
   if (buckets.length === 0) return null;
 
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    e.currentTarget.style.setProperty("--mx", `${e.clientX - rect.left}px`);
+    e.currentTarget.style.setProperty("--my", `${e.clientY - rect.top}px`);
+  };
+
   return (
-    <div className={cn("glass p-5 rounded-tile space-y-3", className)}>
+    <div
+      onMouseMove={handleMouseMove}
+      className={cn(
+        "liquid-surface liquid-interactive p-5 rounded-tile space-y-3",
+        className
+      )}
+    >
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-[13px] font-semibold text-text-secondary">
+          <h2 className="text-xs font-semibold text-text-main tracking-tight">
             {t("randomizer.bucketsTableTitle")}
           </h2>
-          <p className="text-xs text-text-faint mt-0.5">
+          <p className="text-[11px] text-text-faint mt-0.5">
             {t("randomizer.bucketsTableSubtitle")}
           </p>
         </div>
@@ -51,23 +63,28 @@ export function BucketsTable({
         </span>
       </div>
 
-      <div className="overflow-x-auto">
+      <div
+        tabIndex={0}
+        role="region"
+        aria-label={t("randomizer.bucketsTableTitle")}
+        className="overflow-auto max-h-[380px] scroll-y liquid-well rounded-control p-1"
+      >
         <table className="w-full text-left text-xs border-collapse">
-          <thead>
+          <thead className="sticky top-0 z-10 bg-base/90 backdrop-blur-md">
             <tr className="border-b border-edge text-[11px] text-text-faint font-semibold uppercase tracking-wider">
-              <th className="py-2 px-3">{t("randomizer.colRange")}</th>
-              <th className="py-2 px-3">{t("randomizer.colRuns")}</th>
-              <th className="py-2 px-3">{t("randomizer.colBayesScore")}</th>
-              <th className="py-2 px-3">{t("randomizer.colRawAvg")}</th>
-              <th className="py-2 px-3">{t("randomizer.colPeakScore")}</th>
-              <th className="py-2 px-3">{t("randomizer.colConsistency")}</th>
-              <th className="py-2 px-3">{t("randomizer.colConfidence")}</th>
-              <th className="py-2 px-3 text-right">{t("randomizer.colAction")}</th>
+              <th className="py-2.5 px-3">{t("randomizer.colRange")}</th>
+              <th className="py-2.5 px-3">{t("randomizer.colRuns")}</th>
+              <th className="py-2.5 px-3">{t("randomizer.colBayesScore")}</th>
+              <th className="py-2.5 px-3">{t("randomizer.colRawAvg")}</th>
+              <th className="py-2.5 px-3">{t("randomizer.colPeakScore")}</th>
+              <th className="py-2.5 px-3">{t("randomizer.colConsistency")}</th>
+              <th className="py-2.5 px-3">{t("randomizer.colConfidence")}</th>
+              <th className="py-2.5 px-3 text-right">{t("randomizer.colAction")}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-edge">
             {buckets.map((b) => (
-              <tr key={b.sens} className="hover:bg-surface-subtle transition-colors">
+              <tr key={b.sens} className="hover:bg-surface-hover/40 transition-colors">
                 <td className="py-2.5 px-3 font-mono font-semibold text-text-main tabular">
                   {b.label}
                 </td>
@@ -94,6 +111,7 @@ export function BucketsTable({
                     variant="ghost"
                     size="sm"
                     onClick={() => void onApplySens(b.sens)}
+                    className="rounded-full"
                   >
                     {t("randomizer.applySens")}
                   </Button>

@@ -179,18 +179,25 @@ export function Controls({
     }
   };
 
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    e.currentTarget.style.setProperty("--mx", `${e.clientX - rect.left}px`);
+    e.currentTarget.style.setProperty("--my", `${e.clientY - rect.top}px`);
+  };
+
   return (
     <div
       style={style}
+      onMouseMove={handleMouseMove}
       className={cn(
-        "liquid-surface p-5 rounded-tile flex flex-col justify-between gap-4",
+        "liquid-surface liquid-interactive p-5 rounded-tile flex flex-col justify-between gap-4",
         className
       )}
     >
       {/* Top Header: Calibration status & Save indicator */}
       <div className="flex items-center justify-between gap-3 pb-2.5 border-b border-edge">
         <div>
-          <h2 className="text-xs font-semibold text-text-main">
+          <h2 className="text-xs font-semibold text-text-main tracking-tight">
             {t("randomizer.mode")}
           </h2>
           <p className="text-[11px] text-text-faint">
@@ -278,6 +285,7 @@ export function Controls({
           disabled={!canSave}
           onClick={() => void handleSave()}
           icon={<FloppyDisk size={14} />}
+          className="rounded-full"
         >
           {t("randomizer.saveSettings")}
         </Button>

@@ -1,10 +1,12 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Chart as ChartJS,
   LinearScale,
   LogarithmicScale,
   PointElement,
   LineElement,
+  LineController,
+  ScatterController,
   Tooltip as ChartTooltip,
   Legend,
 } from "chart.js";
@@ -26,6 +28,8 @@ ChartJS.register(
   LogarithmicScale,
   PointElement,
   LineElement,
+  LineController,
+  ScatterController,
   ChartTooltip,
   Legend
 );
@@ -73,6 +77,19 @@ export function SweetSpotChart({
   style,
 }: SweetSpotChartProps) {
   const { t } = useI18n();
+  const [themeTick, setThemeTick] = useState(0);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const observer = new MutationObserver(() => {
+      setThemeTick((v) => v + 1);
+    });
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["data-theme"],
+    });
+    return () => observer.disconnect();
+  }, []);
 
   const currentFilter: ChartScopeFilter = useMemo(() => {
     return scopeFilter ?? { mode: "current" };
@@ -120,7 +137,7 @@ export function SweetSpotChart({
         predictorApex: t("randomizer.predictorApex"),
       },
     });
-  }, [validRuns, isNormalized, activeMinCm, activeMaxCm, effectivePrediction, t]);
+  }, [validRuns, isNormalized, activeMinCm, activeMaxCm, effectivePrediction, t, themeTick]);
 
   const chartOptions = useMemo(() => {
     return buildChartOptions(isNormalized, {
@@ -131,7 +148,7 @@ export function SweetSpotChart({
       chartTooltipAt: t("randomizer.chartTooltipAt"),
       chartTrendLabel: t("randomizer.chartTrendLabel"),
     });
-  }, [isNormalized, t]);
+  }, [isNormalized, t, themeTick]);
 
   const scopeOptions = [
     { value: "current", label: t("randomizer.scopeCurrent") },
@@ -140,15 +157,28 @@ export function SweetSpotChart({
     { value: "category", label: t("randomizer.scopeCategory") || "Categoria" },
   ];
 
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    e.currentTarget.style.setProperty("--mx", `${e.clientX - rect.left}px`);
+    e.currentTarget.style.setProperty("--my", `${e.clientY - rect.top}px`);
+  };
+
   return (
-    <div style={style} className={cn("glass p-5 rounded-tile space-y-4", className)}>
+    <div
+      style={style}
+      onMouseMove={handleMouseMove}
+      className={cn(
+        "liquid-surface liquid-interactive p-5 rounded-tile space-y-4",
+        className
+      )}
+    >
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
         <div>
-          <h2 className="text-[13px] font-semibold text-text-secondary">
+          <h2 className="text-xs font-semibold text-text-main tracking-tight">
             {t("randomizer.chartTitle")}
           </h2>
           {scopeTitle && (
-            <p className="text-xs text-text-faint mt-0.5 font-medium">
+            <p className="text-[11px] text-text-faint mt-0.5 font-mono">
               {scopeTitle}
             </p>
           )}
@@ -156,6 +186,7 @@ export function SweetSpotChart({
 
         <div className="flex items-center gap-2 flex-wrap">
           <Segmented
+            id="sweet-spot-scope"
             options={scopeOptions}
             value={currentFilter.mode}
             onChange={handleModeChange}
@@ -196,7 +227,7 @@ export function SweetSpotChart({
         </div>
       </div>
 
-      <div className="h-[280px] w-full pt-2">
+      <div className="liquid-well p-3 rounded-control h-[290px] w-full">
         {validRuns.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center text-text-faint text-xs">
             <span>{t("randomizer.chartEmpty")}</span>

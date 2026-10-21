@@ -139,6 +139,10 @@ describe("v2.0 Glass HUD: Ratchet Simulation and Component Integrity", () => {
       "src/components/views/dashboard/ProgressChart.tsx",
       "src/components/views/dashboard/SessionHistory.tsx",
       "src/components/views/randomizer/index.tsx",
+      "src/components/views/randomizer/sweet-spot-chart.tsx",
+      "src/components/views/randomizer/analytics.tsx",
+      "src/components/views/randomizer/buckets-table.tsx",
+      "src/components/views/randomizer/category-cards.tsx",
       "src/lib/threshold.ts",
       "src/lib/viscose.ts",
     ];
@@ -229,5 +233,34 @@ describe("v2.0 Glass HUD: Ratchet Simulation and Component Integrity", () => {
     assert.ok(cssSrc.includes('[data-theme="amethyst-purple"]'));
     assert.ok(cssSrc.includes('[data-theme="obsidian-amber"]'));
     assert.ok(cssSrc.includes("--in-oklab"));
+  });
+
+  it("verifies Randomizer SweetSpotChart registers LineController and ScatterController and uses Liquid Glass surfaces", () => {
+    const sweetSpotSrc = fs.readFileSync(
+      path.resolve("src/components/views/randomizer/sweet-spot-chart.tsx"),
+      "utf-8"
+    );
+    const analyticsSrc = fs.readFileSync(
+      path.resolve("src/components/views/randomizer/analytics.tsx"),
+      "utf-8"
+    );
+    const bucketsSrc = fs.readFileSync(
+      path.resolve("src/components/views/randomizer/buckets-table.tsx"),
+      "utf-8"
+    );
+    const controlsSrc = fs.readFileSync(
+      path.resolve("src/components/views/randomizer/controls.tsx"),
+      "utf-8"
+    );
+
+    // Chart.js mixed scatter + line datasets require both controllers registered
+    assert.ok(sweetSpotSrc.includes("LineController"));
+    assert.ok(sweetSpotSrc.includes("ScatterController"));
+    assert.ok(sweetSpotSrc.includes("liquid-surface liquid-interactive"));
+
+    // Randomizer subviews use Liquid Glass and interactive spotlight
+    assert.ok(analyticsSrc.includes("liquid-surface liquid-interactive"));
+    assert.ok(bucketsSrc.includes("liquid-surface liquid-interactive"));
+    assert.ok(controlsSrc.includes("liquid-surface liquid-interactive"));
   });
 });

@@ -17,7 +17,7 @@ export function RecenterBanner({
   const { t } = useI18n();
 
   return (
-    <div className="p-3 rounded-control bg-amber-soft border border-amber-edge text-xs text-amber flex items-center justify-between gap-3">
+    <div className="p-3 rounded-control liquid-well bg-amber-soft/50 border border-amber-edge text-xs text-amber flex items-center justify-between gap-3">
       <div className="flex items-center gap-2">
         <Sparkle size={16} weight="fill" className="shrink-0 text-amber" />
         <span>
@@ -28,10 +28,16 @@ export function RecenterBanner({
         </span>
       </div>
       <div className="flex items-center gap-1.5 shrink-0">
-        <Button variant="ghost" size="sm" onClick={onDismiss}>
+        <Button variant="ghost" size="sm" onClick={onDismiss} className="rounded-full">
           <X size={13} />
         </Button>
-        <Button variant="primary" size="sm" onClick={() => void onApply()} icon={<Check size={13} />}>
+        <Button
+          variant="primary"
+          size="sm"
+          onClick={() => void onApply()}
+          icon={<Check size={13} />}
+          className="rounded-full"
+        >
           {t("randomizer.applySens")}
         </Button>
       </div>

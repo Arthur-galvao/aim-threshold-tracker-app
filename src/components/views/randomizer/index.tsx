@@ -289,12 +289,10 @@ export function RandomizerView({ className }: RandomizerViewProps) {
         <AnimatePresence mode="wait" initial={false}>
           <motion.div
             key={activeSubTab}
-            initial={
-              false ? { opacity: 1 } : { opacity: 0, y: 4 }
-            }
-            animate={{ opacity: 1, y: 0 }}
-            exit={false ? { opacity: 1 } : { opacity: 0, y: -3 }}
-            transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
+            initial={{ opacity: 0, y: 6, scale: 0.995 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -4, scale: 0.995 }}
+            transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
             className="flex-1 min-h-0"
           >
             {activeSubTab === "chart" && (
