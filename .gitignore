@@ -67,14 +67,25 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
-# AI / Agent workspace metadata
+# AI / Agent workspace metadata & internal planning docs
 .opencode/
 .gemini/
 .agents/
 .antigravity/
 .superpowers/
+GEMINI.md
+CLAUDE.md
+AGENTS.md
+HANDOFF_UI_REFACTOR.md
+2026-10-12-sens-randomizer-correcoes.md
+2026-10-12-sens-randomizer-overhaul.md
+refactor_gemini_4/
+docs/superpowers/
+docs/ui-remake/
 
-# Local test & debug artifacts
+# Local helper scripts & debug artifacts
+INICIAR.bat
+INICIAR_WEB.bat
 debug_cards.js
 find_duplicates.cjs
 test_output.css
