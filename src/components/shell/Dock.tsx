@@ -1,5 +1,5 @@
 import React, { useEffect } from "react";
-import { motion, useReducedMotion } from "motion/react";
+import { motion } from "motion/react";
 import {
   ChartLineUp,
   Gear,
@@ -29,7 +29,6 @@ export function Dock({
   className,
 }: DockProps) {
   const { t } = useI18n();
-  const shouldReduceMotion = useReducedMotion();
   const { playlistRunner } = useApp();
   const isPlaylistRunning = Boolean(
     playlistRunner?.isRunning && !playlistRunner?.isFinished
@@ -119,7 +118,7 @@ export function Dock({
               aria-label={`${item.label} (${item.shortcut})`}
               aria-current={isActive ? "page" : undefined}
               className={cn(
-                "relative flex h-9 px-3.5 items-center justify-center gap-1.5 rounded-full text-xs font-medium transition-colors cursor-pointer select-none focus-visible:outline-none press",
+                "group relative flex h-9 px-3.5 items-center justify-center gap-1.5 rounded-full text-xs font-medium transition-all duration-200 cursor-pointer select-none focus-visible:outline-none active:scale-95",
                 isActive
                   ? "text-text-main font-semibold"
                   : "text-text-secondary hover:text-text-main"
@@ -128,15 +127,18 @@ export function Dock({
               {isActive && (
                 <motion.div
                   layoutId="dock-mobile-pill"
-                  transition={
-                    shouldReduceMotion
-                      ? { duration: 0 }
-                      : { type: "spring", stiffness: 420, damping: 32, mass: 0.8 }
-                  }
+                  transition={{
+                    type: "spring",
+                    stiffness: 460,
+                    damping: 30,
+                    mass: 0.75,
+                  }}
                   className="absolute inset-0 rounded-full liquid-pill -z-10"
                 />
               )}
-              {item.icon(isActive)}
+              <span className="transition-transform duration-200 group-hover:scale-110">
+                {item.icon(isActive)}
+              </span>
               <span>{item.label}</span>
               {item.badge && (
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald" />
@@ -149,9 +151,13 @@ export function Dock({
           type="button"
           onClick={onOpenSettings}
           aria-label={t("header.settings")}
-          className="flex h-9 w-9 items-center justify-center rounded-full text-text-secondary hover:text-text-main transition-colors cursor-pointer press"
+          className="group flex h-9 w-9 items-center justify-center rounded-full text-text-secondary hover:text-text-main transition-colors cursor-pointer press"
         >
-          <Gear size={17} weight="regular" />
+          <Gear
+            size={17}
+            weight="regular"
+            className="transition-transform duration-300 group-hover:rotate-45"
+          />
         </button>
       </nav>
     );
@@ -186,7 +192,7 @@ export function Dock({
                 aria-label={`${item.label} (atalho ${item.shortcut})`}
                 aria-current={isActive ? "page" : undefined}
                 className={cn(
-                  "relative z-10 flex h-8 px-3.5 items-center justify-center gap-2 rounded-full text-xs font-medium transition-colors cursor-pointer select-none focus-visible:outline-none press",
+                  "group relative z-10 flex h-8 px-3.5 items-center justify-center gap-2 rounded-full text-xs font-medium transition-all duration-200 cursor-pointer select-none focus-visible:outline-none active:scale-95",
                   isActive
                     ? "text-text-main font-semibold"
                     : "text-text-secondary hover:text-text-main"
@@ -195,15 +201,23 @@ export function Dock({
                 {isActive && (
                   <motion.div
                     layoutId="dock-active-pill"
-                    transition={
-                      shouldReduceMotion
-                        ? { duration: 0 }
-                        : { type: "spring", stiffness: 420, damping: 32, mass: 0.8 }
-                    }
+                    transition={{
+                      type: "spring",
+                      stiffness: 460,
+                      damping: 30,
+                      mass: 0.75,
+                    }}
                     className="absolute inset-0 rounded-full liquid-pill -z-10"
                   />
                 )}
-                <span className={cn("inline-flex", isActive && "text-score")}>
+                <span
+                  className={cn(
+                    "inline-flex transition-transform duration-200",
+                    isActive
+                      ? "text-score scale-105"
+                      : "group-hover:scale-110 group-hover:text-text-main"
+                  )}
+                >
                   {item.icon(isActive)}
                 </span>
                 <span>{item.label}</span>

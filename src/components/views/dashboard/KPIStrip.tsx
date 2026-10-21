@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import {
+  Check,
   Copy,
   Info,
   Lightning,
@@ -32,6 +33,7 @@ export function KPIStrip({ className }: KPIStripProps) {
   const { simulatedOutcome } = meta;
 
   const [simScoreInput, setSimScoreInput] = useState<string>("");
+  const [copied, setCopied] = useState(false);
 
   const hasData = Boolean(activeTask?.sessions && activeTask.sessions.length > 0);
   const taskMetrics = useMemo(() => computeTaskMetrics(activeTask), [activeTask]);
@@ -126,36 +128,34 @@ export function KPIStrip({ className }: KPIStripProps) {
       return;
     }
     void navigator.clipboard.writeText(text);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1600);
     showToast(t("toast.copiedEscalate"), "success");
-  };
-
-  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    e.currentTarget.style.setProperty("--mx", `${e.clientX - rect.left}px`);
-    e.currentTarget.style.setProperty("--my", `${e.clientY - rect.top}px`);
   };
 
   return (
     <section
-      onMouseMove={handleMouseMove}
       className={cn(
         "liquid-surface liquid-interactive overflow-hidden grid grid-cols-1 lg:grid-cols-12 divide-y lg:divide-y-0 lg:divide-x divide-edge",
         className
       )}
     >
       {/* Zone 1 (5 cols): Focal Ratchet Command & Live Score Simulator */}
-      <div className="lg:col-span-5 p-5 flex flex-col justify-between gap-4">
+      <div className="group/z1 lg:col-span-5 p-5 flex flex-col justify-between gap-4 transition-colors duration-300 hover:bg-white/[0.012]">
         <div className="space-y-2">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
-              <span className="text-emerald inline-flex" aria-hidden="true">
+              <span
+                className="text-emerald inline-flex transition-transform duration-300 group-hover/z1:scale-110"
+                aria-hidden="true"
+              >
                 <ShieldCheck size={18} weight="fill" />
               </span>
               <span className="text-xs font-semibold text-text-secondary">
                 {t("dashboard.kpiThreat")}
               </span>
               <Tooltip content={t("metric.targetExplanation")}>
-                <span className="text-text-faint hover:text-text-main cursor-pointer inline-flex">
+                <span className="text-text-faint hover:text-text-main transition-transform duration-200 hover:scale-110 cursor-pointer inline-flex">
                   <Info size={13} />
                 </span>
               </Tooltip>
@@ -197,8 +197,17 @@ export function KPIStrip({ className }: KPIStripProps) {
                   size="sm"
                   variant="secondary"
                   onClick={handleCopyEscalate}
-                  icon={<Copy size={13} weight="regular" />}
-                  className="h-7 px-2.5 text-[11px] rounded-full"
+                  icon={
+                    copied ? (
+                      <Check size={13} weight="bold" className="text-emerald animate-pop-in" />
+                    ) : (
+                      <Copy size={13} weight="regular" />
+                    )
+                  }
+                  className={cn(
+                    "h-7 px-2.5 text-[11px] rounded-full transition-all",
+                    copied && "border-emerald-edge text-emerald bg-emerald-soft"
+                  )}
                 >
                   {t("hist.copy")}
                 </Button>
@@ -207,10 +216,25 @@ export function KPIStrip({ className }: KPIStripProps) {
           </div>
         </div>
 
-        {/* Inline Recessed Simulator Well */}
-        <div className="liquid-well px-3 py-2 flex items-center justify-between gap-2.5">
+        {/* Inline Recessed Simulator Well with reactive status border */}
+        <div
+          className={cn(
+            "liquid-well px-3 py-2 flex items-center justify-between gap-2.5 transition-all duration-200 focus-within:border-score/50 focus-within:shadow-[0_0_16px_rgb(var(--score-rgb)/0.16)]",
+            liveSim &&
+              (liveSim.willRaise
+                ? "border-emerald-edge shadow-[0_0_18px_rgb(var(--emerald-rgb)/0.18)]"
+                : "border-amber-edge")
+          )}
+        >
           <div className="flex items-center gap-2 shrink-0">
-            <Lightning size={13} weight="fill" className="text-amber shrink-0" />
+            <Lightning
+              size={13}
+              weight="fill"
+              className={cn(
+                "text-amber shrink-0 transition-transform duration-200",
+                liveSim && "scale-125"
+              )}
+            />
             <input
               type="number"
               value={simScoreInput}
@@ -223,7 +247,7 @@ export function KPIStrip({ className }: KPIStripProps) {
 
           <div className="flex items-center gap-1.5 text-[11px] font-mono truncate">
             {liveSim ? (
-              <>
+              <div className="flex items-center gap-1.5 animate-pop-in">
                 <Badge variant={liveSim.willRaise ? "emerald" : "amber"}>
                   {liveSim.willRaise
                     ? `+${liveSim.delta} pts`
@@ -235,7 +259,7 @@ export function KPIStrip({ className }: KPIStripProps) {
                   </strong>
                 </span>
                 {liveSim.willBreakPB && <Badge variant="amber">PB</Badge>}
-              </>
+              </div>
             ) : (
               <span className="text-text-faint truncate">
                 {t("dashboard.ratchetProtected")}
@@ -246,11 +270,14 @@ export function KPIStrip({ className }: KPIStripProps) {
       </div>
 
       {/* Zone 2 (4 cols): Daily Target & Today's Execution */}
-      <div className="lg:col-span-4 p-5 flex flex-col justify-between gap-4">
+      <div className="group/z2 lg:col-span-4 p-5 flex flex-col justify-between gap-4 transition-colors duration-300 hover:bg-white/[0.012]">
         <div className="space-y-2">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
-              <span className="text-score inline-flex" aria-hidden="true">
+              <span
+                className="text-score inline-flex transition-transform duration-300 group-hover/z2:rotate-12 group-hover/z2:scale-110"
+                aria-hidden="true"
+              >
                 <Target size={18} weight="regular" />
               </span>
               <span className="text-xs font-semibold text-text-secondary">
@@ -290,10 +317,12 @@ export function KPIStrip({ className }: KPIStripProps) {
           <div className="w-full h-2 rounded-full liquid-well overflow-hidden p-0.5">
             <div
               className={cn(
-                "h-full rounded-full transition-all duration-300 ease-out",
-                todaySummary?.hit ? "bg-emerald" : "bg-score"
+                "h-full rounded-full transition-all duration-500 ease-out relative",
+                todaySummary?.hit
+                  ? "bg-emerald shadow-[0_0_12px_rgb(var(--emerald-rgb)/0.65)]"
+                  : "bg-score shadow-[0_0_12px_rgb(var(--score-rgb)/0.65)]"
               )}
-              style={{ width: `${ Math.max(todayProgressPct, hasData ? 4 : 0) }%` }}
+              style={{ width: `${Math.max(todayProgressPct, hasData ? 4 : 0)}%` }}
             />
           </div>
           <div className="flex items-center justify-between text-[11px] font-mono text-text-faint tabular">
@@ -311,12 +340,16 @@ export function KPIStrip({ className }: KPIStripProps) {
       </div>
 
       {/* Zone 3 (3 cols): Personal Best & Hit Rate Consistency */}
-      <div className="lg:col-span-3 p-5 flex flex-col justify-between gap-3">
+      <div className="group/z3 lg:col-span-3 p-5 flex flex-col justify-between gap-3 transition-colors duration-300 hover:bg-white/[0.012]">
         {/* Top half: Personal Best */}
         <div className="flex items-center justify-between gap-2">
           <div>
             <div className="flex items-center gap-1.5 text-xs font-semibold text-text-secondary">
-              <Trophy size={15} weight="regular" className="text-amber" />
+              <Trophy
+                size={15}
+                weight="regular"
+                className="text-amber transition-transform duration-300 group-hover/z3:-translate-y-0.5 group-hover/z3:scale-110"
+              />
               <span>{t("metric.pb")}</span>
             </div>
             <div className="flex items-baseline gap-1.5 mt-1">
@@ -361,7 +394,11 @@ export function KPIStrip({ className }: KPIStripProps) {
         <div className="flex items-center justify-between gap-2">
           <div>
             <div className="flex items-center gap-1.5 text-xs font-semibold text-text-secondary">
-              <TrendUp size={15} weight="regular" className="text-score" />
+              <TrendUp
+                size={15}
+                weight="regular"
+                className="text-score transition-transform duration-300 group-hover/z3:translate-x-0.5 group-hover/z3:-translate-y-0.5"
+              />
               <span>{t("metric.consistency")}</span>
             </div>
             <div className="flex items-baseline gap-1 mt-1">
@@ -389,10 +426,10 @@ export function KPIStrip({ className }: KPIStripProps) {
               </div>
             )}
             <span className="block text-[11px] font-mono text-text-faint tabular">
-              {t("metric.hitRate")}:{" "}
+              Threshold / PB:{" "}
               <strong className="text-text-secondary">
                 {computedMetrics.consistencyRatio !== null
-                  ? `${Math.round(computedMetrics.consistencyRatio * 100)}%`
+                  ? `${computedMetrics.consistencyRatio.toFixed(1)}%`
                   : "—"}
               </strong>
             </span>

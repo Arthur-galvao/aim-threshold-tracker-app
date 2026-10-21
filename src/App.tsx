@@ -21,6 +21,7 @@ import {
 } from "@/components/dialogs";
 import type { AppSettings, Playlist } from "@/lib/types";
 import { getSettings, saveSettings } from "@/lib/tauri-bridge";
+import { applyTheme, getStoredTheme, type AppTheme } from "@/lib/theme";
 
 function AppContent() {
   useWindowActivityGuard();
@@ -67,6 +68,11 @@ function AppContent() {
   const [newScenarioOpen, setNewScenarioOpen] = useState(false);
   const [playlistManagerOpen, setPlaylistManagerOpen] = useState(false);
   const [aimlabOpen, setAimlabOpen] = useState(false);
+  const [theme, setTheme] = useState<AppTheme>(getStoredTheme);
+
+  useEffect(() => {
+    applyTheme(theme);
+  }, [theme]);
 
   // Sincroniza o mapa de centros de cenários com o backend Rust
   useScenarioCentersSync({
@@ -141,6 +147,8 @@ function AppContent() {
       onOpenSessionSheet={() => setSessionSheetOpen(true)}
       watcherActive={watcherStatus.active}
       onToggleWatcher={toggleWatcher}
+      currentTheme={theme}
+      onThemeChange={setTheme}
     >
       {activeTab === "dashboard" && <DashboardView />}
       {activeTab === "randomizer" && <RandomizerView />}
@@ -178,6 +186,8 @@ function AppContent() {
         onClear={clearAllData}
         onUpdateAppSettings={handleUpdateAppSettings}
         onOpenAimLab={() => setAimlabOpen(true)}
+        currentTheme={theme}
+        onThemeChange={setTheme}
       />
 
       <NewScenarioDialog

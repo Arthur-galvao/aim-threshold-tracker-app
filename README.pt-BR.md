@@ -4,7 +4,7 @@
 
 [![Download](https://img.shields.io/github/v/release/Arthur-galvao/aim-threshold-tracker-app?label=download&style=for-the-badge)](https://github.com/Arthur-galvao/aim-threshold-tracker-app/releases/latest)
 
-Aplicativo desktop para rastrear thresholds de mira no KovaaK's, seguindo a metodologia do benchmark Viscose e do padrão Escalate, com suporte a randomização controlada de sensibilidade e análise estatística de Sweet Spot.
+Aplicativo desktop para rastrear thresholds de mira no KovaaK's e Aim Lab, seguindo a metodologia do benchmark Viscose e do padrão Escalate, com interface v2.0 Liquid Glass HUD, fundo interativo de nebulosa espacial 3D, randomização controlada de sensibilidade e análise estatística Bayesiana de Sweet Spot.
 
 ## Download
 
@@ -14,9 +14,15 @@ Disponível para Windows. Não requer privilégios de administrador para instala
 
 ## Principais Funcionalidades
 
+### v2.0 Liquid Glass HUD e Nebulosa Espacial Interativa
+- **Hierarquia Óptica em 3 Camadas:** Lentes translúcidas de cristal fumê (`.liquid-surface`), cavidades ópticas rebaixadas (`.liquid-well`) e cápsulas espaciais flutuantes (`.liquid-float` / `.liquid-pill`) com reflexo especular guiado pelo cursor.
+- **Nebulosa 3D de Poeira Cósmica Interativa:** Renderização em tempo real a 60fps com 1.900 micro-grãos estelares e nuvens volumétricas que reagem com vórtice e paralaxe ao movimento do mouse, pausando automaticamente a GPU quando o app está em segundo plano durante o jogo.
+- **Paletas de Tema Sincronizadas:** Quatro temas dinâmicos (`Cyber Lab`, `Tactical Emerald`, `Amethyst Purple` e `Obsidian Amber`) que sincronizam os acentos de vidro e a nebulosa espacial.
+- **Microinterações Táteis:** Deslizadores com física de mola, contadores numéricos exponenciais, simulador de catraca em tempo real e acordeão fluido no histórico de sessões.
+
 ### Rastreamento de Thresholds e Métricas
 - **Watcher em Tempo Real:** Detecta automaticamente a pasta de estatísticas do KovaaK's (via Steam) e processa novas partidas em tempo real a partir dos arquivos CSV.
-- **Cálculo Dinâmico de Threshold:** Evolução sistemática de metas de pontuação baseadas no histórico de desempenho individual.
+- **Catraca Dinâmica de Threshold:** Evolução sistemática sem regressão (`max(thresholdAnterior, candidato)`) baseada no histórico de desempenho individual, acompanhando Taxa de Sucesso (Hit Rate) e Sequência (Streak).
 - **Normalização de Scores:** Comparação justa entre cenários com pontuações distintas utilizando porcentagem relativa ao Personal Best (% do PB).
 - **Formatação Escalate:** Exportação com um clique do histórico de sessão formatado para compartilhamento com a comunidade.
 - **Privacidade Local:** Todos os dados são armazenados localmente no computador via SQLite/JSON, sem envio de informações para servidores externos.

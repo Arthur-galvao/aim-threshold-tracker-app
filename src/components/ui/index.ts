@@ -2,7 +2,7 @@ export * from "./Button";
 export * from "./IconButton";
 export * from "./Badge";
 export * from "./Segmented";
-export * from "./Tabs";
+export * from "./tabs";
 export * from "./Switch";
 export * from "./Slider";
 export * from "./Dialog";

@@ -4,7 +4,7 @@
 
 [![Download](https://img.shields.io/github/v/release/Arthur-galvao/aim-threshold-tracker-app?label=download&style=for-the-badge)](https://github.com/Arthur-galvao/aim-threshold-tracker-app/releases/latest)
 
-Desktop application for tracking aim thresholds in KovaaK's, following the Viscose benchmark methodology and Escalate standard, featuring controlled sensitivity randomization and empirical Bayesian Sweet Spot statistical analysis.
+Desktop application for tracking aim thresholds in KovaaK's and Aim Lab, following the Viscose benchmark methodology and Escalate standard, featuring a v2.0 Liquid Glass HUD, interactive 3D cosmic dust nebula backdrop, controlled sensitivity randomization, and empirical Bayesian Sweet Spot statistical analysis.
 
 ## Download
 
@@ -14,9 +14,15 @@ Available for Windows. Does not require administrator privileges to install.
 
 ## Key Features
 
+### v2.0 Liquid Glass HUD & Interactive Space Nebula
+- **Three-Tier Optical Glass Hierarchy:** Translucent smoked-crystal lenses (`.liquid-surface`), recessed optical wells (`.liquid-well`), and spatial floating capsules (`.liquid-float` / `.liquid-pill`) with cursor-tracked specular spotlights.
+- **Interactive 3D Cosmic Dust Nebula:** Real-time 60fps 2D/3D canvas rendering 1,900 fibrous stardust grains and volumetric nebula clouds that swirl, disperse, and tilt with mouse movement, automatically pausing when backgrounded during gameplay.
+- **Synchronized Theme Palettes:** Four dynamic themes (`Cyber Lab`, `Tactical Emerald`, `Amethyst Purple`, and `Obsidian Amber`) that recolor both the glass refraction accents and the cosmic nebula.
+- **Tactile Micro-Interactions:** Spring-physics navigation gliders, exponential number tickers, interactive score ratchet simulator, and fluid accordion session history.
+
 ### Threshold & Metric Tracking
 - **Real-Time Watcher:** Automatically detects the KovaaK's stats directory (via Steam) and processes new matches in real time directly from CSV files.
-- **Dynamic Threshold Calculation:** Systematic progression of scoring targets based on individual historical performance.
+- **Dynamic Threshold Ratchet:** Systematic non-regressing progression of scoring targets (`max(previousThreshold, candidate)`) based on individual historical performance, tracking Hit Rate and Streak.
 - **Score Normalization:** Fair comparison across scenarios with different score scales using percentage of Personal Best (% of PB).
 - **Escalate Formatting:** One-click clipboard export formatted for immediate community sharing.
 - **Local Privacy:** All data is stored locally on your machine via SQLite/JSON; no data is sent to external servers.

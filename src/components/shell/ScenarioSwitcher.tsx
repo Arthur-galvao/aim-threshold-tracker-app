@@ -71,7 +71,8 @@ export function ScenarioSwitcher({
           <button
             type="button"
             className={cn(
-              "liquid-pill flex h-8 items-center gap-2.5 px-3.5 rounded-full text-xs cursor-pointer select-none focus-visible:outline-none press",
+              "group liquid-pill flex h-8 items-center gap-2.5 px-3.5 rounded-full text-xs cursor-pointer select-none focus-visible:outline-none press",
+              open && "border-glass-edge-strong",
               className
             )}
           />
@@ -82,12 +83,18 @@ export function ScenarioSwitcher({
             {activeTask ? activeTask.name : t("task.none")}
           </span>
           {activeTask?.category && (
-            <span className="hidden lg:inline-block px-2 py-0.5 rounded-full liquid-well text-[10px] font-medium text-text-secondary truncate">
+            <span className="hidden lg:inline-block px-2 py-0.5 rounded-full liquid-well text-[10px] font-medium text-text-secondary truncate transition-colors group-hover:text-text-main">
               {activeTask.category}
             </span>
           )}
         </div>
-        <CaretDown size={13} className="text-text-faint shrink-0" />
+        <CaretDown
+          size={13}
+          className={cn(
+            "text-text-faint shrink-0 transition-transform duration-200 group-hover:text-text-main",
+            open && "rotate-180 text-score"
+          )}
+        />
       </PopoverTrigger>
 
       <PopoverPortal>
@@ -118,9 +125,9 @@ export function ScenarioSwitcher({
                     type="button"
                     onClick={() => setSelectedCategory(cat)}
                     className={cn(
-                      "px-2.5 py-0.5 rounded-full text-[11px] font-medium whitespace-nowrap transition cursor-pointer press",
+                      "px-2.5 py-0.5 rounded-full text-[11px] font-medium whitespace-nowrap transition-all duration-150 cursor-pointer press",
                       selectedCategory === cat
-                        ? "bg-score-soft text-score border border-edge-strong"
+                        ? "bg-score-soft text-score border border-edge-strong shadow-[0_0_12px_rgb(var(--score-rgb)/0.2)]"
                         : "liquid-well text-text-secondary hover:text-text-main"
                     )}
                   >
@@ -161,14 +168,14 @@ export function ScenarioSwitcher({
                         setOpen(false);
                       }}
                       className={cn(
-                        "flex items-center justify-between p-2 rounded-control text-xs transition cursor-pointer select-none text-left w-full press",
+                        "group flex items-center justify-between p-2 rounded-control text-xs transition-all duration-150 cursor-pointer select-none text-left w-full press",
                         isCurrent
                           ? "liquid-pill text-text-main font-medium border-edge-strong"
-                          : "hover:bg-surface-hover text-text-secondary hover:text-text-main"
+                          : "hover:bg-surface-hover hover:translate-x-0.5 text-text-secondary hover:text-text-main"
                       )}
                     >
                       <div className="flex flex-col min-w-0 pr-2">
-                        <span className="truncate text-text-main font-medium">
+                        <span className="truncate text-text-main font-medium group-hover:text-score transition-colors">
                           {task.name}
                         </span>
                         {task.category && (
@@ -185,10 +192,10 @@ export function ScenarioSwitcher({
                           </span>
                         )}
                         {trend === "up" && (
-                          <TrendUp size={13} className="text-emerald shrink-0" />
+                          <TrendUp size={13} className="text-emerald shrink-0 transition-transform group-hover:-translate-y-0.5" />
                         )}
                         {trend === "down" && (
-                          <TrendDown size={13} className="text-amber shrink-0" />
+                          <TrendDown size={13} className="text-amber shrink-0 transition-transform group-hover:translate-y-0.5" />
                         )}
                         {trend === "flat" && pb !== null && (
                           <Minus size={13} className="text-text-faint shrink-0" />
@@ -208,9 +215,9 @@ export function ScenarioSwitcher({
                   setOpen(false);
                   onNewScenario();
                 }}
-                className="w-full flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-control text-xs font-medium text-score hover:bg-score-soft transition cursor-pointer press"
+                className="group w-full flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-control text-xs font-medium text-score hover:bg-score-soft transition cursor-pointer press"
               >
-                <Plus size={14} weight="bold" />
+                <Plus size={14} weight="bold" className="transition-transform duration-200 group-hover:rotate-90" />
                 <span>{t("task.new")}</span>
               </button>
             </div>

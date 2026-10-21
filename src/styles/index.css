@@ -3,100 +3,197 @@
 @tailwind utilities;
 
 /* ==========================================================================
-   AIM TRACKER — iOS 26 / visionOS Liquid Glass Optical System
-   Three strict optical tiers:
+   AIM TRACKER — Liquid Glass & Space Nebula Optical System
+   Three optical tiers over an interactive 3D cosmic dust nebula stage:
      1. Primary Lens (.glass / .liquid-surface)
-     2. Recessed Cavity (.glass-inset / .liquid-well) — never nest cards!
-     3. Spatial Capsule (.glass-float / .liquid-pill) — top bar, popovers, sheets
+     2. Recessed Cavity (.glass-inset / .liquid-well)
+     3. Spatial Capsule (.glass-float / .liquid-pill)
    ========================================================================== */
 @layer base {
-  :root {
+  :root,
+  [data-theme="cyber-lab"] {
     color-scheme: dark;
+    --in-oklab: ;
+    --in-oklch: ;
 
-    /* Stage */
-    --base: #050811;
-    --surface: #0b101b;
-    --surface-subtle: rgba(255, 255, 255, 0.045);
-    --surface-hover: rgba(255, 255, 255, 0.08);
+    /* Deep Cosmic Void Stage */
+    --base: #020308;
+    --surface: rgba(10, 14, 26, 0.32);
+    --surface-subtle: rgba(255, 255, 255, 0.035);
+    --surface-hover: rgba(255, 255, 255, 0.075);
 
-    /* Text (all >= 4.5:1 on glass over base) */
-    --text-main: #f5f8fc;
-    --text-secondary: #b0bcd0;
-    --text-faint: #7d8b9f;
+    /* Text (high contrast over translucent smoked glass) */
+    --text-main: #f6f9fe;
+    --text-secondary: #bccae0;
+    --text-faint: #8494ad;
 
-    /* Edges */
+    /* Subtle refined edges (HubX / visionOS style — uniform, never harsh bevels) */
     --edge: rgba(255, 255, 255, 0.075);
     --edge-strong: rgba(255, 255, 255, 0.16);
 
-    /* Accent + semantic status */
-    --score-rgb: 88 196 255;
-    --score: rgb(88 196 255);
-    --score-soft: rgba(88, 196, 255, 0.15);
-    --emerald-rgb: 62 224 166;
-    --emerald: rgb(62 224 166);
-    --emerald-soft: rgba(62, 224, 166, 0.14);
-    --emerald-edge: rgba(62, 224, 166, 0.3);
-    --amber-rgb: 251 191 90;
-    --amber: rgb(251 191 90);
-    --amber-soft: rgba(251, 191, 90, 0.14);
-    --amber-edge: rgba(251, 191, 90, 0.3);
-    --red-rgb: 255 107 129;
-    --red: rgb(255 107 129);
-    --red-soft: rgba(255, 107, 129, 0.14);
-    --red-edge: rgba(255, 107, 129, 0.3);
-    --scrim: rgba(2, 4, 9, 0.62);
+    /* Accent + semantic status (Default: Cyber Lab) */
+    --score-rgb: 56 189 248;
+    --score: rgb(56 189 248);
+    --score-soft: rgb(56 189 248 / 0.15);
+    --emerald-rgb: 52 211 153;
+    --emerald: rgb(52 211 153);
+    --emerald-soft: rgb(52 211 153 / 0.14);
+    --emerald-edge: rgb(52 211 153 / 0.32);
+    --amber-rgb: 251 191 36;
+    --amber: rgb(251 191 36);
+    --amber-soft: rgb(251 191 36 / 0.14);
+    --amber-edge: rgb(251 191 36 / 0.32);
+    --red-rgb: 251 113 133;
+    --red: rgb(251 113 133);
+    --red-soft: rgb(251 113 133 / 0.14);
+    --red-edge: rgb(251 113 133 / 0.32);
+    --scrim: rgba(2, 3, 8, 0.65);
 
-    /* Liquid Glass refraction tiers — translucent crystal over chromatic wallpaper */
+    /* Space Nebula Cloud Palette (Cyber Lab: Electric Cyan + Deep Violet + Indigo) */
+    --nebula-primary-rgb: 56 189 248;
+    --nebula-secondary-rgb: 124 58 237;
+    --nebula-accent-rgb: 99 102 241;
+
+    /* Translucent Smoked Liquid Glass Tiers (lets the cosmic nebula shine through) */
     --glass-1: linear-gradient(
-      135deg,
-      rgba(255, 255, 255, 0.1) 0%,
-      rgba(255, 255, 255, 0.03) 45%,
-      rgba(10, 16, 30, 0.36) 100%
+      145deg,
+      rgba(255, 255, 255, 0.055) 0%,
+      rgb(var(--score-rgb) / 0.03) 45%,
+      rgba(6, 9, 18, 0.28) 100%
     );
     --glass-2: linear-gradient(
-      135deg,
-      rgba(255, 255, 255, 0.15) 0%,
-      rgba(255, 255, 255, 0.05) 50%,
-      rgba(16, 24, 44, 0.42) 100%
+      145deg,
+      rgba(255, 255, 255, 0.095) 0%,
+      rgb(var(--score-rgb) / 0.055) 50%,
+      rgba(10, 15, 28, 0.34) 100%
     );
     --glass-float: linear-gradient(
       145deg,
-      rgba(28, 40, 66, 0.68) 0%,
-      rgba(12, 18, 32, 0.62) 100%
+      rgba(18, 25, 44, 0.38) 0%,
+      rgba(8, 11, 22, 0.46) 100%
     );
-    --glass-input: rgba(3, 6, 14, 0.42);
-    --glass-edge: rgba(255, 255, 255, 0.14);
-    --glass-edge-strong: rgba(255, 255, 255, 0.28);
-    --glass-blur: 26px;
-    --glass-sat: 210%;
+    --glass-input: rgba(255, 255, 255, 0.025);
+    --glass-edge: rgba(255, 255, 255, 0.09);
+    --glass-edge-strong: rgba(255, 255, 255, 0.18);
+    --glass-blur: 10px;
+    --glass-sat: 180%;
 
-    /* Specular directional rim + internal chromatic refraction + layered depth */
+    /* Refined Specular Highlights & Depth */
     --spec:
-      inset 0 1.5px 1px 0 rgba(255, 255, 255, 0.34),
-      inset 1px 0 0.5px 0 rgba(255, 255, 255, 0.16),
-      inset 0 -1px 1px 0 rgba(88, 196, 255, 0.12),
-      inset 0 0 22px 0 rgba(255, 255, 255, 0.035);
+      inset 0 1px 0 0 rgba(255, 255, 255, 0.14),
+      inset 0 0 24px 0 rgb(var(--score-rgb) / 0.04);
     --spec-pill:
-      inset 0 1.5px 1px 0 rgba(255, 255, 255, 0.42),
-      inset 0 -1px 0.5px 0 rgba(0, 0, 0, 0.28);
+      inset 0 1px 0 0 rgba(255, 255, 255, 0.18),
+      inset 0 -1px 0 0 rgb(var(--score-rgb) / 0.08);
     --shadow-1:
-      0 4px 12px -2px rgba(0, 0, 0, 0.32),
-      0 18px 36px -12px rgba(0, 0, 0, 0.52);
+      0 8px 28px -6px rgba(0, 0, 0, 0.5),
+      0 2px 8px -2px rgba(0, 0, 0, 0.3);
     --shadow-2:
-      0 8px 20px -4px rgba(0, 0, 0, 0.38),
-      0 28px 54px -16px rgba(0, 0, 0, 0.68);
+      0 14px 38px -8px rgba(0, 0, 0, 0.62),
+      0 4px 12px -2px rgba(0, 0, 0, 0.4);
     --shadow-float:
-      0 12px 28px -6px rgba(0, 0, 0, 0.48),
-      0 40px 80px -20px rgba(0, 0, 0, 0.82);
+      0 18px 48px -10px rgba(0, 0, 0, 0.72),
+      0 4px 16px -4px rgba(0, 0, 0, 0.45);
 
     /* Spatial geometry */
-    --r-tile: 22px;
-    --r-control: 13px;
-    --r-float: 26px;
+    --r-tile: 18px;
+    --r-control: 12px;
+    --r-float: 22px;
 
-    /* Motion: exponential ease-out curves (spring physics handled via motion/react) */
+    /* Motion */
     --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
     --ease-spring: cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  @supports (background: linear-gradient(in oklab, white, black)) {
+    :root {
+      --in-oklab: in oklab;
+      --in-oklch: in oklch;
+    }
+  }
+
+  [data-theme="tactical-emerald"] {
+    --base: #020604;
+    --surface: rgba(7, 18, 14, 0.32);
+    --score-rgb: 16 185 129;
+    --score: rgb(16 185 129);
+    --score-soft: rgb(16 185 129 / 0.15);
+    --nebula-primary-rgb: 16 185 129;
+    --nebula-secondary-rgb: 6 182 212;
+    --nebula-accent-rgb: 52 211 153;
+    --glass-1: linear-gradient(
+      145deg,
+      rgba(255, 255, 255, 0.055) 0%,
+      rgb(16 185 129 / 0.035) 45%,
+      rgba(4, 12, 9, 0.28) 100%
+    );
+    --glass-2: linear-gradient(
+      145deg,
+      rgba(255, 255, 255, 0.095) 0%,
+      rgb(16 185 129 / 0.06) 50%,
+      rgba(8, 20, 15, 0.34) 100%
+    );
+    --glass-float: linear-gradient(
+      145deg,
+      rgba(10, 26, 20, 0.38) 0%,
+      rgba(5, 14, 10, 0.46) 100%
+    );
+  }
+
+  [data-theme="amethyst-purple"] {
+    --base: #04020a;
+    --surface: rgba(14, 8, 26, 0.32);
+    --score-rgb: 168 85 247;
+    --score: rgb(168 85 247);
+    --score-soft: rgb(168 85 247 / 0.16);
+    --nebula-primary-rgb: 168 85 247;
+    --nebula-secondary-rgb: 99 102 241;
+    --nebula-accent-rgb: 236 72 153;
+    --glass-1: linear-gradient(
+      145deg,
+      rgba(255, 255, 255, 0.055) 0%,
+      rgb(168 85 247 / 0.04) 45%,
+      rgba(8, 5, 18, 0.28) 100%
+    );
+    --glass-2: linear-gradient(
+      145deg,
+      rgba(255, 255, 255, 0.095) 0%,
+      rgb(168 85 247 / 0.065) 50%,
+      rgba(16, 10, 30, 0.34) 100%
+    );
+    --glass-float: linear-gradient(
+      145deg,
+      rgba(22, 12, 40, 0.38) 0%,
+      rgba(9, 5, 20, 0.46) 100%
+    );
+  }
+
+  [data-theme="obsidian-amber"] {
+    --base: #060402;
+    --surface: rgba(22, 14, 7, 0.32);
+    --score-rgb: 245 158 11;
+    --score: rgb(245 158 11);
+    --score-soft: rgb(245 158 11 / 0.16);
+    --nebula-primary-rgb: 245 158 11;
+    --nebula-secondary-rgb: 234 88 12;
+    --nebula-accent-rgb: 251 191 36;
+    --glass-1: linear-gradient(
+      145deg,
+      rgba(255, 255, 255, 0.055) 0%,
+      rgb(245 158 11 / 0.035) 45%,
+      rgba(12, 8, 4, 0.28) 100%
+    );
+    --glass-2: linear-gradient(
+      145deg,
+      rgba(255, 255, 255, 0.095) 0%,
+      rgb(245 158 11 / 0.06) 50%,
+      rgba(22, 14, 8, 0.34) 100%
+    );
+    --glass-float: linear-gradient(
+      145deg,
+      rgba(30, 18, 10, 0.38) 0%,
+      rgba(14, 9, 5, 0.46) 100%
+    );
   }
 
   *, ::before, ::after {
@@ -154,92 +251,34 @@
 }
 
 @layer components {
-  /* Tier 1: Primary Liquid Glass Lens */
+  /* Tier 1: Primary Liquid Glass Lens — Translucent Smoked Crystal with Cursor-Reactive Glare */
   .glass,
   .liquid-surface {
     background: var(--glass-1);
-    backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat)) brightness(1.04);
-    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat)) brightness(1.04);
+    backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
     border: 1px solid var(--glass-edge);
-    border-top-color: rgba(255, 255, 255, 0.32);
-    border-left-color: rgba(255, 255, 255, 0.22);
-    border-right-color: rgba(255, 255, 255, 0.1);
-    border-bottom-color: rgba(88, 196, 255, 0.16);
     border-radius: var(--r-tile);
     box-shadow: var(--spec), var(--shadow-1);
     position: relative;
-    isolation: isolate;
-  }
-
-  /* Tier 2: Tactile Liquid Pill / Raised Control */
-  .glass-control,
-  .liquid-pill {
-    background: var(--glass-2);
-    backdrop-filter: blur(18px) saturate(var(--glass-sat)) brightness(1.06);
-    -webkit-backdrop-filter: blur(18px) saturate(var(--glass-sat)) brightness(1.06);
-    border: 1px solid var(--glass-edge);
-    border-top-color: rgba(255, 255, 255, 0.36);
-    border-bottom-color: rgba(255, 255, 255, 0.1);
-    border-radius: var(--r-control);
-    box-shadow: var(--spec-pill), var(--shadow-1);
     transition:
-      transform 220ms var(--ease-out),
-      background-color 180ms var(--ease-out),
-      border-color 180ms var(--ease-out),
-      box-shadow 220ms var(--ease-out);
-  }
-  .glass-control:hover,
-  .liquid-pill:hover {
-    background: rgba(255, 255, 255, 0.12);
-    border-color: var(--glass-edge-strong);
-    border-top-color: rgba(255, 255, 255, 0.48);
-    transform: translateY(-1px);
-  }
-  .glass-control:active,
-  .liquid-pill:active {
-    transform: scale(0.97);
-    transition-duration: 75ms;
+      border-color 240ms var(--ease-out),
+      box-shadow 260ms var(--ease-out),
+      transform 260ms var(--ease-out);
   }
 
-  /* Tier 3: Floating Spatial Capsule (Dynamic Bar, Dialogs, Popovers) */
-  .glass-float,
-  .liquid-float {
-    background: var(--glass-float);
-    backdrop-filter: blur(40px) saturate(220%) brightness(1.05);
-    -webkit-backdrop-filter: blur(40px) saturate(220%) brightness(1.05);
-    border: 1px solid var(--glass-edge-strong);
-    border-top-color: rgba(255, 255, 255, 0.38);
-    border-bottom-color: rgba(88, 196, 255, 0.18);
-    border-radius: var(--r-float);
-    box-shadow: var(--spec-pill), var(--shadow-float);
-    isolation: isolate;
-  }
-
-  /* Recessed Optical Cavity (Replaces nested cards inside a lens) */
-  .glass-inset,
-  .liquid-well {
-    background: var(--glass-input);
-    backdrop-filter: blur(12px) saturate(140%);
-    -webkit-backdrop-filter: blur(12px) saturate(140%);
-    border: 1px solid rgba(255, 255, 255, 0.07);
-    border-top-color: rgba(0, 0, 0, 0.35);
-    border-bottom-color: rgba(255, 255, 255, 0.14);
-    border-radius: var(--r-control);
+  .glass:hover,
+  .liquid-surface:hover {
+    border-color: rgba(255, 255, 255, 0.14);
     box-shadow:
-      inset 0 2px 6px rgba(0, 0, 0, 0.48),
-      inset 0 0 0 0.5px rgba(0, 0, 0, 0.3);
+      inset 0 1px 0 0 rgba(255, 255, 255, 0.2),
+      inset 0 0 32px 0 rgb(var(--score-rgb) / 0.06),
+      var(--shadow-2);
   }
 
-  /* Subtle living drift for the SVG Liquid Wallpaper */
-  .backdrop-drift {
-    animation: liquid-drift 28s ease-in-out infinite alternate;
-    transform-origin: center center;
-  }
-
-  /* Interactive Caustic Spotlight Surface */
-  .liquid-interactive {
-    position: relative;
-  }
+  /* Universal Cursor-Following Caustic Spotlight on ALL Glass Surfaces */
+  .glass::after,
+  .liquid-surface::after,
   .liquid-interactive::after {
     content: "";
     position: absolute;
@@ -247,43 +286,124 @@
     border-radius: inherit;
     pointer-events: none;
     background: radial-gradient(
-      360px circle at var(--mx, 50%) var(--my, 0%),
-      rgba(255, 255, 255, 0.065),
-      transparent 65%
+      380px circle at var(--mx, 50%) var(--my, 0%),
+      rgb(var(--score-rgb) / 0.13),
+      rgba(255, 255, 255, 0.045) 38%,
+      transparent 68%
     );
     opacity: 0;
     transition: opacity 260ms var(--ease-out);
   }
+  .glass:hover::after,
+  .liquid-surface:hover::after,
   .liquid-interactive:hover::after {
     opacity: 1;
   }
 
+  /* Tier 2: Tactile Liquid Pill / Raised Control */
+  .glass-control,
+  .liquid-pill {
+    background: var(--glass-2);
+    backdrop-filter: blur(10px) saturate(165%);
+    -webkit-backdrop-filter: blur(10px) saturate(165%);
+    border: 1px solid var(--glass-edge);
+    border-radius: var(--r-control);
+    box-shadow: var(--spec-pill), var(--shadow-1);
+    transition:
+      transform 200ms var(--ease-out),
+      background 200ms var(--ease-out),
+      border-color 180ms var(--ease-out),
+      box-shadow 220ms var(--ease-out);
+  }
+  .glass-control:hover,
+  .liquid-pill:hover {
+    background: linear-gradient(
+      145deg,
+      rgba(255, 255, 255, 0.14) 0%,
+      rgb(var(--score-rgb) / 0.11) 55%,
+      rgba(14, 20, 36, 0.42) 100%
+    );
+    border-color: var(--glass-edge-strong);
+    box-shadow:
+      inset 0 1px 0 0 rgba(255, 255, 255, 0.28),
+      0 6px 18px -4px rgb(var(--score-rgb) / 0.22);
+    transform: translateY(-1px);
+  }
+  .glass-control:active,
+  .liquid-pill:active {
+    transform: scale(0.96) translateY(0);
+    transition-duration: 70ms;
+  }
+
+  /* Tier 3: Floating Spatial Capsule (TopBar, Dialogs, Popovers) */
+  .glass-float,
+  .liquid-float {
+    background: var(--glass-float);
+    backdrop-filter: blur(16px) saturate(185%);
+    -webkit-backdrop-filter: blur(16px) saturate(185%);
+    border: 1px solid var(--glass-edge-strong);
+    border-radius: var(--r-float);
+    box-shadow: var(--spec-pill), var(--shadow-float);
+  }
+
+  /* Recessed Optical Cavity (Translucent well inside a primary glass surface) */
+  .glass-inset,
+  .liquid-well {
+    background: var(--glass-input);
+    border: 1px solid rgba(255, 255, 255, 0.065);
+    border-radius: var(--r-control);
+    box-shadow:
+      inset 0 1px 4px rgba(0, 0, 0, 0.28),
+      inset 0 0 0 0.5px rgba(255, 255, 255, 0.04);
+    transition:
+      border-color 200ms var(--ease-out),
+      background-color 200ms var(--ease-out),
+      box-shadow 200ms var(--ease-out);
+  }
+  .glass-inset:hover,
+  .liquid-well:hover {
+    border-color: rgba(255, 255, 255, 0.11);
+  }
+
+  /* Subtle living drift for the SVG Liquid Nebula Ribbons */
+  .backdrop-drift {
+    animation: liquid-drift 26s ease-in-out infinite alternate;
+    transform-origin: center center;
+  }
+
+  .liquid-interactive {
+    position: relative;
+  }
+
   .field {
     width: 100%;
-    background: var(--glass-input);
+    background: rgba(255, 255, 255, 0.035);
     border: 1px solid var(--glass-edge);
-    border-bottom-color: rgba(255, 255, 255, 0.15);
     border-radius: 12px;
     padding: 0.5rem 0.75rem;
     font-size: 0.8125rem;
     color: var(--text-main);
     font-family: inherit;
-    box-shadow: inset 0 1.5px 4px rgba(0, 0, 0, 0.38);
+    box-shadow:
+      inset 0 1px 3px rgba(0, 0, 0, 0.28),
+      inset 0 0 0 0.5px rgba(255, 255, 255, 0.04);
     transition:
       border-color 180ms var(--ease-out),
       box-shadow 200ms var(--ease-out),
-      background-color 180ms var(--ease-out);
+      background-color 180ms var(--ease-out),
+      transform 180ms var(--ease-out);
   }
   .field:hover {
     border-color: var(--glass-edge-strong);
+    background: rgba(255, 255, 255, 0.05);
   }
   .field:focus {
     outline: none;
     border-color: var(--score);
-    background: rgba(6, 10, 22, 0.65);
+    background: rgba(6, 10, 22, 0.48);
     box-shadow:
       0 0 0 3px var(--score-soft),
-      inset 0 1.5px 4px rgba(0, 0, 0, 0.35);
+      inset 0 1px 3px rgba(0, 0, 0, 0.28);
   }
   .field::placeholder {
     color: var(--text-faint);
@@ -297,11 +417,11 @@
     cursor: not-allowed;
   }
 
-  /* Native Top-Layer Transitions (modern-web-guidance: animate-to-from-top-layer) */
+  /* Native Top-Layer Transitions */
   .modal-scrim {
     background: var(--scrim);
-    backdrop-filter: blur(12px) saturate(130%);
-    -webkit-backdrop-filter: blur(12px) saturate(130%);
+    backdrop-filter: blur(14px) saturate(140%);
+    -webkit-backdrop-filter: blur(14px) saturate(140%);
     transition:
       opacity 200ms var(--ease-out),
       display 200ms allow-discrete,
@@ -316,46 +436,50 @@
   .top-layer-popup {
     transition:
       opacity 220ms var(--ease-out),
-      transform 220ms var(--ease-out),
+      transform 220ms var(--ease-spring),
       display 220ms allow-discrete,
       overlay 220ms allow-discrete;
   }
   @starting-style {
     .top-layer-popup {
       opacity: 0;
-      transform: scale(0.96) translateY(6px);
+      transform: scale(0.95) translateY(6px);
     }
   }
 
-  /* Micro-interaction primitives */
+  /* Micro-interaction primitives — always active for tactile responsiveness */
   .press {
     transition:
-      transform 200ms var(--ease-out),
-      filter 150ms var(--ease-out);
+      transform 180ms var(--ease-spring),
+      filter 150ms var(--ease-out),
+      box-shadow 180ms var(--ease-out);
+  }
+  .press:hover {
+    transform: translateY(-1px);
   }
   .press:active {
-    transform: scale(0.96);
-    transition-duration: 70ms;
+    transform: scale(0.95) translateY(0.5px) !important;
+    transition-duration: 65ms;
   }
   .lift {
     transition:
-      transform 260ms var(--ease-out),
-      box-shadow 260ms var(--ease-out),
+      transform 240ms var(--ease-spring),
+      box-shadow 240ms var(--ease-out),
       border-color 200ms var(--ease-out);
   }
   .lift:hover {
-    transform: translateY(-2px);
+    transform: translateY(-2.5px);
     box-shadow: var(--spec), var(--shadow-2);
-    border-top-color: rgba(255, 255, 255, 0.28);
+    border-color: var(--glass-edge-strong);
   }
 
-  /* Staggered entrance: style={{ "--i": index }} */
+  /* Staggered entrance */
   .enter {
-    animation: enter-up 420ms var(--ease-out) both;
-    animation-delay: calc(var(--i, 0) * 40ms);
+    animation: enter-up 380ms var(--ease-out) both;
+    animation-delay: calc(var(--i, 0) * 35ms);
   }
   .view-enter {
-    animation: view-in 260ms var(--ease-out) both;
+    animation: view-in 240ms var(--ease-out) both;
   }
 
   .tabular {
@@ -382,19 +506,6 @@
   .scroll-y::-webkit-scrollbar-thumb:hover {
     background: rgba(255, 255, 255, 0.24);
   }
-
-  @media (prefers-reduced-transparency: reduce) {
-    .glass,
-    .liquid-surface,
-    .glass-control,
-    .liquid-pill,
-    .glass-float,
-    .liquid-float {
-      background: var(--surface);
-      backdrop-filter: none;
-      -webkit-backdrop-filter: none;
-    }
-  }
 }
 
 @keyframes enter-up {
@@ -420,7 +531,7 @@
 @keyframes pop-in {
   from {
     opacity: 0;
-    transform: scale(0.97) translateY(4px);
+    transform: scale(0.95) translateY(4px);
   }
   to {
     opacity: 1;
@@ -440,22 +551,7 @@
     transform: scale(1) translate3d(0, 0, 0);
   }
   to {
-    transform: scale(1.04) translate3d(-1.5%, 1%, 0);
-  }
-}
-
-/* Reduced motion: disable spatial transforms while preserving smooth opacity feedback */
-@media (prefers-reduced-motion: reduce) {
-  .enter,
-  .view-enter,
-  .backdrop-drift {
-    animation: none !important;
-  }
-  .lift:hover,
-  .glass-control:hover,
-  .liquid-pill:hover,
-  .press:active {
-    transform: none !important;
+    transform: scale(1.045) translate3d(-1.5%, 1.2%, 0);
   }
 }
 

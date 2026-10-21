@@ -15,11 +15,16 @@ export function Badge({
   ...props
 }: BadgeProps) {
   const variantStyles: Record<BadgeVariant, string> = {
-    neutral: "bg-surface-subtle text-text-secondary border-edge",
-    score: "bg-score-soft text-score border-edge",
-    emerald: "bg-emerald-soft text-emerald border-emerald-edge",
-    amber: "bg-amber-soft text-amber border-amber-edge",
-    red: "bg-red-soft text-red border-red-edge",
+    neutral:
+      "bg-surface-subtle text-text-secondary border-edge backdrop-blur-md shadow-[inset_0_1px_0.5px_rgba(255,255,255,0.16)]",
+    score:
+      "bg-score-soft text-score border-edge backdrop-blur-md shadow-[inset_0_1px_0.5px_rgba(255,255,255,0.22)]",
+    emerald:
+      "bg-emerald-soft text-emerald border-emerald-edge backdrop-blur-md shadow-[inset_0_1px_0.5px_rgba(255,255,255,0.22)]",
+    amber:
+      "bg-amber-soft text-amber border-amber-edge backdrop-blur-md shadow-[inset_0_1px_0.5px_rgba(255,255,255,0.22)]",
+    red:
+      "bg-red-soft text-red border-red-edge backdrop-blur-md shadow-[inset_0_1px_0.5px_rgba(255,255,255,0.22)]",
   };
 
   return (

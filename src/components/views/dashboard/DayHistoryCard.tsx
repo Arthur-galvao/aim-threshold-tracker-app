@@ -1,6 +1,6 @@
 import { useState } from "react";
+import { AnimatePresence, motion } from "motion/react";
 import {
-  CaretDown,
   CaretRight,
   ShieldCheck,
   Check,
@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui";
 import { useI18n } from "@/lib/i18n";
 import type { Session } from "@/lib/types";
 import type { DaySummary } from "@/lib/day-summary";
+import { cn } from "@/lib/utils";
 
 export interface DayGroupItem extends DaySummary {
   individualSessions: Session[];
@@ -52,7 +53,14 @@ export function DayHistoryCard({
   };
 
   return (
-    <div className={`rounded-control overflow-hidden transition-all ${isExpanded ? "liquid-pill" : "liquid-well"}`}>
+    <div
+      className={cn(
+        "group/card rounded-control overflow-hidden transition-all duration-200",
+        isExpanded
+          ? "liquid-pill border-glass-edge-strong"
+          : "liquid-well hover:border-glass-edge-strong hover:translate-x-0.5"
+      )}
+    >
       {/* Day Summary Row */}
       <div
         role="button"
@@ -64,15 +72,23 @@ export function DayHistoryCard({
             onToggle();
           }
         }}
-        className="p-3.5 flex items-center justify-between gap-3 cursor-pointer select-none"
+        className="p-3.5 flex items-center justify-between gap-3 cursor-pointer select-none transition-colors hover:bg-white/[0.02]"
       >
         <div className="flex items-center gap-3 min-w-0">
-          <span className="text-text-faint" aria-hidden="true">
-            {isExpanded ? <CaretDown size={14} /> : <CaretRight size={14} />}
+          <span
+            className={cn(
+              "text-text-faint transition-transform duration-200 inline-flex",
+              isExpanded
+                ? "rotate-90 text-score"
+                : "group-hover/card:text-text-main group-hover/card:translate-x-0.5"
+            )}
+            aria-hidden="true"
+          >
+            <CaretRight size={14} weight="bold" />
           </span>
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <span className="font-mono font-semibold text-xs text-text-main tabular">
+              <span className="font-mono font-semibold text-xs text-text-main tabular transition-colors group-hover/card:text-score">
                 {formatted}
               </span>
               <span className="text-[11px] text-text-faint uppercase font-mono">
@@ -88,8 +104,11 @@ export function DayHistoryCard({
 
         <div className="flex items-center gap-3 shrink-0">
           <div className="text-right font-mono">
-            <div className="text-xs font-bold text-score tabular">
-              {day.best} <span className="text-[10px] text-text-faint font-normal">{t("metric.pts")}</span>
+            <div className="text-xs font-bold text-score tabular transition-transform duration-200 group-hover/card:scale-105 origin-right">
+              {day.best}{" "}
+              <span className="text-[10px] text-text-faint font-normal">
+                {t("metric.pts")}
+              </span>
             </div>
             <div className="text-[11px] text-emerald tabular flex items-center justify-end gap-1">
               <ShieldCheck size={12} weight="regular" />
@@ -107,80 +126,90 @@ export function DayHistoryCard({
         </div>
       </div>
 
-      {/* Expanded Individual Runs */}
-      {isExpanded && (
-        <div className="liquid-well p-3 space-y-1.5 border-t border-edge">
-          <div className="flex items-center justify-between text-[11px] font-mono text-text-faint px-2 pb-1 border-b border-edge">
-            <span>{t("chart.tooltipRuns")}</span>
-            <span>{t("hist.colAction")}</span>
-          </div>
-
-          {day.individualSessions.map((sess, idx) => {
-            const isConfirming = confirmDeleteId === sess.id;
-
-            return (
-              <div
-                key={sess.id}
-                className="flex items-center justify-between px-2.5 py-1.5 rounded-[10px] bg-surface-subtle text-xs font-mono hover:bg-surface-hover transition-colors"
-              >
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <span className="text-text-faint text-[10px] tabular">
-                    #{idx + 1}
-                  </span>
-                  <span className="font-bold text-text-main tabular">
-                    {sess.pb} pts
-                  </span>
-                  {sess.sourceFile && (
-                    <span
-                      className="text-[10px] text-text-faint truncate max-w-[200px]"
-                      title={sess.sourceFile}
-                    >
-                      {sess.sourceFile}
-                    </span>
-                  )}
-                </div>
-
-                {/* Inline Confirmation for Delete */}
-                <div className="shrink-0 flex items-center">
-                  {isConfirming ? (
-                    <div className="flex items-center gap-1.5 animate-pop-in">
-                      <span className="text-[11px] text-red font-sans">
-                        {t("dashboard.deleteConfirm")}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => handleDelete(sess.id)}
-                        className="px-2 py-0.5 rounded-[8px] bg-red-soft text-red border border-red-edge text-xs font-medium press cursor-pointer"
-                        title={t("hist.confirm")}
-                      >
-                        <Check size={12} weight="bold" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setConfirmDeleteId(null)}
-                        className="px-2 py-0.5 rounded-[8px] bg-surface-subtle text-text-faint hover:text-text-main text-xs press cursor-pointer"
-                        title={t("hist.cancel")}
-                      >
-                        <X size={12} weight="bold" />
-                      </button>
-                    </div>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => setConfirmDeleteId(sess.id)}
-                      className="p-1 rounded-control text-text-faint hover:text-red hover:bg-red-soft transition-colors cursor-pointer press"
-                      title={t("hist.delete")}
-                      aria-label={t("hist.delete")}
-                    >
-                      <Trash size={14} weight="regular" />
-                    </button>
-                  )}
-                </div>
+      {/* Expanded Individual Runs with smooth Accordion motion */}
+      <AnimatePresence initial={false}>
+        {isExpanded && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+            className="overflow-hidden"
+          >
+            <div className="liquid-well p-3 space-y-1.5 border-t border-edge">
+              <div className="flex items-center justify-between text-[11px] font-mono text-text-faint px-2 pb-1 border-b border-edge">
+                <span>{t("chart.tooltipRuns")}</span>
+                <span>{t("hist.colAction")}</span>
               </div>
-            );
-          })}
-        </div>
-      )}
+
+              {day.individualSessions.map((sess, idx) => {
+                const isConfirming = confirmDeleteId === sess.id;
+
+                return (
+                  <div
+                    key={sess.id}
+                    className="flex items-center justify-between px-2.5 py-1.5 rounded-[10px] liquid-pill text-xs font-mono transition-all duration-150 hover:translate-x-0.5"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <span className="text-text-faint text-[10px] tabular">
+                        #{idx + 1}
+                      </span>
+                      <span className="font-bold text-text-main tabular">
+                        {sess.pb} pts
+                      </span>
+                      {sess.sourceFile && (
+                        <span
+                          className="text-[10px] text-text-faint truncate max-w-[200px]"
+                          title={sess.sourceFile}
+                        >
+                          {sess.sourceFile}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Inline Confirmation for Delete */}
+                    <div className="shrink-0 flex items-center">
+                      {isConfirming ? (
+                        <div className="flex items-center gap-1.5 animate-pop-in">
+                          <span className="text-[11px] text-red font-sans">
+                            {t("dashboard.deleteConfirm")}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(sess.id)}
+                            className="px-2 py-0.5 rounded-[8px] bg-red-soft text-red border border-red-edge text-xs font-medium press cursor-pointer"
+                            title={t("hist.confirm")}
+                          >
+                            <Check size={12} weight="bold" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setConfirmDeleteId(null)}
+                            className="px-2 py-0.5 rounded-[8px] bg-surface-subtle text-text-faint hover:text-text-main text-xs press cursor-pointer"
+                            title={t("hist.cancel")}
+                          >
+                            <X size={12} weight="bold" />
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setConfirmDeleteId(sess.id)}
+                          className="p-1 rounded-control text-text-faint hover:text-red hover:bg-red-soft transition-colors cursor-pointer press"
+                          title={t("hist.delete")}
+                          aria-label={t("hist.delete")}
+                        >
+                          <Trash size={14} weight="regular" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Gear, Translate, Mouse, Database } from "@phosphor-icons/react";
+import { Gear, Translate, Mouse, Database, Palette, Check } from "@phosphor-icons/react";
 import {
   Dialog,
   DialogPortal,
@@ -14,6 +14,7 @@ import {
 import type { AppSettings, WatcherStatus } from "@/lib/types";
 import { getSettings, saveSettings } from "@/lib/tauri-bridge";
 import { useI18n, type Lang } from "@/lib/i18n";
+import { APP_THEMES, type AppTheme } from "@/lib/theme";
 import { SettingsKovaakSection } from "./SettingsKovaakSection";
 import { SettingsRawaccelSection } from "./SettingsRawaccelSection";
 import { SettingsAutomationSection } from "./SettingsAutomationSection";
@@ -42,6 +43,8 @@ export interface SettingsDialogProps {
   notifyStepAdvance?: boolean;
   onUpdateAppSettings?: (settings: Partial<AppSettings>) => Promise<void>;
   onOpenAimLab?: () => void;
+  currentTheme?: AppTheme;
+  onThemeChange?: (theme: AppTheme) => void;
 }
 
 export function SettingsDialog({
@@ -67,6 +70,8 @@ export function SettingsDialog({
   notifyStepAdvance: propNotifyStepAdvance,
   onUpdateAppSettings,
   onOpenAimLab,
+  currentTheme = "cyber-lab",
+  onThemeChange,
 }: SettingsDialogProps) {
   const { t, lang, setLang } = useI18n();
 
@@ -220,6 +225,53 @@ export function SettingsDialog({
                 </div>
               </div>
             </section>
+
+            {/* Theme & Space Nebula */}
+            {onThemeChange && (
+              <section className="space-y-2">
+                <label className="text-[11px] font-semibold uppercase tracking-wider text-text-faint px-1 flex items-center gap-1.5">
+                  <Palette size={13} weight="bold" />
+                  <span>{lang === "pt" ? "Tema & Nebulosa Espacial" : "Theme & Space Nebula"}</span>
+                </label>
+
+                <div className="glass-inset p-4 grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  {APP_THEMES.map((theme) => {
+                    const active = currentTheme === theme.id;
+                    return (
+                      <button
+                        key={theme.id}
+                        type="button"
+                        onClick={() => onThemeChange(theme.id)}
+                        className={`press flex items-center justify-between gap-2.5 p-3 rounded-control text-left transition-all cursor-pointer ${
+                          active
+                            ? "liquid-pill text-text-main border-edge-strong"
+                            : "glass-control text-text-secondary hover:text-text-main"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <span
+                            className="w-3.5 h-3.5 rounded-full shrink-0 border border-white/25"
+                            style={{
+                              backgroundColor: theme.color,
+                              boxShadow: `0 0 12px ${theme.color}`,
+                            }}
+                          />
+                          <div className="min-w-0">
+                            <span className="block text-xs font-semibold truncate">
+                              {theme.name}
+                            </span>
+                            <span className="block text-[10px] text-text-faint truncate">
+                              {theme.desc}
+                            </span>
+                          </div>
+                        </div>
+                        {active && <Check size={14} weight="bold" className="text-score shrink-0" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
+            )}
 
             {/* Language */}
             <section className="space-y-2">

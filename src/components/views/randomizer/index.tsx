@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback } from "react";
-import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import { AnimatePresence, motion } from "motion/react";
 import { ChartScatter, Rows, SquaresFour } from "@phosphor-icons/react";
 import { useApp } from "@/hooks/useAppData";
 import { useSensRandomizer } from "@/hooks/useSensRandomizer";
@@ -31,7 +31,7 @@ type RandomizerTab = "chart" | "buckets" | "categories";
 
 export function RandomizerView({ className }: RandomizerViewProps) {
   const { t } = useI18n();
-  const shouldReduceMotion = useReducedMotion();
+
   const { appData, activeTask } = useApp();
   const allTasks = appData.tasks;
   const playlists = appData.playlists ?? [];
@@ -290,10 +290,10 @@ export function RandomizerView({ className }: RandomizerViewProps) {
           <motion.div
             key={activeSubTab}
             initial={
-              shouldReduceMotion ? { opacity: 1 } : { opacity: 0, y: 4 }
+              false ? { opacity: 1 } : { opacity: 0, y: 4 }
             }
             animate={{ opacity: 1, y: 0 }}
-            exit={shouldReduceMotion ? { opacity: 1 } : { opacity: 0, y: -3 }}
+            exit={false ? { opacity: 1 } : { opacity: 0, y: -3 }}
             transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
             className="flex-1 min-h-0"
           >

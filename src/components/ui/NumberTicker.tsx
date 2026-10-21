@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-import { useReducedMotion } from "motion/react";
 import { cn } from "@/lib/utils";
 
 export interface NumberTickerProps {
@@ -14,29 +13,25 @@ export interface NumberTickerProps {
 export function NumberTicker({
   value,
   decimalPlaces = 0,
-  duration = 0.6,
+  duration = 0.55,
   prefix = "",
   suffix = "",
   className,
 }: NumberTickerProps) {
-  const shouldReduceMotion = useReducedMotion();
   const [displayValue, setDisplayValue] = useState<number>(value);
+  const [isTicking, setIsTicking] = useState(false);
   const startValueRef = useRef<number>(value);
   const startTimeRef = useRef<number | null>(null);
   const animFrameRef = useRef<number | null>(null);
 
   useEffect(() => {
-    if (shouldReduceMotion) {
-      setDisplayValue(value);
-      return;
-    }
-
     const startVal = displayValue;
     const endVal = value;
     if (startVal === endVal) return;
 
     startValueRef.current = startVal;
     startTimeRef.current = null;
+    setIsTicking(true);
 
     const animate = (timestamp: number) => {
       if (!startTimeRef.current) startTimeRef.current = timestamp;
@@ -53,6 +48,7 @@ export function NumberTicker({
         animFrameRef.current = requestAnimationFrame(animate);
       } else {
         setDisplayValue(endVal);
+        setIsTicking(false);
       }
     };
 
@@ -63,7 +59,7 @@ export function NumberTicker({
         cancelAnimationFrame(animFrameRef.current);
       }
     };
-  }, [value, duration, shouldReduceMotion]);
+  }, [value, duration]);
 
   const formatted = displayValue.toLocaleString(undefined, {
     minimumFractionDigits: decimalPlaces,
@@ -71,7 +67,13 @@ export function NumberTicker({
   });
 
   return (
-    <span className={cn("font-mono tabular select-none inline-block", className)}>
+    <span
+      className={cn(
+        "font-mono tabular select-none inline-block transition-transform duration-200",
+        isTicking && "scale-[1.03] brightness-110",
+        className
+      )}
+    >
       {prefix}
       {formatted}
       {suffix}

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import { AnimatePresence, motion } from "motion/react";
 import {
   ClockCounterClockwise,
   Crosshair,
@@ -23,7 +23,6 @@ type SidePanelMode = "history" | "scenarios";
 
 export function DashboardView({ className }: DashboardViewProps) {
   const { t } = useI18n();
-  const shouldReduceMotion = useReducedMotion();
   const { state } = useTrackerWorkspace();
   const { tasks, activeTask } = state;
 
@@ -87,14 +86,10 @@ export function DashboardView({ className }: DashboardViewProps) {
             <AnimatePresence mode="wait" initial={false}>
               <motion.div
                 key={sideMode}
-                initial={
-                  shouldReduceMotion ? { opacity: 1 } : { opacity: 0, y: 4 }
-                }
+                initial={{ opacity: 0, y: 5 }}
                 animate={{ opacity: 1, y: 0 }}
-                exit={
-                  shouldReduceMotion ? { opacity: 1 } : { opacity: 0, y: -3 }
-                }
-                transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
+                exit={{ opacity: 0, y: -4 }}
+                transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
                 className="h-full"
               >
                 {sideMode === "history" ? (

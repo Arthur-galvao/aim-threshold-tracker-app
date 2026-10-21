@@ -203,5 +203,31 @@ describe("v2.0 Glass HUD: Ratchet Simulation and Component Integrity", () => {
     assert.ok(toolbarSrc.includes("showMA3"));
     assert.ok(chartSrc.includes("filterByPeriod"));
   });
-});
 
+  it("verifies interactive space nebula backdrop, isolated transparent AppShell, theme tokens, and KPIStrip percentage fix", () => {
+    const shellSrc = fs.readFileSync(path.resolve("src/components/shell/AppShell.tsx"), "utf-8");
+    const backdropSrc = fs.readFileSync(path.resolve("src/components/shell/Backdrop.tsx"), "utf-8");
+    const kpiSrc = fs.readFileSync(path.resolve("src/components/views/dashboard/KPIStrip.tsx"), "utf-8");
+    const cssSrc = fs.readFileSync(path.resolve("src/styles/index.css"), "utf-8");
+
+    // AppShell must isolate stacking context and not obscure Backdrop with opaque bg-base
+    assert.ok(shellSrc.includes("isolate"));
+    assert.ok(shellSrc.includes("bg-transparent"));
+    assert.ok(!shellSrc.includes("bg-base text-text-main"));
+
+    // Backdrop must include interactive canvas + mouse cursor tracking
+    assert.ok(backdropSrc.includes("<canvas"));
+    assert.ok(backdropSrc.includes("--cursor-x"));
+    assert.ok(backdropSrc.includes("contentvisibilityautostatechange"));
+
+    // KPIStrip must not multiply consistencyRatio by 100 (9300% bug fix)
+    assert.ok(!kpiSrc.includes("consistencyRatio * 100"));
+    assert.ok(kpiSrc.includes("consistencyRatio.toFixed(1)"));
+
+    // Theme tokens and oklab gradient interpolation in index.css
+    assert.ok(cssSrc.includes('[data-theme="tactical-emerald"]'));
+    assert.ok(cssSrc.includes('[data-theme="amethyst-purple"]'));
+    assert.ok(cssSrc.includes('[data-theme="obsidian-amber"]'));
+    assert.ok(cssSrc.includes("--in-oklab"));
+  });
+});

@@ -44,15 +44,15 @@ export function ChartToolbar({
 
       <div className="flex items-center gap-3 flex-wrap">
         {/* Series Toggles */}
-        <div className="inline-flex items-center gap-1.5 text-xs font-mono">
+        <div className="liquid-well p-1 inline-flex items-center gap-1 rounded-control text-xs font-mono">
           <button
             type="button"
             onClick={onToggleThreshold}
             className={cn(
-              "px-2.5 py-1 rounded-control border transition-all text-xs inline-flex items-center gap-1.5 cursor-pointer press",
+              "px-2.5 py-1 rounded-[10px] border transition-all text-xs inline-flex items-center gap-1.5 cursor-pointer press",
               showThreshold
-                ? "bg-emerald-soft text-emerald border-emerald-edge"
-                : "bg-surface-subtle text-text-faint border-edge opacity-50"
+                ? "bg-emerald-soft text-emerald border-emerald-edge shadow-[inset_0_1px_0.5px_rgba(255,255,255,0.2)]"
+                : "bg-transparent text-text-faint border-transparent opacity-60 hover:opacity-90"
             )}
             title={t("chart.toggleSeries")}
           >
@@ -64,10 +64,10 @@ export function ChartToolbar({
             type="button"
             onClick={onTogglePB}
             className={cn(
-              "px-2.5 py-1 rounded-control border transition-all text-xs inline-flex items-center gap-1.5 cursor-pointer press",
+              "px-2.5 py-1 rounded-[10px] border transition-all text-xs inline-flex items-center gap-1.5 cursor-pointer press",
               showPB
-                ? "bg-score-soft text-score border-edge"
-                : "bg-surface-subtle text-text-faint border-edge opacity-50"
+                ? "bg-score-soft text-score border-edge shadow-[inset_0_1px_0.5px_rgba(255,255,255,0.2)]"
+                : "bg-transparent text-text-faint border-transparent opacity-60 hover:opacity-90"
             )}
             title={t("chart.toggleSeries")}
           >
@@ -79,10 +79,10 @@ export function ChartToolbar({
             type="button"
             onClick={onToggleMA3}
             className={cn(
-              "px-2.5 py-1 rounded-control border transition-all text-xs inline-flex items-center gap-1.5 cursor-pointer press",
+              "px-2.5 py-1 rounded-[10px] border transition-all text-xs inline-flex items-center gap-1.5 cursor-pointer press",
               showMA3
-                ? "bg-surface-subtle text-text-secondary border-edge"
-                : "bg-surface-subtle text-text-faint border-edge opacity-50"
+                ? "liquid-pill text-text-main border-edge"
+                : "bg-transparent text-text-faint border-transparent opacity-60 hover:opacity-90"
             )}
             title={t("chart.toggleSeries")}
           >

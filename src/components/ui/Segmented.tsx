@@ -1,5 +1,5 @@
 import React, { useId } from "react";
-import { motion, useReducedMotion } from "motion/react";
+import { motion } from "motion/react";
 import { cn } from "@/lib/utils";
 
 export interface SegmentedOption<T extends string = string> {
@@ -28,7 +28,6 @@ export function Segmented<T extends string = string>({
 }: SegmentedProps<T>) {
   const generatedId = useId();
   const componentId = id || generatedId;
-  const shouldReduceMotion = useReducedMotion();
 
   const sizeStyles = {
     sm: "h-7 text-xs px-2.5",
@@ -54,7 +53,7 @@ export function Segmented<T extends string = string>({
             disabled={opt.disabled}
             onClick={() => onChange(opt.value)}
             className={cn(
-              "relative z-10 inline-flex items-center justify-center gap-1.5 font-medium transition-colors rounded-[10px] cursor-pointer focus-visible:outline-none disabled:opacity-40 disabled:pointer-events-none press",
+              "group relative z-10 inline-flex items-center justify-center gap-1.5 font-medium transition-all duration-200 rounded-[10px] cursor-pointer focus-visible:outline-none disabled:opacity-40 disabled:pointer-events-none active:scale-95",
               sizeStyles[size],
               isSelected
                 ? "text-text-main font-semibold"
@@ -64,15 +63,27 @@ export function Segmented<T extends string = string>({
             {isSelected && (
               <motion.div
                 layoutId={`segmented-pill-${componentId}`}
-                transition={
-                  shouldReduceMotion
-                    ? { duration: 0 }
-                    : { type: "spring", stiffness: 420, damping: 32, mass: 0.8 }
-                }
+                transition={{
+                  type: "spring",
+                  stiffness: 460,
+                  damping: 30,
+                  mass: 0.75,
+                }}
                 className="absolute inset-0 z-[-1] liquid-pill rounded-[10px]"
               />
             )}
-            {opt.icon && <span className="inline-flex shrink-0">{opt.icon}</span>}
+            {opt.icon && (
+              <span
+                className={cn(
+                  "inline-flex shrink-0 transition-transform duration-200",
+                  isSelected
+                    ? "text-score scale-105"
+                    : "group-hover:scale-110 group-hover:text-text-main"
+                )}
+              >
+                {opt.icon}
+              </span>
+            )}
             <span>{opt.label}</span>
           </button>
         );

@@ -100,6 +100,14 @@ export function ChartCanvas({
       .join(" ");
   }, [data, showPB, getX, getY]);
 
+  const pbAreaPath = useMemo(() => {
+    if (!showPB || data.length === 0 || !pbLinePath) return "";
+    const firstX = getX(0).toFixed(1);
+    const lastX = getX(data.length - 1).toFixed(1);
+    const bottomY = (padTop + chartH).toFixed(1);
+    return `${pbLinePath} L ${lastX},${bottomY} L ${firstX},${bottomY} Z`;
+  }, [showPB, data.length, pbLinePath, getX, chartH]);
+
   const ma3LinePath = useMemo(() => {
     if (!showMA3 || data.length === 0) return "";
     return data
@@ -129,7 +137,7 @@ export function ChartCanvas({
   const hoveredItem = hoveredIdx !== null && data[hoveredIdx] ? data[hoveredIdx] : null;
 
   return (
-    <div ref={containerRef} className="relative w-full overflow-hidden select-none">
+    <div ref={containerRef} className="relative w-full overflow-hidden select-none liquid-well p-2">
       <svg
         viewBox={`0 0 ${width} ${height}`}
         className="w-full h-auto overflow-visible cursor-crosshair"
@@ -137,6 +145,13 @@ export function ChartCanvas({
         onMouseLeave={() => setHoveredIdx(null)}
         aria-label={t("chart.title")}
       >
+        <defs>
+          <linearGradient id="pb-area-gradient" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="var(--score)" stopOpacity="0.22" />
+            <stop offset="100%" stopColor="var(--score)" stopOpacity="0.0" />
+          </linearGradient>
+        </defs>
+
         {yTicks.map((val) => {
           const y = getY(val);
           return (
@@ -186,12 +201,16 @@ export function ChartCanvas({
           />
         )}
 
+        {showPB && pbAreaPath && (
+          <path d={pbAreaPath} fill="url(#pb-area-gradient)" />
+        )}
+
         {showPB && pbLinePath && (
           <path
             d={pbLinePath}
             fill="none"
             stroke="var(--score)"
-            strokeWidth="2"
+            strokeWidth="2.2"
             strokeLinecap="round"
             strokeLinejoin="round"
           />
@@ -202,15 +221,20 @@ export function ChartCanvas({
             const x = getX(idx);
             const y = getY(item.best);
             const isPb = item.isPbDay;
+            const isHovered = hoveredIdx === idx;
             return (
               <circle
                 key={idx}
                 cx={x}
                 cy={y}
-                r={isPb ? 4.5 : 3}
+                r={isHovered ? 6 : isPb ? 4.5 : 3.2}
                 fill={isPb ? "var(--amber)" : "var(--score)"}
                 stroke="var(--base)"
                 strokeWidth="1.5"
+                style={{
+                  transition: "r 160ms cubic-bezier(0.16, 1, 0.3, 1), opacity 160ms ease",
+                  opacity: hoveredIdx !== null && !isHovered ? 0.65 : 1,
+                }}
               />
             );
           })}
@@ -224,13 +248,16 @@ export function ChartCanvas({
           if (!showLabel) return null;
           const x = getX(idx);
           const [, m, day] = item.date.split("-");
+          const isHovered = hoveredIdx === idx;
           return (
             <text
               key={idx}
               x={x}
               y={height - 10}
               textAnchor="middle"
-              className="font-mono tabular fill-text-faint text-[10px]"
+              className={`font-mono tabular text-[10px] transition-colors ${
+                isHovered ? "fill-text-main font-semibold" : "fill-text-faint"
+              }`}
             >
               {`${day}/${m}`}
             </text>
@@ -249,24 +276,42 @@ export function ChartCanvas({
               strokeDasharray="3 3"
             />
             {showPB && (
-              <circle
-                cx={getX(hoveredIdx)}
-                cy={getY(hoveredItem.best)}
-                r="6"
-                fill="var(--score)"
-                stroke="var(--base)"
-                strokeWidth="2"
-              />
+              <>
+                <circle
+                  cx={getX(hoveredIdx)}
+                  cy={getY(hoveredItem.best)}
+                  r="11"
+                  fill="var(--score)"
+                  opacity="0.2"
+                />
+                <circle
+                  cx={getX(hoveredIdx)}
+                  cy={getY(hoveredItem.best)}
+                  r="6"
+                  fill="var(--score)"
+                  stroke="var(--base)"
+                  strokeWidth="2"
+                />
+              </>
             )}
             {showThreshold && (
-              <circle
-                cx={getX(hoveredIdx)}
-                cy={getY(hoveredItem.threshold)}
-                r="5"
-                fill="var(--emerald)"
-                stroke="var(--base)"
-                strokeWidth="2"
-              />
+              <>
+                <circle
+                  cx={getX(hoveredIdx)}
+                  cy={getY(hoveredItem.threshold)}
+                  r="9"
+                  fill="var(--emerald)"
+                  opacity="0.2"
+                />
+                <circle
+                  cx={getX(hoveredIdx)}
+                  cy={getY(hoveredItem.threshold)}
+                  r="5"
+                  fill="var(--emerald)"
+                  stroke="var(--base)"
+                  strokeWidth="2"
+                />
+              </>
             )}
           </g>
         )}
