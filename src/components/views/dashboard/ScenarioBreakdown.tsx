@@ -5,9 +5,11 @@ import {
   CheckCircle,
   Trophy,
   ShieldCheck,
+  TrendDown,
 } from "@phosphor-icons/react";
 import { useTrackerWorkspace } from "@/context/TrackerWorkspaceContext";
 import { VISCOSE_CATEGORIES } from "@/lib/viscose";
+import { computeTaskMetrics } from "@/lib/threshold";
 import { useI18n } from "@/lib/i18n";
 import { Badge, EmptyState } from "@/components/ui";
 import { cn } from "@/lib/utils";
@@ -23,6 +25,7 @@ export function ScenarioBreakdown({ className, embedded = false }: ScenarioBreak
   const { tasks, activeTask } = state;
 
   const [categoryFilter, setCategoryFilter] = useState<string>("All");
+  const [weaknessFocus, setWeaknessFocus] = useState<boolean>(false);
   const [search, setSearch] = useState<string>("");
 
   const categories = useMemo(() => {
@@ -30,7 +33,7 @@ export function ScenarioBreakdown({ className, embedded = false }: ScenarioBreak
   }, []);
 
   const filteredTasks = useMemo(() => {
-    return tasks.filter((task) => {
+    const base = tasks.filter((task) => {
       const matchCat = categoryFilter === "All" || task.category === categoryFilter;
       const matchSearch =
         search.trim() === "" ||
@@ -38,7 +41,22 @@ export function ScenarioBreakdown({ className, embedded = false }: ScenarioBreak
         task.subcategory.toLowerCase().includes(search.toLowerCase());
       return matchCat && matchSearch;
     });
-  }, [tasks, categoryFilter, search]);
+
+    if (!weaknessFocus) return base;
+
+    const weaknessScore = (task: (typeof tasks)[number]): number => {
+      if (!task.sessions || task.sessions.length === 0) return 2;
+      const last = task.sessions[task.sessions.length - 1];
+      const thresh = Number(last.threshold) || 0;
+      const lastPb = Number(last.pb) || 0;
+      const recentRatio = thresh > 0 ? lastPb / thresh : 1;
+      const { hitRate } = computeTaskMetrics(task);
+      const hitNorm = hitRate !== null ? hitRate / 100 : 0.85;
+      return hitNorm * 0.5 + recentRatio * 0.5;
+    };
+
+    return [...base].sort((a, b) => weaknessScore(a) - weaknessScore(b));
+  }, [tasks, categoryFilter, search, weaknessFocus]);
 
   return (
     <div
@@ -62,8 +80,25 @@ export function ScenarioBreakdown({ className, embedded = false }: ScenarioBreak
           />
         </div>
 
-        {/* Category Pills */}
+        {/* Category Pills + 60/40 Weakness Focus */}
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scroll-y select-none">
+          <button
+            type="button"
+            onClick={() => setWeaknessFocus((prev) => !prev)}
+            title={t("dashboard.weaknessFocusTooltip")}
+            className={cn(
+              "px-2.5 py-0.5 text-[11px] font-medium rounded-full transition-all shrink-0 cursor-pointer press flex items-center gap-1",
+              weaknessFocus
+                ? "bg-amber/15 text-amber border border-amber/40 font-semibold"
+                : "liquid-well text-text-secondary hover:text-text-main"
+            )}
+          >
+            <TrendDown size={12} weight="bold" />
+            <span>{t("dashboard.weaknessFocus")}</span>
+          </button>
+
+          <div className="h-3.5 w-[1px] bg-edge shrink-0 mx-0.5" />
+
           {categories.map((cat) => {
             const isSelected = categoryFilter === cat;
             return (

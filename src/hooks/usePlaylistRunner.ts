@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import type { Playlist, PlaylistItem, Task } from "@/lib/types";
+import { getTargetThresholdForTask } from "@/lib/threshold";
 
 interface UsePlaylistRunnerProps {
   tasks: Task[];
@@ -13,8 +14,11 @@ export interface PlaylistRunnerState {
   currentItem: PlaylistItem | null;
   currentTask: Task | null;
   sessionCountAtStart: number;
+  stepTargetThreshold: number | null;
+  stepBestScore: number | null;
   startedAt: number | null;
   elapsedSeconds: number;
+  playlistElapsedSeconds: number;
   isFinished: boolean;
   isRunning: boolean;
   completedStepIndices: Set<number>;
@@ -40,7 +44,10 @@ export function usePlaylistRunner({
   const [activePlaylist, setActivePlaylist] = useState<Playlist | null>(null);
   const [currentStepIndex, setCurrentStepIndex] = useState<number>(0);
   const [sessionCountAtStart, setSessionCountAtStart] = useState<number>(0);
+  const [sessionIdsAtStart, setSessionIdsAtStart] = useState<Set<string>>(new Set());
+  const [stepTargetThreshold, setStepTargetThreshold] = useState<number | null>(null);
   const [startedAt, setStartedAt] = useState<number | null>(null);
+  const [playlistStartedAt, setPlaylistStartedAt] = useState<number | null>(null);
   const [now, setNow] = useState<number>(Date.now());
   const [isFinished, setIsFinished] = useState<boolean>(false);
   const [isRunning, setIsRunning] = useState<boolean>(false);
@@ -51,7 +58,10 @@ export function usePlaylistRunner({
     activePlaylist,
     currentStepIndex,
     sessionCountAtStart,
+    sessionIdsAtStart,
+    stepTargetThreshold,
     startedAt,
+    playlistStartedAt,
     isFinished,
     isRunning,
     completedStepIndices,
@@ -62,7 +72,10 @@ export function usePlaylistRunner({
       activePlaylist,
       currentStepIndex,
       sessionCountAtStart,
+      sessionIdsAtStart,
+      stepTargetThreshold,
       startedAt,
+      playlistStartedAt,
       isFinished,
       isRunning,
       completedStepIndices,
@@ -81,17 +94,28 @@ export function usePlaylistRunner({
     return taskMap.get(currentItem.taskId) ?? null;
   }, [currentItem, taskMap]);
 
+  const stepBestScore = useMemo(() => {
+    if (!currentTask || !currentTask.sessions.length) return null;
+    const newSessions = currentTask.sessions.filter((s) => !sessionIdsAtStart.has(s.id));
+    if (newSessions.length === 0) return null;
+    return Math.max(...newSessions.map((s) => Number(s.pb) || 0));
+  }, [currentTask, sessionIdsAtStart]);
+
   // Advance to step index
   const goToStep = useCallback(
     (index: number, playlist: Playlist) => {
       const item = playlist.items[index];
       if (!item) return;
 
-      const task = taskMap.get(item.taskId);
+      const task = taskMap.get(item.taskId) ?? null;
       const count = task ? task.sessions.length : 0;
+      const ids = new Set(task ? task.sessions.map((s) => s.id) : []);
+      const targetThresh = getTargetThresholdForTask(task);
 
       setCurrentStepIndex(index);
       setSessionCountAtStart(count);
+      setSessionIdsAtStart(ids);
+      setStepTargetThreshold(targetThresh);
       setStartedAt(Date.now());
       setActiveTaskId(item.taskId);
     },
@@ -101,9 +125,12 @@ export function usePlaylistRunner({
   const start = useCallback(
     (playlist: Playlist) => {
       if (!playlist.items || playlist.items.length === 0) return;
+      const startTs = Date.now();
       setActivePlaylist(playlist);
       setIsFinished(false);
       setIsRunning(true);
+      setPlaylistStartedAt(startTs);
+      setNow(startTs);
       setCompletedStepIndices(new Set());
       goToStep(0, playlist);
     },
@@ -111,6 +138,7 @@ export function usePlaylistRunner({
   );
 
   const finish = useCallback(() => {
+    setNow(Date.now());
     setIsFinished(true);
     setIsRunning(false);
     onStepAdvanceRef.current?.(stateRef.current.currentStepIndex, "", true);
@@ -149,6 +177,7 @@ export function usePlaylistRunner({
     setIsFinished(false);
     setCurrentStepIndex(0);
     setStartedAt(null);
+    setPlaylistStartedAt(null);
   }, []);
 
   const restart = useCallback(() => {
@@ -215,6 +244,16 @@ export function usePlaylistRunner({
 
         if (item.targetMode === "reps" && completedReps >= item.targetValue) {
           next();
+        } else if (item.targetMode === "threshold" && completedReps >= Math.max(1, item.targetValue)) {
+          const startIds = stateRef.current.sessionIdsAtStart;
+          const newScores = task
+            ? task.sessions.filter((s) => !startIds.has(s.id)).map((s) => Number(s.pb) || 0)
+            : [];
+          const bestInStep = newScores.length > 0 ? Math.max(...newScores) : null;
+          const targetThresh = stateRef.current.stepTargetThreshold;
+          if (targetThresh === null || (bestInStep !== null && bestInStep >= targetThresh)) {
+            next();
+          }
         }
       } else if (targetStepIndex > curIdx) {
         setCompletedStepIndices((prev) => {
@@ -245,7 +284,7 @@ export function usePlaylistRunner({
     return () => clearInterval(interval);
   }, [isRunning, isFinished]);
 
-  // Auto-advance checking: reps or time
+  // Auto-advance checking: reps, threshold or time
   useEffect(() => {
     if (!isRunning || isFinished || !activePlaylist || !currentItem) return;
 
@@ -253,6 +292,16 @@ export function usePlaylistRunner({
       const currentSessionsCount = currentTask ? currentTask.sessions.length : 0;
       const completedReps = currentSessionsCount - sessionCountAtStart;
       if (completedReps >= currentItem.targetValue) {
+        next();
+      }
+    } else if (currentItem.targetMode === "threshold") {
+      const currentSessionsCount = currentTask ? currentTask.sessions.length : 0;
+      const completedReps = currentSessionsCount - sessionCountAtStart;
+      const minReps = Math.max(1, currentItem.targetValue);
+      const thresholdMet =
+        stepTargetThreshold === null ||
+        (stepBestScore !== null && stepBestScore >= stepTargetThreshold);
+      if (completedReps >= minReps && thresholdMet) {
         next();
       }
     } else if (currentItem.targetMode === "time" && startedAt !== null) {
@@ -268,6 +317,8 @@ export function usePlaylistRunner({
     currentItem,
     currentTask,
     sessionCountAtStart,
+    stepTargetThreshold,
+    stepBestScore,
     startedAt,
     now,
     next,
@@ -277,6 +328,11 @@ export function usePlaylistRunner({
     if (!startedAt) return 0;
     return Math.max(0, Math.floor((now - startedAt) / 1000));
   }, [startedAt, now]);
+
+  const playlistElapsedSeconds = useMemo(() => {
+    if (!playlistStartedAt) return 0;
+    return Math.max(0, Math.floor((now - playlistStartedAt) / 1000));
+  }, [playlistStartedAt, now]);
 
   const predictNextScenarioName = useCallback((): string | null => {
     const {
@@ -293,7 +349,7 @@ export function usePlaylistRunner({
     const task = taskMap.get(item.taskId);
     if (!task) return null;
 
-    if (item.targetMode === "reps") {
+    if (item.targetMode === "reps" || item.targetMode === "threshold") {
       const currentReps = Math.max(0, task.sessions.length - startCount);
       if (currentReps + 1 < item.targetValue) {
         return task.name;
@@ -315,8 +371,11 @@ export function usePlaylistRunner({
     currentItem,
     currentTask,
     sessionCountAtStart,
+    stepTargetThreshold,
+    stepBestScore,
     startedAt,
     elapsedSeconds,
+    playlistElapsedSeconds,
     isFinished,
     isRunning,
     completedStepIndices,

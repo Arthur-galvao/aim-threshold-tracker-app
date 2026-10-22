@@ -60,12 +60,21 @@ export function RangePresets({
             {isOutsideBiomechEnvelope ? t("randomizer.zoneOutWarning") : zoneLabel}
           </span>
         </div>
-        <div className="flex items-center gap-4 text-xs font-mono tabular">
+        <div className="flex items-center flex-wrap gap-4 text-xs font-mono tabular">
           <div className="flex items-baseline gap-1.5">
             <span className="text-text-faint">Val:</span>
             <NumberTicker
               value={inGameValorant}
               decimalPlaces={3}
+              className="font-semibold text-text-main"
+            />
+          </div>
+          <div className="h-3 w-[1px] bg-edge" />
+          <div className="flex items-baseline gap-1.5">
+            <span className="text-text-faint">eDPI:</span>
+            <NumberTicker
+              value={Math.round(inGameValorant * parsedDpi)}
+              decimalPlaces={0}
               className="font-semibold text-text-main"
             />
           </div>

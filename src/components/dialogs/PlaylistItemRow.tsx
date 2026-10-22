@@ -104,12 +104,28 @@ export function PlaylistItemRow({
           >
             {t("playlist.timeUnit")}
           </button>
+          <button
+            type="button"
+            onClick={() =>
+              onUpdate(index, {
+                targetMode: "threshold",
+                targetValue: item.targetMode === "threshold" ? item.targetValue : 1,
+              })
+            }
+            className={`px-2 py-0.5 rounded-control text-[10px] font-mono font-semibold transition ${
+              item.targetMode === "threshold"
+                ? "bg-score text-base shadow-xs"
+                : "text-text-secondary hover:text-text-main"
+            }`}
+          >
+            {t("playlist.modeThreshold")}
+          </button>
         </div>
 
         <Input
           type="number"
           min="1"
-          max={item.targetMode === "reps" ? 100 : 3600}
+          max={item.targetMode === "time" ? 3600 : 100}
           value={item.targetValue}
           onChange={(e) => {
             const val = Math.max(1, parseInt(e.target.value) || 1);

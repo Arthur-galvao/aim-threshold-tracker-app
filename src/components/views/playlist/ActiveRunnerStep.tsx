@@ -7,11 +7,13 @@ import {
   X,
   Crosshair,
   Sliders,
+  ShieldCheck,
+  Eye,
 } from "@phosphor-icons/react";
 import { Button, Badge } from "@/components/ui";
 import type { Task } from "@/lib/types";
 import type { PlaylistRunnerState } from "@/hooks/usePlaylistRunner";
-import { getRecommendedSens } from "@/lib/viscose";
+import { getRecommendedSens, getSubcategoryCoachingCue } from "@/lib/viscose";
 import {
   formatSensitivity,
   getScenarioIdealSens,
@@ -41,7 +43,14 @@ export function ActiveRunnerStep({
   onApplySens,
 }: ActiveRunnerStepProps) {
   const { t } = useI18n();
-  const { activePlaylist, currentStepIndex, currentItem, currentTask } = runner;
+  const {
+    activePlaylist,
+    currentStepIndex,
+    currentItem,
+    currentTask,
+    stepTargetThreshold,
+    stepBestScore,
+  } = runner;
 
   const totalSteps = activePlaylist?.items.length ?? 0;
   const isLastStep = currentStepIndex >= totalSteps - 1;
@@ -57,6 +66,11 @@ export function ActiveRunnerStep({
     ? getRecommendedSens(currentTask.category, currentTask.subcategory)
     : null;
 
+  const coachingCue = useMemo(() => {
+    if (!currentTask) return null;
+    return getSubcategoryCoachingCue(currentTask.category, currentTask.subcategory);
+  }, [currentTask]);
+
   // Calculate step progress
   let progressPct = 0;
   let progressLabel = "";
@@ -68,6 +82,21 @@ export function ActiveRunnerStep({
       const targetReps = currentItem.targetValue;
       progressPct = Math.min(100, (completedReps / targetReps) * 100);
       progressLabel = t("runner.goalReps", {
+        current: completedReps,
+        target: targetReps,
+      });
+    } else if (currentItem.targetMode === "threshold") {
+      const currentSessions = currentTask ? currentTask.sessions.length : 0;
+      const completedReps = Math.max(0, currentSessions - runner.sessionCountAtStart);
+      const targetReps = Math.max(1, currentItem.targetValue);
+      const threshVal = stepTargetThreshold ?? 0;
+      const bestVal = stepBestScore ?? 0;
+      const scoreRatio = threshVal > 0 ? Math.min(1, bestVal / threshVal) : completedReps >= targetReps ? 1 : 0;
+      const repRatio = Math.min(1, completedReps / targetReps);
+      progressPct = Math.min(100, ((scoreRatio + repRatio) / 2) * 100);
+      progressLabel = t("runner.goalThreshold", {
+        best: bestVal,
+        threshold: threshVal > 0 ? threshVal : "—",
         current: completedReps,
         target: targetReps,
       });
@@ -85,7 +114,7 @@ export function ActiveRunnerStep({
   }
 
   return (
-    <div className="liquid-surface p-6 rounded-tile flex flex-col justify-between gap-6">
+    <div className="liquid-surface p-6 rounded-tile flex flex-col justify-between gap-5">
       {/* Step Header */}
       <div>
         <div className="flex items-center justify-between gap-3 mb-3">
@@ -131,8 +160,32 @@ export function ActiveRunnerStep({
         )}
       </div>
 
-      {/* Sensitivity Cards for this Step */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      {/* Telemetry & Sensitivity Cards for this Step */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        {/* Scenario Target Threshold */}
+        <div className="liquid-well p-3.5 flex flex-col justify-between gap-1">
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-text-faint flex items-center gap-1.5">
+            <ShieldCheck size={13} weight="bold" className="text-emerald" />
+            <span>{t("runner.thresholdCardTitle")}</span>
+          </span>
+          <div className="flex items-baseline justify-between gap-2 mt-1">
+            <span className="font-mono text-lg font-bold text-text-main tabular-nums">
+              {stepTargetThreshold !== null ? `${stepTargetThreshold} pts` : t("runner.noTargetYet")}
+            </span>
+            {stepBestScore !== null && (
+              <span
+                className={`text-[10px] font-mono px-1.5 py-0.5 rounded border tabular-nums ${
+                  stepTargetThreshold !== null && stepBestScore >= stepTargetThreshold
+                    ? "text-emerald bg-emerald-soft border-emerald-edge"
+                    : "text-text-secondary bg-surface-subtle border-edge"
+                }`}
+              >
+                {t("runner.stepBestScore", { score: stepBestScore })}
+              </span>
+            )}
+          </div>
+        </div>
+
         {/* Scenario Ideal Sens */}
         <div className="liquid-well p-3.5 flex items-center justify-between gap-3">
           <div className="min-w-0">
@@ -199,6 +252,23 @@ export function ActiveRunnerStep({
           )}
         </div>
       </div>
+
+      {/* Biomechanical & Quiet Eye Directive */}
+      {coachingCue && (
+        <div className="liquid-well p-3.5 rounded-control border border-edge space-y-1.5">
+          <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-score">
+            <Eye size={13} weight="bold" />
+            <span>{t("coach.title")}</span>
+          </div>
+          <p className="text-xs text-text-main leading-relaxed">
+            {t(coachingCue.mechanicKey)}
+          </p>
+          <p className="text-[11px] text-text-secondary leading-relaxed">
+            <span className="font-semibold text-text-main">{t("coach.quietEye")}:</span>{" "}
+            {t(coachingCue.quietEyeKey)}
+          </p>
+        </div>
+      )}
 
       {/* Target Progress Bar & Controls */}
       <div className="space-y-4 pt-2 border-t border-edge">

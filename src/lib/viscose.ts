@@ -1,4 +1,5 @@
 import type { Task } from "./types";
+import type { Key } from "./i18n.tsx";
 import { predictOptimalSensitivity, type RunDataPoint } from "./sens-analytics.ts";
 
 export const VISCOSE_CATEGORIES: Record<string, string[]> = {
@@ -26,6 +27,46 @@ export function getRecommendedSens(
   subcategory: string
 ): number | null {
   return VISCOSE_RECOMMENDED_SENS[category]?.[subcategory] ?? null;
+}
+
+export interface SubcategoryCoachingCue {
+  mechanicKey: Key;
+  quietEyeKey: Key;
+}
+
+const SUBCATEGORY_COACHING_CUES: Record<string, Record<string, SubcategoryCoachingCue>> = {
+  "Click Timing": {
+    Precision: { mechanicKey: "coach.clickPrecision", quietEyeKey: "coach.qeClicking" },
+    Reading: { mechanicKey: "coach.clickReading", quietEyeKey: "coach.qeClicking" },
+    Stability: { mechanicKey: "coach.clickStability", quietEyeKey: "coach.qeClicking" },
+  },
+  "Control Tracking": {
+    Arm: { mechanicKey: "coach.trackArm", quietEyeKey: "coach.qeTracking" },
+    Wrist: { mechanicKey: "coach.trackWrist", quietEyeKey: "coach.qeTracking" },
+    Fingertip: { mechanicKey: "coach.trackFingertip", quietEyeKey: "coach.qeTracking" },
+    Blending: { mechanicKey: "coach.trackBlending", quietEyeKey: "coach.qeTracking" },
+  },
+  "Reactive Tracking": {
+    Control: { mechanicKey: "coach.reactiveControl", quietEyeKey: "coach.qeTracking" },
+    Speed: { mechanicKey: "coach.reactiveSpeed", quietEyeKey: "coach.qeTracking" },
+    Reading: { mechanicKey: "coach.reactiveReading", quietEyeKey: "coach.qeTracking" },
+  },
+  "Flick Tech": {
+    Speed: { mechanicKey: "coach.flickSpeed", quietEyeKey: "coach.qeSwitching" },
+    Stability: { mechanicKey: "coach.flickStability", quietEyeKey: "coach.qeSwitching" },
+    Micro: { mechanicKey: "coach.flickMicro", quietEyeKey: "coach.qeClicking" },
+    "Post-Flick": { mechanicKey: "coach.flickPost", quietEyeKey: "coach.qeSwitching" },
+  },
+};
+
+export function getSubcategoryCoachingCue(
+  category: string,
+  subcategory: string
+): SubcategoryCoachingCue {
+  return (
+    SUBCATEGORY_COACHING_CUES[category]?.[subcategory] ??
+    SUBCATEGORY_COACHING_CUES[DEFAULT_CATEGORY][DEFAULT_SUBCATEGORY]
+  );
 }
 
 interface ScenarioRule {

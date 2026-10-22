@@ -15,11 +15,13 @@ export interface Task {
   sessions: Session[];
 }
 
+export type PlaylistTargetMode = "reps" | "time" | "threshold";
+
 export interface PlaylistItem {
   id: string;
   taskId: string;
-  targetMode: "reps" | "time";
-  targetValue: number; // reps: número de sessões; time: segundos
+  targetMode: PlaylistTargetMode;
+  targetValue: number; // reps/threshold: número de sessões; time: segundos
 }
 
 export interface Playlist {

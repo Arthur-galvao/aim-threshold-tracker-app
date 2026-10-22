@@ -79,7 +79,7 @@ export function StepSequenceList({ runner, tasks }: StepSequenceListProps) {
 
               <span className="text-[10px] font-mono font-semibold text-text-faint px-1.5 py-0.5 rounded bg-surface-subtle shrink-0 tabular-nums">
                 {item.targetValue}
-                {item.targetMode === "reps" ? "r" : "s"}
+                {item.targetMode === "reps" ? "r" : item.targetMode === "threshold" ? "r+T" : "s"}
               </span>
             </button>
           );

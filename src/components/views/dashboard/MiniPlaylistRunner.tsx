@@ -39,6 +39,8 @@ export function MiniPlaylistRunner({ className }: MiniPlaylistRunnerProps) {
     stop,
     restart,
     sessionCountAtStart,
+    stepTargetThreshold,
+    stepBestScore,
     elapsedSeconds,
   } = playlistRunner;
 
@@ -61,6 +63,20 @@ export function MiniPlaylistRunner({ className }: MiniPlaylistRunnerProps) {
       const percentage = Math.min(100, (completedReps / targetReps) * 100);
       const label = `${completedReps}/${targetReps} runs`;
       return { percentage, label };
+    } else if (currentItem.targetMode === "threshold") {
+      const currentSessions = currentTask ? currentTask.sessions.length : 0;
+      const completedReps = Math.max(0, currentSessions - sessionCountAtStart);
+      const targetReps = Math.max(1, currentItem.targetValue);
+      const threshVal = stepTargetThreshold ?? 0;
+      const bestVal = stepBestScore ?? 0;
+      const scoreRatio = threshVal > 0 ? Math.min(1, bestVal / threshVal) : completedReps >= targetReps ? 1 : 0;
+      const repRatio = Math.min(1, completedReps / targetReps);
+      const percentage = Math.min(100, ((scoreRatio + repRatio) / 2) * 100);
+      const label =
+        threshVal > 0
+          ? `${bestVal}/${threshVal} pts (${completedReps}/${targetReps}r)`
+          : `${completedReps}/${targetReps} runs`;
+      return { percentage, label };
     } else {
       const elapsed = elapsedSeconds;
       const target = currentItem.targetValue;
@@ -68,7 +84,7 @@ export function MiniPlaylistRunner({ className }: MiniPlaylistRunnerProps) {
       const label = `${formatDuration(elapsed)} / ${formatDuration(target)}`;
       return { percentage, label };
     }
-  }, [currentItem, currentTask, sessionCountAtStart, elapsedSeconds]);
+  }, [currentItem, currentTask, sessionCountAtStart, stepTargetThreshold, stepBestScore, elapsedSeconds]);
 
   // 1. Finished State
   if (isFinished && activePlaylist) {

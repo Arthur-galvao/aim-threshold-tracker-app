@@ -1,6 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { stabilizeCenter } from "../src/lib/scenario-centers.ts";
+import { VISCOSE_CATEGORIES, getSubcategoryCoachingCue } from "../src/lib/viscose.ts";
 
 describe("stabilizeCenter", () => {
   it("returns next when prev is undefined or invalid", () => {
@@ -51,5 +52,18 @@ describe("stabilizeCenter", () => {
     assert.equal(updatedSettings.baseSensCm, 45.0, "baseSensCm must remain untouched");
     assert.equal(updatedSettings.centerOverrides["vt 1w4ts"], 38.0);
     assert.equal(updatedSettings.centerOverrides["vt pasu"], 38.0);
+  });
+
+  it("maps every Viscose category and subcategory to a valid coaching cue and Quiet Eye key", () => {
+    for (const [category, subcategories] of Object.entries(VISCOSE_CATEGORIES)) {
+      for (const sub of subcategories) {
+        const cue = getSubcategoryCoachingCue(category, sub);
+        assert.ok(cue.mechanicKey.startsWith("coach."), `Invalid mechanicKey for ${category}/${sub}`);
+        assert.ok(cue.quietEyeKey.startsWith("coach.qe"), `Invalid quietEyeKey for ${category}/${sub}`);
+      }
+    }
+    const fallback = getSubcategoryCoachingCue("Unknown", "Unknown");
+    assert.equal(fallback.mechanicKey, "coach.clickPrecision");
+    assert.equal(fallback.quietEyeKey, "coach.qeClicking");
   });
 });

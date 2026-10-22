@@ -4,6 +4,7 @@ import {
   ArrowsClockwise,
   CheckCircle,
   ArrowCounterClockwise,
+  WarningCircle,
 } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 import { Button, EmptyState } from "@/components/ui";
@@ -21,6 +22,12 @@ import { PlaylistManagerDialog } from "@/components/dialogs/PlaylistManagerDialo
 export interface PlaylistViewProps {
   className?: string;
   onOpenManager?: () => void;
+}
+
+function formatDuration(totalSeconds: number): string {
+  const mins = Math.floor(totalSeconds / 60);
+  const secs = totalSeconds % 60;
+  return `${mins}:${secs.toString().padStart(2, "0")}`;
 }
 
 export function PlaylistView({ className, onOpenManager }: PlaylistViewProps) {
@@ -118,6 +125,12 @@ export function PlaylistView({ className, onOpenManager }: PlaylistViewProps) {
 
   // Case 2: Runner finished all steps
   if (playlistRunner.isFinished && playlistRunner.activePlaylist) {
+    const totalSecs = playlistRunner.playlistElapsedSeconds;
+    const isShortSession =
+      playlistRunner.activePlaylist.items.length >= 3 &&
+      totalSecs > 0 &&
+      totalSecs < 900;
+
     return (
       <div className={cn("grid grid-cols-12 gap-4", className)}>
         <div className="liquid-surface col-span-12 p-8 text-center rounded-tile space-y-4">
@@ -130,6 +143,19 @@ export function PlaylistView({ className, onOpenManager }: PlaylistViewProps) {
           <p className="text-xs text-text-secondary max-w-md mx-auto">
             {t("runner.completedDesc")}
           </p>
+          {totalSecs > 0 && (
+            <p className="text-xs font-mono text-text-faint tabular-nums">
+              {t("runner.sessionDuration", { duration: formatDuration(totalSecs) })}
+            </p>
+          )}
+          {isShortSession && (
+            <div className="max-w-lg mx-auto p-3.5 rounded-control bg-amber/10 border border-amber/30 text-left flex items-start gap-2.5">
+              <WarningCircle size={18} weight="bold" className="text-amber shrink-0 mt-0.5" />
+              <p className="text-xs text-text-main leading-relaxed">
+                {t("runner.shortSessionWarning", { duration: formatDuration(totalSecs) })}
+              </p>
+            </div>
+          )}
           <div className="flex items-center justify-center gap-3 pt-2">
             <Button
               type="button"
