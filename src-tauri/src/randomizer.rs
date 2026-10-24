@@ -241,7 +241,9 @@ pub fn parse_rawaccel_live_values(json_content: &str) -> Result<RawaccelLiveValu
     Ok((out_dpi, scale_whole, scale_vert))
 }
 
-pub fn apply_scale_to_rawaccel_json(json_content: &str, scale: f64) -> Result<String, String> {
+/// Aplica o multiplicador via "Output DPI" (base do backup * mult). O campo "scale" e ignorado
+/// pelo RawAccel no modo noaccel, entao ele so e devolvido ao valor do backup (cura valores antigos).
+pub fn apply_scale_to_rawaccel_json(json_content: &str, backup: &RawAccelBackup, mouse_dpi: f64, mult: f64) -> Result<String, String> {
     let mut json: Value = serde_json::from_str(json_content)
         .map_err(|e| format!("JSON do RawAccel inválido: {e}"))?;
 
@@ -254,23 +256,25 @@ pub fn apply_scale_to_rawaccel_json(json_content: &str, scale: f64) -> Result<St
         .get_mut(0)
         .ok_or_else(|| "Nenhum profile no settings.json".to_string())?;
 
-    if let Some(whole_params) = first_profile
-        .get_mut("Whole or horizontal accel parameters")
-        .and_then(|w| w.as_object_mut())
-    {
-        whole_params.insert("scale".to_string(), serde_json::json!(scale));
+    let base_dpi = Some(mouse_dpi)
+        .filter(|d| *d > 0.0)
+        .ok_or_else(|| "DPI do mouse invalido".to_string())?;
+
+    if let Some(obj) = first_profile.as_object_mut() {
+        obj.insert("Output DPI".to_string(), serde_json::json!((base_dpi * mult * 100.0).round() / 100.0));
     }
-    if let Some(vert_params) = first_profile
-        .get_mut("Vertical accel parameters")
-        .and_then(|v| v.as_object_mut())
-    {
-        vert_params.insert("scale".to_string(), serde_json::json!(scale));
+    for (key, original) in [
+        ("Whole or horizontal accel parameters", backup.scale_whole),
+        ("Vertical accel parameters", backup.scale_vert),
+    ] {
+        if let (Some(scale), Some(params)) = (original, first_profile.get_mut(key).and_then(|w| w.as_object_mut())) {
+            params.insert("scale".to_string(), serde_json::json!(scale));
+        }
     }
 
     serde_json::to_string_pretty(&json)
         .map_err(|e| format!("Falha ao serializar settings.json: {e}"))
 }
-
 pub fn restore_rawaccel_json_from_backup(json_content: &str, backup: &RawAccelBackup) -> Result<String, String> {
     let mut json: Value = serde_json::from_str(json_content)
         .map_err(|e| format!("JSON do RawAccel inválido: {e}"))?;
@@ -342,9 +346,9 @@ pub fn ensure_rawaccel_backup(app: &AppHandle, rawaccel_dir: &Path) -> Result<Ra
             Ok(backup)
         }
         Some(mut existing) => {
-            let edited_externally = live_scale_whole.is_some()
-                && live_scale_whole != existing.last_written_scale
-                && live_scale_whole != existing.scale_whole;
+            let edited_externally = live_out_dpi.is_some()
+                && live_out_dpi != existing.last_written_output_dpi
+                && live_out_dpi != existing.output_dpi;
             if edited_externally {
                 existing.output_dpi = live_out_dpi;
                 existing.scale_whole = live_scale_whole;
@@ -388,17 +392,22 @@ pub fn run_writer(rawaccel_dir: &Path) -> Result<(), String> {
     Ok(())
 }
 
-pub fn update_and_apply_scale(rawaccel_dir: &Path, scale: f64, _mouse_dpi: f64) -> Result<(), String> {
+pub fn update_and_apply_scale(app: &AppHandle, rawaccel_dir: &Path, mult: f64, mouse_dpi: f64) -> Result<(), String> {
     let settings_path = rawaccel_dir.join("settings.json");
     if !settings_path.exists() {
         return Err(format!("settings.json não encontrado em {}", rawaccel_dir.display()));
     }
 
+    let mut backup = ensure_rawaccel_backup(app, rawaccel_dir)?;
     let content = fs::read_to_string(&settings_path)
         .map_err(|e| format!("Falha ao ler settings.json: {e}"))?;
 
-    let updated_content = apply_scale_to_rawaccel_json(&content, scale)?;
+    let updated_content = apply_scale_to_rawaccel_json(&content, &backup, mouse_dpi, mult)?;
     atomic_write(&settings_path, &updated_content)?;
+
+    backup.last_written_output_dpi = Some((mouse_dpi * mult * 100.0).round() / 100.0);
+    backup.last_written_scale = Some(mult);
+    storage::save_rawaccel_backup(app, &backup)?;
     run_writer(rawaccel_dir)
 }
 
@@ -414,8 +423,8 @@ pub fn restore_from_backup(app: &AppHandle, rawaccel_dir: &Path) -> Result<(), S
     let updated_content = match storage::load_rawaccel_backup(app) {
         Some(backup) => restore_rawaccel_json_from_backup(&content, &backup)?,
         None => {
-            eprintln!("[RawAccel] Backup não encontrado; aplicando scale 1.0 como fallback");
-            apply_scale_to_rawaccel_json(&content, 1.0)?
+            eprintln!("[RawAccel] Backup não encontrado; mantendo settings atual");
+            content.clone()
         }
     };
 
@@ -481,8 +490,6 @@ pub fn apply_next_sens(
 
     let target_dir = found_dir.ok_or_else(|| "Diretório do RawAccel indefinido".to_string())?;
 
-    let mut backup = ensure_rawaccel_backup(app, &target_dir)?;
-
     let target_scenario = {
         let upcoming = state.upcoming_scenario.lock().unwrap().clone();
         upcoming.or_else(|| ctx.finished_scenario.clone())
@@ -503,10 +510,7 @@ pub fn apply_next_sens(
         (cm, mult)
     };
 
-    update_and_apply_scale(&target_dir, next_mult, settings.mouse_dpi)?;
-
-    backup.last_written_scale = Some(next_mult);
-    let _ = storage::save_rawaccel_backup(app, &backup);
+    update_and_apply_scale(app, &target_dir, next_mult, settings.mouse_dpi)?;
 
     let now_iso = chrono::Local::now().to_rfc3339();
 
@@ -698,7 +702,7 @@ mod tests {
     }
 
     #[test]
-    fn test_apply_scale_to_rawaccel_json_preserves_output_dpi() {
+    fn test_apply_scale_to_rawaccel_json_writes_output_dpi() {
         let raw_json = r#"{
             "profiles": [
                 {
@@ -714,17 +718,23 @@ mod tests {
             ]
         }"#;
 
-        let transformed = apply_scale_to_rawaccel_json(raw_json, 1.35).expect("apply scale ok");
+        let backup = RawAccelBackup {
+            output_dpi: Some(1600.0),
+            scale_whole: Some(1.0),
+            scale_vert: Some(1.0),
+            last_written_output_dpi: None,
+            last_written_scale: None,
+            saved_at: String::new(),
+        };
+        let transformed = apply_scale_to_rawaccel_json(raw_json, &backup, 1600.0, 1.25).expect("apply scale ok");
         let v: serde_json::Value = serde_json::from_str(&transformed).unwrap();
         let prof = &v["profiles"][0];
 
-        // Output DPI and Acceleration are untouched
-        assert_eq!(prof["Output DPI"].as_f64(), Some(1600.0));
+        // Output DPI carries the multiplier; other fields and scale stay at backup values
+        assert_eq!(prof["Output DPI"].as_f64(), Some(2000.0));
         assert_eq!(prof["Acceleration"].as_f64(), Some(0.05));
-
-        // Whole and Vertical are updated
-        assert_eq!(prof["Whole or horizontal accel parameters"]["scale"].as_f64(), Some(1.35));
-        assert_eq!(prof["Vertical accel parameters"]["scale"].as_f64(), Some(1.35));
+        assert_eq!(prof["Whole or horizontal accel parameters"]["scale"].as_f64(), Some(1.0));
+        assert_eq!(prof["Vertical accel parameters"]["scale"].as_f64(), Some(1.0));
     }
 
     #[test]

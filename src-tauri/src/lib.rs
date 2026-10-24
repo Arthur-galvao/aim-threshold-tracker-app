@@ -104,7 +104,7 @@ fn save_settings(
         if avail {
             if let Some(ref dir) = found_dir {
                 let current_mult = state.randomizer_state.lock().unwrap().active_mult;
-                let _ = randomizer::update_and_apply_scale(dir, current_mult, settings.mouse_dpi);
+                let _ = randomizer::update_and_apply_scale(&app, dir, current_mult, settings.mouse_dpi);
             }
         }
     }
@@ -315,7 +315,7 @@ fn save_randomizer_settings(
     } else if is_enabled && avail && (prev_dpi - settings.mouse_dpi).abs() > 0.01 {
         if let Some(ref dir) = found_dir {
             let current_mult = state.randomizer_state.lock().unwrap().active_mult;
-            let _ = randomizer::update_and_apply_scale(dir, current_mult, settings.mouse_dpi);
+            let _ = randomizer::update_and_apply_scale(&app, dir, current_mult, settings.mouse_dpi);
         }
     }
 
@@ -418,7 +418,7 @@ fn detect_rawaccel_path(state: State<'_, AppState>) -> Result<Option<String>, St
 }
 
 #[tauri::command]
-fn test_rawaccel_writer(_app: AppHandle, state: State<'_, AppState>, path: Option<String>) -> Result<String, String> {
+fn test_rawaccel_writer(app: AppHandle, state: State<'_, AppState>, path: Option<String>) -> Result<String, String> {
     let target_dir = match path {
         Some(p) if !p.trim().is_empty() => std::path::PathBuf::from(p),
         _ => {
@@ -432,12 +432,9 @@ fn test_rawaccel_writer(_app: AppHandle, state: State<'_, AppState>, path: Optio
         return Err(format!("Diretório inválido: writer.exe ou settings.json ausentes em {}", target_dir.display()));
     }
 
-    let (current_mult, mouse_dpi) = {
-        let s = state.settings.lock().unwrap();
-        let mult = state.randomizer_state.lock().unwrap().active_mult;
-        (mult, s.randomizer.mouse_dpi)
-    };
-    randomizer::update_and_apply_scale(&target_dir, current_mult, mouse_dpi)?;
+    let current_mult = state.randomizer_state.lock().unwrap().active_mult;
+    let mouse_dpi = state.settings.lock().unwrap().randomizer.mouse_dpi;
+    randomizer::update_and_apply_scale(&app, &target_dir, current_mult, mouse_dpi)?;
     Ok("Comunicação com o driver RawAccel testada com sucesso!".to_string())
 }
 
@@ -505,8 +502,8 @@ pub fn run() {
                 if let Some(ref dir) = found_dir {
                     if let Some(backup) = storage::load_rawaccel_backup(app.handle()) {
                         if let Ok(content) = std::fs::read_to_string(dir.join("settings.json")) {
-                            if let Ok((_, live_scale, _)) = randomizer::parse_rawaccel_live_values(&content) {
-                                if live_scale.is_some() && live_scale == backup.last_written_scale && live_scale != backup.scale_whole {
+                            if let Ok((live_dpi, _, _)) = randomizer::parse_rawaccel_live_values(&content) {
+                                if live_dpi.is_some() && live_dpi == backup.last_written_output_dpi && live_dpi != backup.output_dpi {
                                     let _ = randomizer::restore_from_backup(app.handle(), dir);
                                 }
                             }
