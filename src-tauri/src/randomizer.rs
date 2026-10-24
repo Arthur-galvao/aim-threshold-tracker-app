@@ -153,7 +153,7 @@ pub fn resolve_range_cm(s: &RandomizerSettings, center_override: Option<f64>) ->
     if s.auto_scenario_sens {
         let center = center_override.or(s.scenario_ideal_cm).unwrap_or(base).max(MIN_CM);
         let p = (s.spread_percent / 100.0).clamp(0.01, 0.90);
-        ((center / (1.0 + p)).max(MIN_CM), center * (1.0 + p))
+        ((center * (1.0 - p)).max(MIN_CM), center * (1.0 + p))
     } else if s.range_mode.eq_ignore_ascii_case("multiplier") {
         let (a, b) = (s.min_mult.min(s.max_mult).max(0.01), s.min_mult.max(s.max_mult).max(0.01));
         ((base / b).max(MIN_CM), base / a)
@@ -550,12 +550,12 @@ mod tests {
         };
 
         let (min_cm, max_cm) = resolve_range_cm(&settings, None);
-        assert!((min_cm - 32.0).abs() < 1e-4, "min_cm was {}, expected 32.0", min_cm);
+        assert!((min_cm - 30.0).abs() < 1e-4, "min_cm was {}, expected 30.0", min_cm);
         assert!((max_cm - 50.0).abs() < 1e-4, "max_cm was {}, expected 50.0", max_cm);
 
         // Override tem precedência
         let (min_ov, max_ov) = resolve_range_cm(&settings, Some(50.0));
-        assert!((min_ov - 40.0).abs() < 1e-4, "min_ov was {}, expected 40.0", min_ov);
+        assert!((min_ov - 37.5).abs() < 1e-4, "min_ov was {}, expected 37.5", min_ov);
         assert!((max_ov - 62.5).abs() < 1e-4, "max_ov was {}, expected 62.5", max_ov);
     }
 
@@ -609,11 +609,11 @@ mod tests {
         };
 
         let preview = preview_sens_range_calc(&settings, None);
-        assert_eq!(preview.min_cm, 32.0);
+        assert_eq!(preview.min_cm, 30.0);
         assert_eq!(preview.max_cm, 50.0);
         assert!(preview.grid_cm.len() >= 3);
         assert_eq!(preview.min_mult, 0.8);
-        assert_eq!(preview.max_mult, 1.25);
+        assert_eq!(preview.max_mult, 1.3333);
     }
 
     #[test]
