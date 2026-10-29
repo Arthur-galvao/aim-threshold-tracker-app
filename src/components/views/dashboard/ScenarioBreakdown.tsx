@@ -6,8 +6,12 @@ import {
   Trophy,
   ShieldCheck,
   TrendDown,
+  Queue,
+  CaretDown,
+  X,
 } from "@phosphor-icons/react";
 import { useTrackerWorkspace } from "@/context/TrackerWorkspaceContext";
+import { useApp } from "@/hooks/useAppData";
 import { VISCOSE_CATEGORIES } from "@/lib/viscose";
 import { computeTaskMetrics } from "@/lib/threshold";
 import { useI18n } from "@/lib/i18n";
@@ -21,26 +25,61 @@ export interface ScenarioBreakdownProps {
 
 export function ScenarioBreakdown({ className, embedded = false }: ScenarioBreakdownProps) {
   const { t } = useI18n();
+  const { appData } = useApp();
   const { state, actions } = useTrackerWorkspace();
   const { tasks, activeTask } = state;
+  const playlists = appData?.playlists ?? [];
 
   const [categoryFilter, setCategoryFilter] = useState<string>("All");
+  const [selectedPlaylistId, setSelectedPlaylistId] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      const p = new URLSearchParams(window.location.search).get("playlist");
+      if (p) return p;
+    }
+    return "All";
+  });
   const [weaknessFocus, setWeaknessFocus] = useState<boolean>(false);
   const [search, setSearch] = useState<string>("");
+
+  const effectivePlaylistId = playlists.some((p) => p.id === selectedPlaylistId)
+    ? selectedPlaylistId
+    : "All";
 
   const categories = useMemo(() => {
     return ["All", ...Object.keys(VISCOSE_CATEGORIES)];
   }, []);
 
   const filteredTasks = useMemo(() => {
+    const selectedPlaylist =
+      effectivePlaylistId !== "All"
+        ? playlists.find((p) => p.id === effectivePlaylistId)
+        : null;
+
+    const playlistTaskIds = selectedPlaylist
+      ? new Set(selectedPlaylist.items.map((it) => it.taskId))
+      : null;
+
     const base = tasks.filter((task) => {
+      const matchPlaylist = !playlistTaskIds || playlistTaskIds.has(task.id);
       const matchCat = categoryFilter === "All" || task.category === categoryFilter;
       const matchSearch =
         search.trim() === "" ||
         task.name.toLowerCase().includes(search.toLowerCase()) ||
         task.subcategory.toLowerCase().includes(search.toLowerCase());
-      return matchCat && matchSearch;
+      return matchPlaylist && matchCat && matchSearch;
     });
+
+    if (selectedPlaylist && !weaknessFocus) {
+      const orderIndexMap = new Map<string, number>();
+      selectedPlaylist.items.forEach((item, idx) => {
+        if (!orderIndexMap.has(item.taskId)) {
+          orderIndexMap.set(item.taskId, idx);
+        }
+      });
+      return [...base].sort(
+        (a, b) => (orderIndexMap.get(a.id) ?? 999) - (orderIndexMap.get(b.id) ?? 999)
+      );
+    }
 
     if (!weaknessFocus) return base;
 
@@ -56,7 +95,7 @@ export function ScenarioBreakdown({ className, embedded = false }: ScenarioBreak
     };
 
     return [...base].sort((a, b) => weaknessScore(a) - weaknessScore(b));
-  }, [tasks, categoryFilter, search, weaknessFocus]);
+  }, [tasks, effectivePlaylistId, playlists, categoryFilter, search, weaknessFocus]);
 
   return (
     <div
@@ -80,8 +119,55 @@ export function ScenarioBreakdown({ className, embedded = false }: ScenarioBreak
           />
         </div>
 
-        {/* Category Pills + 60/40 Weakness Focus */}
+        {/* Category Pills + Playlist Filter + 60/40 Weakness Focus */}
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scroll-y select-none">
+          {playlists.length > 0 && (
+            <div className="flex items-center gap-1 shrink-0">
+              <div
+                className={cn(
+                  "relative flex items-center rounded-full transition-all text-[11px] font-medium",
+                  effectivePlaylistId !== "All"
+                    ? "bg-score-soft text-score border border-edge-strong font-semibold"
+                    : "liquid-well text-text-secondary hover:text-text-main"
+                )}
+              >
+                <span className="pl-2.5 text-text-faint pointer-events-none flex items-center">
+                  <Queue size={12} weight="regular" />
+                </span>
+                <select
+                  value={effectivePlaylistId}
+                  onChange={(e) => setSelectedPlaylistId(e.target.value)}
+                  aria-label={t("dashboard.filterByPlaylist")}
+                  className="bg-transparent text-[11px] font-medium py-0.5 pl-1.5 pr-6 appearance-none cursor-pointer focus:outline-none"
+                >
+                  <option value="All" className="bg-bg-canvas text-text-main">
+                    {t("dashboard.allPlaylists")}
+                  </option>
+                  {playlists.map((pl) => (
+                    <option key={pl.id} value={pl.id} className="bg-bg-canvas text-text-main">
+                      {pl.name} ({pl.items.length})
+                    </option>
+                  ))}
+                </select>
+                <span className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-text-faint flex items-center">
+                  <CaretDown size={10} weight="bold" />
+                </span>
+              </div>
+              {effectivePlaylistId !== "All" && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedPlaylistId("All")}
+                  title={t("dashboard.clearPlaylistFilter")}
+                  aria-label={t("dashboard.clearPlaylistFilter")}
+                  className="w-5 h-5 rounded-full liquid-well hover:bg-score-soft text-text-faint hover:text-score flex items-center justify-center transition-all press shrink-0 cursor-pointer"
+                >
+                  <X size={10} weight="bold" />
+                </button>
+              )}
+              <div className="h-3.5 w-[1px] bg-edge shrink-0 mx-0.5" />
+            </div>
+          )}
+
           <button
             type="button"
             onClick={() => setWeaknessFocus((prev) => !prev)}

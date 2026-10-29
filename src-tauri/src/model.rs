@@ -42,6 +42,8 @@ pub struct Playlist {
     pub name: String,
     pub items: Vec<PlaylistItem>,
     pub created_at: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub auto_advance_mode: Option<String>,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -173,6 +175,8 @@ pub struct AppSettings {
     pub auto_detect_playlist: bool,
     #[serde(default = "default_true")]
     pub notify_step_advance: bool,
+    #[serde(default = "default_true")]
+    pub auto_advance_on_threshold: bool,
     #[serde(default = "default_dpi")]
     pub mouse_dpi: f64,
 }
@@ -187,6 +191,7 @@ impl Default for AppSettings {
             close_to_tray: true,
             auto_detect_playlist: true,
             notify_step_advance: true,
+            auto_advance_on_threshold: true,
             mouse_dpi: 800.0,
         }
     }

@@ -63,10 +63,22 @@ function AppContent() {
   } = useSensRandomizer();
 
   const [activeTab, setActiveTab] = useState<NavTab>("dashboard");
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(() => {
+    if (typeof window !== "undefined") {
+      const p = new URLSearchParams(window.location.search).get("dialog");
+      return p === "settings" || window.location.hash === "#settings";
+    }
+    return false;
+  });
   const [sessionSheetOpen, setSessionSheetOpen] = useState(false);
   const [newScenarioOpen, setNewScenarioOpen] = useState(false);
-  const [playlistManagerOpen, setPlaylistManagerOpen] = useState(false);
+  const [playlistManagerOpen, setPlaylistManagerOpen] = useState(() => {
+    if (typeof window !== "undefined") {
+      const p = new URLSearchParams(window.location.search).get("dialog");
+      return p === "playlists" || p === "playlist-editor" || window.location.hash === "#playlists";
+    }
+    return false;
+  });
   const [aimlabOpen, setAimlabOpen] = useState(false);
   const [theme, setTheme] = useState<AppTheme>(getStoredTheme);
 

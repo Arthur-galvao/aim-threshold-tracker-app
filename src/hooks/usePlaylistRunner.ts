@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import type { Playlist, PlaylistItem, Task } from "@/lib/types";
-import { getTargetThresholdForTask } from "@/lib/threshold";
+import { getTargetThresholdForTask, resolveAutoAdvanceOnThreshold } from "@/lib/threshold";
 
 interface UsePlaylistRunnerProps {
   tasks: Task[];
   setActiveTaskId: (id: string) => void;
   onStepAdvance?: (stepIndex: number, scenarioName: string, isFinished: boolean) => void;
+  globalAutoAdvance?: boolean;
 }
 
 export interface PlaylistRunnerState {
@@ -37,6 +38,7 @@ export function usePlaylistRunner({
   tasks,
   setActiveTaskId,
   onStepAdvance,
+  globalAutoAdvance,
 }: UsePlaylistRunnerProps): PlaylistRunnerState {
   const onStepAdvanceRef = useRef(onStepAdvance);
   onStepAdvanceRef.current = onStepAdvance;
@@ -53,6 +55,10 @@ export function usePlaylistRunner({
   const [isRunning, setIsRunning] = useState<boolean>(false);
   const [completedStepIndices, setCompletedStepIndices] = useState<Set<number>>(new Set());
 
+  const shouldAutoAdvance = useMemo(() => {
+    return resolveAutoAdvanceOnThreshold(activePlaylist, globalAutoAdvance);
+  }, [activePlaylist, globalAutoAdvance]);
+
   // Ref to hold current state for interval checks without stale closures
   const stateRef = useRef({
     activePlaylist,
@@ -65,6 +71,7 @@ export function usePlaylistRunner({
     isFinished,
     isRunning,
     completedStepIndices,
+    shouldAutoAdvance,
   });
 
   useEffect(() => {
@@ -79,6 +86,7 @@ export function usePlaylistRunner({
       isFinished,
       isRunning,
       completedStepIndices,
+      shouldAutoAdvance,
     };
   });
 
@@ -252,7 +260,9 @@ export function usePlaylistRunner({
           const bestInStep = newScores.length > 0 ? Math.max(...newScores) : null;
           const targetThresh = stateRef.current.stepTargetThreshold;
           if (targetThresh === null || (bestInStep !== null && bestInStep >= targetThresh)) {
-            next();
+            if (shouldAutoAdvance) {
+              next();
+            }
           }
         }
       } else if (targetStepIndex > curIdx) {
@@ -272,7 +282,7 @@ export function usePlaylistRunner({
         goToStep(targetStepIndex, pl);
       }
     },
-    [taskMap, next, goToStep]
+    [taskMap, next, goToStep, shouldAutoAdvance]
   );
 
   // Tick timer for time-based targets
@@ -302,7 +312,9 @@ export function usePlaylistRunner({
         stepTargetThreshold === null ||
         (stepBestScore !== null && stepBestScore >= stepTargetThreshold);
       if (completedReps >= minReps && thresholdMet) {
-        next();
+        if (shouldAutoAdvance) {
+          next();
+        }
       }
     } else if (currentItem.targetMode === "time" && startedAt !== null) {
       const elapsed = Math.floor((now - startedAt) / 1000);
@@ -322,6 +334,7 @@ export function usePlaylistRunner({
     startedAt,
     now,
     next,
+    shouldAutoAdvance,
   ]);
 
   const elapsedSeconds = useMemo(() => {

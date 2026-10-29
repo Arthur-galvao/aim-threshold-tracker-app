@@ -126,6 +126,7 @@ export async function getSettings(): Promise<AppSettings> {
             close_to_tray: true,
             auto_detect_playlist: true,
             notify_step_advance: true,
+            auto_advance_on_threshold: true,
             ...JSON.parse(stored),
           };
         } catch {}
@@ -138,6 +139,7 @@ export async function getSettings(): Promise<AppSettings> {
       close_to_tray: true,
       auto_detect_playlist: true,
       notify_step_advance: true,
+      auto_advance_on_threshold: true,
     };
   }
   return invoke<AppSettings>("get_settings");

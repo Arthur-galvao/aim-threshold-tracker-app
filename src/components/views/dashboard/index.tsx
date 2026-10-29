@@ -26,7 +26,15 @@ export function DashboardView({ className }: DashboardViewProps) {
   const { state } = useTrackerWorkspace();
   const { tasks, activeTask } = state;
 
-  const [sideMode, setSideMode] = useState<SidePanelMode>("history");
+  const [sideMode, setSideMode] = useState<SidePanelMode>(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("view") === "scenarios" || params.has("playlist")) {
+        return "scenarios";
+      }
+    }
+    return "history";
+  });
 
   if (tasks.length === 0) {
     return (

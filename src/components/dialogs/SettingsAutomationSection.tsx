@@ -5,18 +5,22 @@ export interface SettingsAutomationSectionProps {
   closeToTray: boolean;
   autoDetectPlaylist: boolean;
   notifyStepAdvance: boolean;
+  autoAdvanceOnThreshold: boolean;
   onToggleCloseToTray: (val: boolean) => void;
   onToggleAutoDetectPlaylist: (val: boolean) => void;
   onToggleNotifyStepAdvance: (val: boolean) => void;
+  onToggleAutoAdvanceOnThreshold: (val: boolean) => void;
 }
 
 export function SettingsAutomationSection({
   closeToTray,
   autoDetectPlaylist,
   notifyStepAdvance,
+  autoAdvanceOnThreshold,
   onToggleCloseToTray,
   onToggleAutoDetectPlaylist,
   onToggleNotifyStepAdvance,
+  onToggleAutoAdvanceOnThreshold,
 }: SettingsAutomationSectionProps) {
   const { t } = useI18n();
 
@@ -69,6 +73,21 @@ export function SettingsAutomationSection({
           <Switch
             checked={notifyStepAdvance}
             onCheckedChange={onToggleNotifyStepAdvance}
+          />
+        </div>
+
+        <div className="p-4 flex items-center justify-between gap-4">
+          <div className="space-y-0.5">
+            <span className="text-xs font-semibold text-text-main block">
+              {t("settings.autoAdvanceOnThreshold")}
+            </span>
+            <span className="text-[11px] text-text-faint block">
+              {t("settings.autoAdvanceOnThresholdDesc")}
+            </span>
+          </div>
+          <Switch
+            checked={autoAdvanceOnThreshold}
+            onCheckedChange={onToggleAutoAdvanceOnThreshold}
           />
         </div>
       </div>

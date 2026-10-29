@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   ListChecks,
   Plus,
@@ -46,9 +46,31 @@ export function PlaylistManagerDialog({
   initialTaskIds,
 }: PlaylistManagerDialogProps) {
   const { t } = useI18n();
-  const [isCreating, setIsCreating] = useState(false);
-  const [editingPlaylist, setEditingPlaylist] = useState<Playlist | null>(null);
+  const [isCreating, setIsCreating] = useState(() => {
+    if (typeof window !== "undefined") {
+      return new URLSearchParams(window.location.search).get("create") === "1";
+    }
+    return false;
+  });
+  const [editingPlaylist, setEditingPlaylist] = useState<Playlist | null>(() => {
+    if (typeof window !== "undefined") {
+      const p = new URLSearchParams(window.location.search).get("dialog");
+      if (p === "playlist-editor") {
+        return playlists[0] ?? null;
+      }
+    }
+    return null;
+  });
   const [syncing, setSyncing] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const p = new URLSearchParams(window.location.search).get("dialog");
+      if (p === "playlist-editor" && playlists.length > 0 && !editingPlaylist && !isCreating) {
+        setEditingPlaylist(playlists[0]);
+      }
+    }
+  }, [playlists, editingPlaylist, isCreating]);
 
   const taskMap = useMemo(() => new Map(tasks.map((t) => [t.id, t])), [tasks]);
 

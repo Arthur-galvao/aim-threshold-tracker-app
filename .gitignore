@@ -90,5 +90,6 @@ debug_cards.js
 find_duplicates.cjs
 test_output.css
 screenshot_tool.js
+test-capture.mjs
 *.png
 !src-tauri/icons/*.png

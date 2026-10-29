@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { Plus, Sparkle } from "@phosphor-icons/react";
-import { Button, Input, Select, Field } from "@/components/ui";
-import type { Playlist, PlaylistItem, Task } from "@/lib/types";
+import { Button, Input, Select, Field, Segmented } from "@/components/ui";
+import type { Playlist, PlaylistItem, PlaylistAutoAdvanceMode, Task } from "@/lib/types";
 import { PlaylistItemRow } from "./PlaylistItemRow";
 import { useI18n } from "@/lib/i18n";
 
@@ -24,6 +24,9 @@ export function PlaylistEditor({
   const taskMap = useMemo(() => new Map(tasks.map((t) => [t.id, t])), [tasks]);
 
   const [name, setName] = useState(initialPlaylist?.name ?? "");
+  const [autoAdvanceMode, setAutoAdvanceMode] = useState<PlaylistAutoAdvanceMode>(
+    initialPlaylist?.autoAdvanceMode ?? "inherit"
+  );
   const [items, setItems] = useState<PlaylistItem[]>(() => {
     if (initialPlaylist?.items && initialPlaylist.items.length > 0) {
       return [...initialPlaylist.items];
@@ -108,6 +111,7 @@ export function PlaylistEditor({
         name: name.trim(),
         items,
         createdAt: initialPlaylist?.createdAt ?? new Date().toISOString(),
+        autoAdvanceMode,
       };
       await onSave(playlist);
     } finally {
@@ -142,6 +146,25 @@ export function PlaylistEditor({
         >
           {t("playlist.orderSuggest")}
         </Button>
+      </div>
+
+      {/* Auto-Advance Mode */}
+      <div className="space-y-1.5">
+        <label className="text-[11px] font-semibold uppercase tracking-wider text-text-faint px-0.5">
+          {t("playlist.autoAdvanceMode")}
+        </label>
+        <div>
+          <Segmented<PlaylistAutoAdvanceMode>
+            size="sm"
+            value={autoAdvanceMode}
+            onChange={setAutoAdvanceMode}
+            options={[
+              { value: "inherit", label: t("playlist.autoAdvanceInherit") },
+              { value: "enabled", label: t("playlist.autoAdvanceEnabled") },
+              { value: "disabled", label: t("playlist.autoAdvanceDisabled") },
+            ]}
+          />
+        </div>
       </div>
 
       {/* Playlist Items List */}

@@ -41,6 +41,7 @@ export interface SettingsDialogProps {
   closeToTray?: boolean;
   autoDetectPlaylist?: boolean;
   notifyStepAdvance?: boolean;
+  autoAdvanceOnThreshold?: boolean;
   onUpdateAppSettings?: (settings: Partial<AppSettings>) => Promise<void>;
   onOpenAimLab?: () => void;
   currentTheme?: AppTheme;
@@ -68,6 +69,7 @@ export function SettingsDialog({
   closeToTray: propCloseToTray,
   autoDetectPlaylist: propAutoDetectPlaylist,
   notifyStepAdvance: propNotifyStepAdvance,
+  autoAdvanceOnThreshold: propAutoAdvanceOnThreshold,
   onUpdateAppSettings,
   onOpenAimLab,
   currentTheme = "cyber-lab",
@@ -78,6 +80,7 @@ export function SettingsDialog({
   const [closeToTray, setCloseToTray] = useState(propCloseToTray ?? true);
   const [autoDetectPlaylist, setAutoDetectPlaylist] = useState(propAutoDetectPlaylist ?? true);
   const [notifyStepAdvance, setNotifyStepAdvance] = useState(propNotifyStepAdvance ?? true);
+  const [autoAdvanceOnThreshold, setAutoAdvanceOnThreshold] = useState(propAutoAdvanceOnThreshold ?? true);
   const [mouseDpi, setMouseDpi] = useState(800);
   const [dpiText, setDpiText] = useState("800");
 
@@ -98,8 +101,11 @@ export function SettingsDialog({
       if (propNotifyStepAdvance === undefined && s.notify_step_advance !== undefined) {
         setNotifyStepAdvance(s.notify_step_advance);
       }
+      if (propAutoAdvanceOnThreshold === undefined && s.auto_advance_on_threshold !== undefined) {
+        setAutoAdvanceOnThreshold(s.auto_advance_on_threshold);
+      }
     });
-  }, [open, propCloseToTray, propAutoDetectPlaylist, propNotifyStepAdvance]);
+  }, [open, propCloseToTray, propAutoDetectPlaylist, propNotifyStepAdvance, propAutoAdvanceOnThreshold]);
 
   const updateSetting = async (partial: Partial<AppSettings>) => {
     if (onUpdateAppSettings) {
@@ -159,6 +165,7 @@ export function SettingsDialog({
               closeToTray={closeToTray}
               autoDetectPlaylist={autoDetectPlaylist}
               notifyStepAdvance={notifyStepAdvance}
+              autoAdvanceOnThreshold={autoAdvanceOnThreshold}
               onToggleCloseToTray={(val) => {
                 setCloseToTray(val);
                 void updateSetting({ close_to_tray: val });
@@ -170,6 +177,10 @@ export function SettingsDialog({
               onToggleNotifyStepAdvance={(val) => {
                 setNotifyStepAdvance(val);
                 void updateSetting({ notify_step_advance: val });
+              }}
+              onToggleAutoAdvanceOnThreshold={(val) => {
+                setAutoAdvanceOnThreshold(val);
+                void updateSetting({ auto_advance_on_threshold: val });
               }}
             />
 

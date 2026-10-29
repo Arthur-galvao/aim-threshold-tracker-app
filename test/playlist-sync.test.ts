@@ -4,6 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import type { AppSettings, DetectedPlaylistEvent, Playlist, PlaylistItem, Task } from "../src/lib/types.ts";
 import { categorizeScenario } from "../src/lib/viscose.ts";
+import { resolveAutoAdvanceOnThreshold } from "../src/lib/threshold.ts";
 
 describe("playlist-sync and detection", () => {
   describe("AppSettings and DetectedPlaylistEvent type structures", () => {
@@ -634,6 +635,84 @@ describe("playlist-sync and detection", () => {
       assert.match(mockData.tasks[1].id, /^task_/);
       assert.equal(mockData.tasks[0].sessions[0].id, "sess_dupe");
       assert.match(mockData.tasks[1].sessions[0].id, /^sess_/);
+    });
+  });
+
+  describe("Milestone M2: Auto-Advance on Threshold configuration and enforcement", () => {
+    it("resolves auto advance with global fallback", () => {
+      assert.equal(resolveAutoAdvanceOnThreshold(null, true), true);
+      assert.equal(resolveAutoAdvanceOnThreshold(null, false), false);
+      assert.equal(resolveAutoAdvanceOnThreshold(null, undefined), true);
+      assert.equal(resolveAutoAdvanceOnThreshold(undefined, true), true);
+      assert.equal(resolveAutoAdvanceOnThreshold(undefined, false), false);
+    });
+
+    it("resolves inherit mode using global setting", () => {
+      const inheritPl: Playlist = {
+        id: "p1",
+        name: "Test",
+        items: [],
+        createdAt: "2026-10-29",
+        autoAdvanceMode: "inherit",
+      };
+      assert.equal(resolveAutoAdvanceOnThreshold(inheritPl, true), true);
+      assert.equal(resolveAutoAdvanceOnThreshold(inheritPl, false), false);
+      assert.equal(resolveAutoAdvanceOnThreshold(inheritPl, undefined), true);
+    });
+
+    it("respects enabled override over global false", () => {
+      const enabledPl: Playlist = {
+        id: "p2",
+        name: "Test",
+        items: [],
+        createdAt: "2026-10-29",
+        autoAdvanceMode: "enabled",
+      };
+      assert.equal(resolveAutoAdvanceOnThreshold(enabledPl, false), true);
+      assert.equal(resolveAutoAdvanceOnThreshold(enabledPl, true), true);
+    });
+
+    it("respects disabled override over global true", () => {
+      const disabledPl: Playlist = {
+        id: "p3",
+        name: "Test",
+        items: [],
+        createdAt: "2026-10-29",
+        autoAdvanceMode: "disabled",
+      };
+      assert.equal(resolveAutoAdvanceOnThreshold(disabledPl, true), false);
+      assert.equal(resolveAutoAdvanceOnThreshold(disabledPl, false), false);
+    });
+
+    it("verifies Settings and PlaylistEditor automation controls and callbacks", () => {
+      const dialogContent = fs.readFileSync(
+        path.resolve("src/components/dialogs/SettingsDialog.tsx"),
+        "utf-8"
+      );
+      const automationContent = fs.readFileSync(
+        path.resolve("src/components/dialogs/SettingsAutomationSection.tsx"),
+        "utf-8"
+      );
+      const editorContent = fs.readFileSync(
+        path.resolve("src/components/dialogs/PlaylistEditor.tsx"),
+        "utf-8"
+      );
+
+      assert.ok(automationContent.includes("autoAdvanceOnThreshold"));
+      assert.ok(automationContent.includes("onToggleAutoAdvanceOnThreshold"));
+      assert.ok(automationContent.includes("settings.autoAdvanceOnThreshold"));
+      assert.ok(dialogContent.includes("autoAdvanceOnThreshold"));
+      assert.ok(editorContent.includes("autoAdvanceMode"));
+      assert.ok(editorContent.includes("Segmented"));
+    });
+
+    it("verifies zero emojis across all newly updated UI, editor, and dialog files", () => {
+      const emojiRegex = /\p{Extended_Pictographic}/u;
+      const editorContent = fs.readFileSync(
+        path.resolve("src/components/dialogs/PlaylistEditor.tsx"),
+        "utf-8"
+      );
+      assert.equal(emojiRegex.test(editorContent), false, "PlaylistEditor.tsx contains visual emojis");
     });
   });
 });

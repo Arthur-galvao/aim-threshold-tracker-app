@@ -16,6 +16,7 @@ export interface Task {
 }
 
 export type PlaylistTargetMode = "reps" | "time" | "threshold";
+export type PlaylistAutoAdvanceMode = "inherit" | "enabled" | "disabled";
 
 export interface PlaylistItem {
   id: string;
@@ -29,6 +30,7 @@ export interface Playlist {
   name: string;
   items: PlaylistItem[];
   createdAt: string;
+  autoAdvanceMode?: PlaylistAutoAdvanceMode;
 }
 
 export interface AppData {
@@ -71,6 +73,7 @@ export interface AppSettings {
   auto_detect_playlist?: boolean;
   notify_step_advance?: boolean;
   mouse_dpi?: number;
+  auto_advance_on_threshold?: boolean;
 }
 
 export interface ImportStats {

@@ -261,9 +261,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const [globalAutoAdvance, setGlobalAutoAdvance] = useState<boolean>(true);
+
+  const refreshGlobalSettings = useCallback(async () => {
+    try {
+      const s = await getSettings();
+      if (s.auto_advance_on_threshold !== undefined) {
+        setGlobalAutoAdvance(s.auto_advance_on_threshold !== false);
+      }
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    void refreshGlobalSettings();
+    const handleFocus = () => void refreshGlobalSettings();
+    window.addEventListener("focus", handleFocus);
+    return () => window.removeEventListener("focus", handleFocus);
+  }, [refreshGlobalSettings]);
+
   const playlistRunner = usePlaylistRunner({
     tasks: appData.tasks,
     setActiveTaskId,
+    globalAutoAdvance,
     onStepAdvance: async (_stepIndex, scenarioName, isFinished) => {
       try {
         const settings = await getSettings();

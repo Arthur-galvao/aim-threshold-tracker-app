@@ -1,4 +1,4 @@
-import type { AppData, Task } from "./types.ts";
+import type { AppData, Task, Playlist } from "./types.ts";
 import { categorizeScenario } from "./viscose.ts";
 import { summarizeDays } from "./day-summary.ts";
 
@@ -276,4 +276,14 @@ export function recalculateAllTasks(tasks: Task[]): void {
   for (const task of tasks) {
     recalculateAllTaskThresholds(task);
   }
+}
+
+export function resolveAutoAdvanceOnThreshold(
+  playlist: Playlist | null | undefined,
+  globalSetting: boolean | undefined
+): boolean {
+  const overrideVal = playlist?.autoAdvanceMode;
+  if (overrideVal === "enabled") return true;
+  if (overrideVal === "disabled") return false;
+  return globalSetting !== false;
 }
