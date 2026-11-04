@@ -13,7 +13,7 @@ import {
 } from "@/components/ui";
 import type { AppSettings, WatcherStatus } from "@/lib/types";
 import { getSettings, saveSettings } from "@/lib/tauri-bridge";
-import { useI18n, type Lang } from "@/lib/i18n";
+import { useI18n, type Key, type Lang } from "@/lib/i18n";
 import { APP_THEMES, type AppTheme } from "@/lib/theme";
 import { SettingsKovaakSection } from "./SettingsKovaakSection";
 import { SettingsRawaccelSection } from "./SettingsRawaccelSection";
@@ -272,7 +272,7 @@ export function SettingsDialog({
                               {theme.name}
                             </span>
                             <span className="block text-[10px] text-text-faint truncate">
-                              {theme.desc}
+                              {t(theme.descKey as Key)}
                             </span>
                           </div>
                         </div>

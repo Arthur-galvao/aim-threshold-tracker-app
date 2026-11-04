@@ -181,23 +181,23 @@ export async function getPlaylistInProgress(): Promise<DetectedPlaylistEvent | n
   }
 }
 
-export async function pickStatsFolder(): Promise<string | null> {
+export async function pickStatsFolder(title?: string): Promise<string | null> {
   if (!isTauri()) return null;
   const selected = await open({
     directory: true,
     multiple: false,
-    title: "Selecione a pasta de stats do KovaaK's",
+    title,
   });
   if (Array.isArray(selected)) return selected[0] ?? null;
   return selected ?? null;
 }
 
-export async function pickAimlabCsvFile(): Promise<string | null> {
+export async function pickAimlabCsvFile(title?: string): Promise<string | null> {
   if (!isTauri()) return null;
   const selected = await open({
     directory: false,
     multiple: false,
-    title: "Selecione o arquivo CSV do Aim Lab",
+    title,
     filters: [{ name: "CSV", extensions: ["csv"] }],
   });
   if (Array.isArray(selected)) return selected[0] ?? null;

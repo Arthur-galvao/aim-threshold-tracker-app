@@ -23,7 +23,6 @@ import {
   onImportComplete,
   onRunRecorded,
   onWatcherError,
-  saveSettings,
   setStatsPath,
   startWatcher,
   stopWatcher,
@@ -31,8 +30,9 @@ import {
 import { dataStore } from "@/lib/data-store";
 import { deriveTask } from "@/lib/derived-tasks";
 import { getTargetThresholdForTask } from "@/lib/threshold";
-import { useI18n } from "@/lib/i18n";
+import { useI18n, type Key } from "@/lib/i18n";
 import { useApp } from "./useAppData";
+import { useSettings } from "./useSettings";
 
 export interface WatcherContextValue {
   watcherStatus: WatcherStatus;
@@ -56,6 +56,7 @@ const WatcherContext = createContext<WatcherContextValue | null>(null);
 export function WatcherProvider({ children }: { children: ReactNode }) {
   const { showToast, playlistRunner, fixupTaskCategories } = useApp();
   const { t } = useI18n();
+  const { updateSettings } = useSettings();
   const [watcherStatus, setWatcherStatus] = useState<WatcherStatus>({
     active: false,
     path: null,
@@ -109,8 +110,11 @@ export function WatcherProvider({ children }: { children: ReactNode }) {
           }
           if (granted) {
             sendNotification({
-              title: "Nova Run Registrada",
-              body: `Score: ${event.score} | ${event.scenario}`,
+              title: tRef.current("notif.newRunTitle" as Key),
+              body: tRef.current("notif.newRunBody" as Key, {
+                score: event.score,
+                scenario: event.scenario,
+              }),
             });
           }
         } catch {}
@@ -156,10 +160,7 @@ export function WatcherProvider({ children }: { children: ReactNode }) {
         if (detected) {
           await setStatsPath(detected);
           setSettingsPath(detected);
-          await saveSettings({
-            ...settings,
-            kovaak_stats_path: detected,
-          });
+          await updateSettings({ kovaak_stats_path: detected });
         }
       }
 
@@ -182,7 +183,7 @@ export function WatcherProvider({ children }: { children: ReactNode }) {
               "success"
             );
           }
-          await saveSettings({ ...settings, import_on_first_run: false });
+          await updateSettings({ import_on_first_run: false });
         } catch {}
       }
     };
@@ -203,14 +204,16 @@ export function WatcherProvider({ children }: { children: ReactNode }) {
     return importExistingCsvs();
   }, []);
 
-  const updateStatsPath = useCallback(async (path: string) => {
-    await setStatsPath(path);
-    const settings = await getSettings();
-    await saveSettings({ ...settings, kovaak_stats_path: path });
-    setSettingsPath(path);
-    await startWatcher();
-    setWatcherStatus(await getWatcherStatus());
-  }, []);
+  const updateStatsPath = useCallback(
+    async (path: string) => {
+      await setStatsPath(path);
+      await updateSettings({ kovaak_stats_path: path });
+      setSettingsPath(path);
+      await startWatcher();
+      setWatcherStatus(await getWatcherStatus());
+    },
+    [updateSettings]
+  );
 
   const value = useMemo<WatcherContextValue>(
     () => ({

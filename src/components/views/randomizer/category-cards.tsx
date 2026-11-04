@@ -166,18 +166,18 @@ export function CategoryCards({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-edge">
         <div>
           <h2 className="text-xs font-semibold text-text-main tracking-tight">
-            {t("categorySens.title") || "Sensibilidade por Categoria e Playlists"}
+            {t("categorySens.title")}
           </h2>
           <p className="text-[11px] text-text-faint mt-0.5">
-            {t("categorySens.subtitle") || "Recomendações e benchmarking empírico por grupo motor"}
+            {t("categorySens.subtitle")}
           </p>
         </div>
 
         <Segmented
           id="category-playlist-sens-tab"
           options={[
-            { value: "category", label: t("randomizer.scopeCategory") || "Categorias" },
-            { value: "playlist", label: t("randomizer.scopePlaylist") || "Playlists" },
+            { value: "category", label: t("randomizer.scopeCategory") },
+            { value: "playlist", label: t("randomizer.scopePlaylist") },
           ]}
           value={activeTab}
           onChange={(val) => setActiveTab(val as "category" | "playlist")}
@@ -188,19 +188,19 @@ export function CategoryCards({
       {activeTab === "category" ? (
         categoryGroups.length === 0 ? (
           <div className="py-8 text-center text-xs text-text-faint">
-            {t("categorySens.empty") || "Nenhum dado por categoria registrado."}
+            {t("categorySens.empty")}
           </div>
         ) : (
           <div
             tabIndex={0}
             role="region"
-            aria-label={t("categorySens.title") || "Categorias"}
+            aria-label={t("categorySens.title")}
             className="overflow-auto max-h-[420px] scroll-y liquid-well rounded-control p-1"
           >
             <table className="w-full text-left text-xs border-collapse">
               <thead className="sticky top-0 z-10 bg-base/90 backdrop-blur-md">
                 <tr className="border-b border-edge text-[11px] font-semibold text-text-faint uppercase tracking-wider">
-                  <th className="py-2.5 px-3">{t("modal.category") || "Categoria"}</th>
+                  <th className="py-2.5 px-3">{t("modal.category")}</th>
                   <th className="py-2.5 px-3">Cenários</th>
                   <th className="py-2.5 px-3">Runs</th>
                   <th className="py-2.5 px-3">Sens Recomendada</th>
@@ -265,13 +265,13 @@ export function CategoryCards({
       ) : (
         playlistStatsList.length === 0 ? (
           <div className="py-8 text-center text-xs text-text-faint">
-            {t("playlistSens.empty") || "Nenhuma playlist encontrada."}
+            {t("playlistSens.empty")}
           </div>
         ) : (
           <div
             tabIndex={0}
             role="region"
-            aria-label={t("randomizer.scopePlaylist") || "Playlists"}
+            aria-label={t("randomizer.scopePlaylist")}
             className="overflow-auto max-h-[420px] scroll-y liquid-well rounded-control p-1"
           >
             <table className="w-full text-left text-xs border-collapse">

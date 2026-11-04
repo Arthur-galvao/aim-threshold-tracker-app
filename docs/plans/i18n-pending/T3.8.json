@@ -1,0 +1,8 @@
+{
+  "pt": {
+    "randomizer.dpiMismatch": "DPI informado no KovaaK's ({csv}) ≠ DPI configurado no app ({app}); o cm/360 pode estar errado."
+  },
+  "en": {
+    "randomizer.dpiMismatch": "DPI reported in KovaaK's ({csv}) ≠ DPI set in the app ({app}); cm/360 may be off."
+  }
+}

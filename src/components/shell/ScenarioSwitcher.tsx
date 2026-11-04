@@ -14,7 +14,7 @@ import {
   PopoverPositioner,
   PopoverPopup,
 } from "@/components/ui";
-import { useI18n } from "@/lib/i18n";
+import { useI18n, type Key } from "@/lib/i18n";
 import type { Task } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -110,7 +110,7 @@ export function ScenarioSwitcher({
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Buscar cenários..."
+                placeholder={t("scenarioSwitcher.search" as Key)}
                 className="field pl-8 py-1.5 text-xs rounded-full"
                 autoFocus
               />

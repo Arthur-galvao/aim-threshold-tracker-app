@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { AppProvider, useApp } from "@/hooks/useAppData";
+import { SettingsProvider, useSettings } from "@/hooks/useSettings";
 import { WatcherProvider, useWatcher } from "@/hooks/useKovaakWatcher";
 import { RandomizerProvider, useSensRandomizer } from "@/hooks/useSensRandomizer";
 import { useScenarioCentersSync } from "@/hooks/useScenarioCentersSync";
@@ -21,7 +22,6 @@ import {
   RecoveryNotice,
 } from "@/components/dialogs";
 import type { AppSettings, Playlist } from "@/lib/types";
-import { getSettings, saveSettings } from "@/lib/tauri-bridge";
 import { applyTheme, getStoredTheme, type AppTheme } from "@/lib/theme";
 
 function AppContent() {
@@ -45,6 +45,8 @@ function AppContent() {
     syncGamePlaylists,
     playlistRunner,
   } = useApp();
+
+  const { updateSettings } = useSettings();
 
   const {
     watcherStatus,
@@ -134,10 +136,9 @@ function AppContent() {
 
   const handleUpdateAppSettings = useCallback(
     async (partial: Partial<AppSettings>) => {
-      const current = await getSettings();
-      await saveSettings({ ...current, ...partial });
+      await updateSettings(partial);
     },
-    []
+    [updateSettings]
   );
 
   return (
@@ -244,15 +245,17 @@ export default function App() {
   return (
     <I18nProvider>
       <ToastProvider>
-        <AppProvider>
-          <WatcherProvider>
-            <TrackerWorkspaceProvider>
-              <RandomizerProvider>
-                <AppContent />
-              </RandomizerProvider>
-            </TrackerWorkspaceProvider>
-          </WatcherProvider>
-        </AppProvider>
+        <SettingsProvider>
+          <AppProvider>
+            <WatcherProvider>
+              <TrackerWorkspaceProvider>
+                <RandomizerProvider>
+                  <AppContent />
+                </RandomizerProvider>
+              </TrackerWorkspaceProvider>
+            </WatcherProvider>
+          </AppProvider>
+        </SettingsProvider>
       </ToastProvider>
     </I18nProvider>
   );

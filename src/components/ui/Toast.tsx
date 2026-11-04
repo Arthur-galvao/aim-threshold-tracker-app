@@ -1,6 +1,7 @@
 import React, { createContext, useCallback, useContext, useState } from "react";
 import { Check, Info, Warning, X } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
+import { useI18n, type Key } from "@/lib/i18n";
 
 export type ToastType = "success" | "error" | "info" | "warning";
 
@@ -74,6 +75,7 @@ export function ToastItem({
   toast: ToastMessage;
   onDismiss?: () => void;
 }) {
+  const { t } = useI18n();
   const icons: Record<ToastType, React.ReactNode> = {
     success: <Check size={16} className="text-emerald" weight="bold" />,
     error: <X size={16} className="text-red" weight="bold" />,
@@ -104,7 +106,7 @@ export function ToastItem({
         <button
           type="button"
           onClick={onDismiss}
-          aria-label="Dispensar notificação"
+          aria-label={t("toast.dismiss" as Key)}
           className="shrink-0 text-text-faint hover:text-text-main transition cursor-pointer press p-0.5 rounded"
         >
           <X size={14} />

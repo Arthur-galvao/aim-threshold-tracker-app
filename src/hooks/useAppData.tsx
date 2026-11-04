@@ -22,7 +22,6 @@ import * as bridge from "@/lib/tauri-bridge";
 import {
   getPlaylistInProgress,
   listenKovaakPlaylistActive,
-  getSettings,
 } from "@/lib/tauri-bridge";
 import { dataStore, type DataStoreBackend } from "@/lib/data-store";
 import { createTaskDeriver } from "@/lib/derived-tasks";
@@ -35,6 +34,9 @@ import {
 import { migrateAndCategorizeTasks } from "@/lib/viscose";
 import { useI18n, type Key } from "@/lib/i18n";
 import { usePlaylistRunner, type PlaylistRunnerState } from "./usePlaylistRunner";
+import { useSettings } from "./useSettings";
+
+const APP_NOTIFICATION_TITLE = "Aim Threshold Tracker";
 
 const storeBackend: DataStoreBackend = {
   getAppData: bridge.getAppData,
@@ -224,23 +226,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const [globalAutoAdvance, setGlobalAutoAdvance] = useState<boolean>(true);
-
-  const refreshGlobalSettings = useCallback(async () => {
-    try {
-      const s = await getSettings();
-      if (s.auto_advance_on_threshold !== undefined) {
-        setGlobalAutoAdvance(s.auto_advance_on_threshold !== false);
-      }
-    } catch {}
-  }, []);
-
-  useEffect(() => {
-    void refreshGlobalSettings();
-    const handleFocus = () => void refreshGlobalSettings();
-    window.addEventListener("focus", handleFocus);
-    return () => window.removeEventListener("focus", handleFocus);
-  }, [refreshGlobalSettings]);
+  // Ajustes vêm do SettingsContext (recarregados no foco da janela, ver useSettings).
+  const { settings } = useSettings();
+  const settingsRef = useRef(settings);
+  settingsRef.current = settings;
+  const globalAutoAdvance = settings?.auto_advance_on_threshold !== false;
 
   const playlistRunner = usePlaylistRunner({
     tasks: appData.tasks,
@@ -248,12 +238,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     globalAutoAdvance,
     onStepAdvance: async (_stepIndex, scenarioName, isFinished) => {
       try {
-        const settings = await getSettings();
-        if (settings.notify_step_advance !== false) {
+        if (settingsRef.current?.notify_step_advance !== false) {
           if (isFinished) {
-            await sendNotificationHelper("Aim Threshold Tracker", "Playlist concluída!");
+            await sendNotificationHelper(APP_NOTIFICATION_TITLE, t("notif.playlistDone" as Key));
           } else if (scenarioName) {
-            await sendNotificationHelper("Aim Threshold Tracker", `Etapa avançada: ${scenarioName}`);
+            await sendNotificationHelper(
+              APP_NOTIFICATION_TITLE,
+              t("notif.stepAdvanced" as Key, { name: scenarioName })
+            );
           }
         }
       } catch (err) {
@@ -271,8 +263,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const handleDetectedPlaylist = useCallback(
     async (event: DetectedPlaylistEvent) => {
       try {
-        const settings = await getSettings();
-        if (settings.auto_detect_playlist === false) {
+        const settings = settingsRef.current;
+        if (settings?.auto_detect_playlist === false) {
           return;
         }
 
@@ -293,10 +285,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
         if (!isSamePlaylistRunning) {
           runner.start(targetPlaylist);
-          if (settings.notify_step_advance !== false) {
+          if (settings?.notify_step_advance !== false) {
             await sendNotificationHelper(
-              "Aim Threshold Tracker",
-              `Playlist detectada: ${targetPlaylist.name}`
+              APP_NOTIFICATION_TITLE,
+              t("notif.playlistDetected" as Key, { name: targetPlaylist.name })
             );
           }
         } else {
@@ -318,7 +310,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         console.error("Erro ao sincronizar playlist ativa do KovaaK:", err);
       }
     },
-    [sendNotificationHelper]
+    [sendNotificationHelper, t]
   );
 
   useEffect(() => {
