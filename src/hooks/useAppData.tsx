@@ -26,14 +26,14 @@ import {
 } from "@/lib/tauri-bridge";
 import { dataStore, type DataStoreBackend } from "@/lib/data-store";
 import { createTaskDeriver } from "@/lib/derived-tasks";
-import { errorCode } from "@/lib/backend-error";
+import { formatBackendError } from "@/lib/backend-error";
 import {
   isPermissionGranted,
   requestPermission,
   sendNotification,
 } from "@tauri-apps/plugin-notification";
 import { migrateAndCategorizeTasks } from "@/lib/viscose";
-import { useI18n, type Key } from "@/lib/i18n";
+import { useI18n } from "@/lib/i18n";
 import { usePlaylistRunner, type PlaylistRunnerState } from "./usePlaylistRunner";
 import { useSettings } from "./useSettings";
 
@@ -134,11 +134,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   /** Mostra um erro de comando (códigos curtos do backend, traduzidos aqui). */
   const reportError = useCallback(
     (err: unknown) => {
-      const code = errorCode(err);
       console.error("Erro no comando do backend:", err);
-      const key = `error.${code}` as Key;
-      const text = t(key);
-      showToast(text === key ? code : text, "error");
+      showToast(formatBackendError(err, t), "error");
     },
     [showToast, t]
   );

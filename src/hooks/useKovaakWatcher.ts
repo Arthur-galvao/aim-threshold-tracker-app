@@ -31,6 +31,7 @@ import { dataStore } from "@/lib/data-store";
 import { deriveTask } from "@/lib/derived-tasks";
 import { getTargetThresholdForTask } from "@/lib/threshold";
 import { useI18n } from "@/lib/i18n";
+import { formatBackendError } from "@/lib/backend-error";
 import { useApp } from "./useAppData";
 import { useSettings } from "./useSettings";
 
@@ -124,7 +125,7 @@ export function WatcherProvider({ children }: { children: ReactNode }) {
     track(
       onWatcherError((error) => {
         setWatcherStatus((prev) => ({ ...prev, error, active: false }));
-        showToastRef.current(tRef.current("toast.watcherError", { error }), "error");
+        showToastRef.current(tRef.current("toast.watcherError", { error: formatBackendError(error, tRef.current) }), "error");
       })
     );
 

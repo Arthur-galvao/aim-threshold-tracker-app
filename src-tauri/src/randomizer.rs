@@ -9,6 +9,7 @@ use rand::Rng;
 use serde_json::Value;
 use tauri::{AppHandle, Emitter, Manager, State};
 
+use crate::errors::{err, err_d};
 use crate::model::{RandomizerSettings, RandomizerState};
 use crate::sampler::{draw_index, grid_bounds, lattice_cm, SamplerState, MIN_CM};
 use crate::AppState;
@@ -115,14 +116,14 @@ pub fn check_rawaccel_availability(configured_dir: Option<&str>) -> (bool, Optio
                 (
                     false,
                     Some(dir),
-                    Some("Pasta do RawAccel encontrada, mas o driver de kernel não está registrado. Execute o installer.exe e reinicie o PC.".into()),
+                    Some(err("rawaccel_driver_not_registered")),
                     gui_running,
                 )
             } else if gui_running {
                 (
                     true,
                     Some(dir),
-                    Some("Aviso: A interface gráfica do Raw Accel (rawaccel.exe) está aberta. Feche a janela para evitar que ela reverta a sensibilidade sorteada.".into()),
+                    Some(err("rawaccel_gui_running")),
                     true,
                 )
             } else {
@@ -132,7 +133,7 @@ pub fn check_rawaccel_availability(configured_dir: Option<&str>) -> (bool, Optio
         None => (
             false,
             None,
-            Some("RawAccel não encontrado nos locais comuns nem configurado nas opções.".into()),
+            Some(err("rawaccel_not_found")),
             gui_running,
         ),
     }
@@ -212,12 +213,12 @@ pub type RawaccelLiveValues = (Option<f64>, Option<f64>, Option<f64>);
 
 pub fn parse_rawaccel_live_values(json_content: &str) -> Result<RawaccelLiveValues, String> {
     let json: Value = serde_json::from_str(json_content)
-        .map_err(|e| format!("JSON do RawAccel inválido: {e}"))?;
+        .map_err(|e| err_d("rawaccel_json_invalid", e))?;
     let first_profile = json
         .get("profiles")
         .and_then(|p| p.as_array())
         .and_then(|arr| arr.first())
-        .ok_or_else(|| "Nenhum profile encontrado no settings.json do RawAccel".to_string())?;
+        .ok_or_else(|| err("rawaccel_no_profile"))?;
 
     let out_dpi = first_profile.get("Output DPI").and_then(|v| v.as_f64());
     let scale_whole = first_profile
@@ -236,20 +237,20 @@ pub fn parse_rawaccel_live_values(json_content: &str) -> Result<RawaccelLiveValu
 /// pelo RawAccel no modo noaccel, entao ele so e devolvido ao valor do backup (cura valores antigos).
 pub fn apply_scale_to_rawaccel_json(json_content: &str, backup: &RawAccelBackup, mouse_dpi: f64, mult: f64) -> Result<String, String> {
     let mut json: Value = serde_json::from_str(json_content)
-        .map_err(|e| format!("JSON do RawAccel inválido: {e}"))?;
+        .map_err(|e| err_d("rawaccel_json_invalid", e))?;
 
     let profiles = json
         .get_mut("profiles")
         .and_then(|p| p.as_array_mut())
-        .ok_or_else(|| "Campo 'profiles' inválido no settings.json".to_string())?;
+        .ok_or_else(|| err("rawaccel_profiles_invalid"))?;
 
     let first_profile = profiles
         .get_mut(0)
-        .ok_or_else(|| "Nenhum profile no settings.json".to_string())?;
+        .ok_or_else(|| err("rawaccel_no_profile"))?;
 
     let base_dpi = Some(mouse_dpi)
         .filter(|d| *d > 0.0)
-        .ok_or_else(|| "DPI do mouse invalido".to_string())?;
+        .ok_or_else(|| err("mouse_dpi_invalid"))?;
 
     if let Some(obj) = first_profile.as_object_mut() {
         obj.insert("Output DPI".to_string(), serde_json::json!((base_dpi * mult * 100.0).round() / 100.0));
@@ -264,20 +265,20 @@ pub fn apply_scale_to_rawaccel_json(json_content: &str, backup: &RawAccelBackup,
     }
 
     serde_json::to_string_pretty(&json)
-        .map_err(|e| format!("Falha ao serializar settings.json: {e}"))
+        .map_err(|e| err_d("json_serialize_failed", e))
 }
 pub fn restore_rawaccel_json_from_backup(json_content: &str, backup: &RawAccelBackup) -> Result<String, String> {
     let mut json: Value = serde_json::from_str(json_content)
-        .map_err(|e| format!("JSON do RawAccel inválido: {e}"))?;
+        .map_err(|e| err_d("rawaccel_json_invalid", e))?;
 
     let profiles = json
         .get_mut("profiles")
         .and_then(|p| p.as_array_mut())
-        .ok_or_else(|| "Campo 'profiles' inválido no settings.json".to_string())?;
+        .ok_or_else(|| err("rawaccel_profiles_invalid"))?;
 
     let first_profile = profiles
         .get_mut(0)
-        .ok_or_else(|| "Nenhum profile no settings.json".to_string())?;
+        .ok_or_else(|| err("rawaccel_no_profile"))?;
 
     if let Some(out_dpi) = backup.output_dpi {
         if let Some(obj) = first_profile.as_object_mut() {
@@ -304,16 +305,16 @@ pub fn restore_rawaccel_json_from_backup(json_content: &str, backup: &RawAccelBa
     }
 
     serde_json::to_string_pretty(&json)
-        .map_err(|e| format!("Falha ao serializar settings.json: {e}"))
+        .map_err(|e| err_d("json_serialize_failed", e))
 }
 
 pub fn ensure_rawaccel_backup(app: &AppHandle, rawaccel_dir: &Path) -> Result<RawAccelBackup, String> {
     let settings_path = rawaccel_dir.join("settings.json");
     if !settings_path.exists() {
-        return Err(format!("settings.json não encontrado em {}", rawaccel_dir.display()));
+        return Err(err_d("rawaccel_settings_not_found", rawaccel_dir.display()));
     }
     let content = fs::read_to_string(&settings_path)
-        .map_err(|e| format!("Falha ao ler settings.json: {e}"))?;
+        .map_err(|e| err_d("read_failed", e))?;
 
     let (live_out_dpi, live_scale_whole, live_scale_vert) = parse_rawaccel_live_values(&content)?;
     let now_iso = chrono::Local::now().to_rfc3339();
@@ -355,7 +356,7 @@ pub fn ensure_rawaccel_backup(app: &AppHandle, rawaccel_dir: &Path) -> Result<Ra
 pub fn run_writer(rawaccel_dir: &Path) -> Result<(), String> {
     let writer_path = rawaccel_dir.join("writer.exe");
     if !writer_path.exists() {
-        return Err(format!("writer.exe não encontrado em {}", rawaccel_dir.display()));
+        return Err(err_d("rawaccel_writer_not_found", rawaccel_dir.display()));
     }
 
     #[cfg(windows)]
@@ -374,10 +375,10 @@ pub fn run_writer(rawaccel_dir: &Path) -> Result<(), String> {
 
     let status = cmd
         .status()
-        .map_err(|e| format!("Falha ao executar writer.exe: {e}"))?;
+        .map_err(|e| err_d("writer_failed", e))?;
 
     if !status.success() {
-        return Err(format!("writer.exe finalizou com código de erro: {:?}", status.code()));
+        return Err(err_d("writer_exit_failed", format!("{:?}", status.code())));
     }
 
     Ok(())
@@ -386,12 +387,12 @@ pub fn run_writer(rawaccel_dir: &Path) -> Result<(), String> {
 pub fn update_and_apply_scale(app: &AppHandle, rawaccel_dir: &Path, mult: f64, mouse_dpi: f64) -> Result<(), String> {
     let settings_path = rawaccel_dir.join("settings.json");
     if !settings_path.exists() {
-        return Err(format!("settings.json não encontrado em {}", rawaccel_dir.display()));
+        return Err(err_d("rawaccel_settings_not_found", rawaccel_dir.display()));
     }
 
     let mut backup = ensure_rawaccel_backup(app, rawaccel_dir)?;
     let content = fs::read_to_string(&settings_path)
-        .map_err(|e| format!("Falha ao ler settings.json: {e}"))?;
+        .map_err(|e| err_d("read_failed", e))?;
 
     let updated_content = apply_scale_to_rawaccel_json(&content, &backup, mouse_dpi, mult)?;
     storage::atomic_write(&settings_path, updated_content.as_bytes())?;
@@ -405,11 +406,11 @@ pub fn update_and_apply_scale(app: &AppHandle, rawaccel_dir: &Path, mult: f64, m
 pub fn restore_from_backup(app: &AppHandle, rawaccel_dir: &Path) -> Result<(), String> {
     let settings_path = rawaccel_dir.join("settings.json");
     if !settings_path.exists() {
-        return Err(format!("settings.json não encontrado em {}", rawaccel_dir.display()));
+        return Err(err_d("rawaccel_settings_not_found", rawaccel_dir.display()));
     }
 
     let content = fs::read_to_string(&settings_path)
-        .map_err(|e| format!("Falha ao ler settings.json: {e}"))?;
+        .map_err(|e| err_d("read_failed", e))?;
 
     let updated_content = match storage::load_rawaccel_backup(app) {
         Some(backup) => restore_rawaccel_json_from_backup(&content, &backup)?,
@@ -476,10 +477,10 @@ pub fn apply_next_sens(
         r_state.error_message = err_msg.clone();
         drop(r_state);
         let _ = app.emit("randomizer_error", serde_json::json!({ "message": err_msg }));
-        return Err(err_msg.unwrap_or_else(|| "RawAccel indisponível".into()));
+        return Err(err_msg.unwrap_or_else(|| err("rawaccel_unavailable")));
     }
 
-    let target_dir = found_dir.ok_or_else(|| "Diretório do RawAccel indefinido".to_string())?;
+    let target_dir = found_dir.ok_or_else(|| err("rawaccel_dir_unset"))?;
 
     let target_scenario = {
         let upcoming = state.upcoming_scenario.lock().unwrap().clone();
@@ -519,7 +520,7 @@ pub fn apply_next_sens(
     };
 
     app.emit("sens_updated", &new_state)
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| err_d("sens_emit_failed", e))?;
 
     Ok(new_state)
 }

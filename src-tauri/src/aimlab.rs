@@ -8,6 +8,7 @@ use rusqlite::{Connection, OpenFlags};
 use chrono::{DateTime, NaiveDateTime, Utc};
 use tauri::{AppHandle, Manager, State, Emitter};
 
+use crate::errors::{err, err_d};
 use crate::model::{KovaakRun, ImportStats, AppData};
 use crate::AppState;
 
@@ -899,13 +900,9 @@ pub fn migrate_existing_aimlab_tasks(data: &mut AppData) -> bool {
 
 #[tauri::command]
 pub fn sync_aimlab_sqlite(app: AppHandle) -> Result<ImportStats, String> {
-    let aimlab_dir = get_aimlab_users_dir().ok_or_else(|| {
-        "Pasta Users do Aim Lab não encontrada (%USERPROFILE%\\AppData\\LocalLow\\Statespace\\aimlab_tb\\Users)".to_string()
-    })?;
+    let aimlab_dir = get_aimlab_users_dir().ok_or_else(|| err("aimlab_users_dir_not_found"))?;
 
-    let db_path = find_best_aimlab_db(&aimlab_dir).ok_or_else(|| {
-        "Arquivo Klutch.bytes não encontrado na pasta de usuários do Aim Lab".to_string()
-    })?;
+    let db_path = find_best_aimlab_db(&aimlab_dir).ok_or_else(|| err("aimlab_db_not_found"))?;
 
     let fallback_dpi = {
         let state: State<AppState> = app.state();
@@ -922,11 +919,11 @@ pub fn sync_aimlab_sqlite(app: AppHandle) -> Result<ImportStats, String> {
         "temp_klutch_{}.bytes",
         Utc::now().timestamp_millis()
     ));
-    fs::copy(&db_path, &temp_db_path).map_err(|e| format!("Failed to copy DB: {}", e))?;
+    fs::copy(&db_path, &temp_db_path).map_err(|e| err_d("aimlab_db_copy_failed", e))?;
 
     let runs_result = (|| -> Result<Vec<KovaakRun>, String> {
         let conn = Connection::open_with_flags(&temp_db_path, OpenFlags::SQLITE_OPEN_READ_ONLY)
-            .map_err(|e| format!("Failed to open DB: {}", e))?;
+            .map_err(|e| err_d("sqlite_failed", e))?;
 
         let has_sens_table = conn
             .prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='SensData'")
@@ -942,7 +939,7 @@ pub fn sync_aimlab_sqlite(app: AppHandle) -> Result<ImportStats, String> {
                      FROM TaskData t
                      LEFT JOIN SensData s ON t.playId = s.PlayID AND s.Type = 0",
                 )
-                .map_err(|e| format!("Failed to prepare joined query: {}", e))?;
+                .map_err(|e| err_d("sqlite_failed", e))?;
 
             let runs_iter = stmt
                 .query_map([], |row| {
@@ -997,7 +994,7 @@ pub fn sync_aimlab_sqlite(app: AppHandle) -> Result<ImportStats, String> {
                         ..Default::default()
                     })
                 })
-                .map_err(|e| format!("Failed to execute query: {}", e))?;
+                .map_err(|e| err_d("sqlite_failed", e))?;
 
             for run in runs_iter.flatten() {
                 let mut r = run;
@@ -1010,7 +1007,7 @@ pub fn sync_aimlab_sqlite(app: AppHandle) -> Result<ImportStats, String> {
         } else {
             let mut stmt = conn
                 .prepare("SELECT taskName, score, createDate FROM TaskData")
-                .map_err(|e| format!("Failed to prepare fallback query: {}", e))?;
+                .map_err(|e| err_d("sqlite_failed", e))?;
 
             let runs_iter = stmt
                 .query_map([], |row| {
@@ -1028,7 +1025,7 @@ pub fn sync_aimlab_sqlite(app: AppHandle) -> Result<ImportStats, String> {
                         ..Default::default()
                     })
                 })
-                .map_err(|e| format!("Failed to execute fallback query: {}", e))?;
+                .map_err(|e| err_d("sqlite_failed", e))?;
 
             for run in runs_iter.flatten() {
                 let mut r = run;
@@ -1053,7 +1050,7 @@ pub fn import_aimlab_csv(app: AppHandle, path: String) -> Result<ImportStats, St
     let mut reader = csv::ReaderBuilder::new()
         .has_headers(true)
         .from_path(&path)
-        .map_err(|e| format!("Falha ao ler CSV: {}", e))?;
+        .map_err(|e| err_d("csv_parse_failed", e))?;
 
     let fallback_dpi = {
         let state: State<AppState> = app.state();

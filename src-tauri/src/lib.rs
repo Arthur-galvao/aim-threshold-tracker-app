@@ -1,4 +1,5 @@
 mod data_commands;
+mod errors;
 mod data_store;
 mod kovaaak;
 mod migrations;
@@ -18,6 +19,7 @@ use tauri::menu::{MenuBuilder, MenuItem, MenuItemBuilder, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Emitter, Manager, State, WindowEvent};
 
+use crate::errors::{err, err_d};
 use model::{AppSettings, ImportStats, RandomizerSettings, RandomizerState, WatcherStatus};
 
 /// Acima disso o re-parse dos CSVs da migração v2 roda em background.
@@ -78,8 +80,8 @@ pub struct TrayItems {
 
 #[tauri::command]
 fn set_tray_labels(state: State<'_, TrayItems>, open: String, quit: String) -> Result<(), String> {
-    state.open.set_text(open).map_err(|e| e.to_string())?;
-    state.quit.set_text(quit).map_err(|e| e.to_string())?;
+    state.open.set_text(open).map_err(|e| err_d("tray_labels_failed", e))?;
+    state.quit.set_text(quit).map_err(|e| err_d("tray_labels_failed", e))?;
     Ok(())
 }
 
@@ -143,7 +145,7 @@ fn start_watcher(app: AppHandle, state: State<'_, AppState>) -> Result<(), Strin
                 aimlab::find_active_aimlab_replay_dir()
                     .map(|p| p.to_string_lossy().to_string())
             })
-            .ok_or_else(|| "Pasta do KovaaK's ou Aim Lab não encontrada".to_string())?
+            .ok_or_else(|| err("game_dir_not_found"))?
     };
 
     if state.watcher.lock().unwrap().is_some() {
@@ -152,7 +154,7 @@ fn start_watcher(app: AppHandle, state: State<'_, AppState>) -> Result<(), Strin
 
     let dir = std::path::Path::new(&path);
     if !dir.exists() || !dir.is_dir() {
-        return Err(format!("A pasta não existe: {path}"));
+        return Err(err_d("dir_not_exists", &path));
     }
 
     let handle = watcher::spawn(app.clone(), std::path::PathBuf::from(&path))?;
@@ -230,13 +232,13 @@ fn save_randomizer_settings(
     settings: RandomizerSettings,
 ) -> Result<RandomizerState, String> {
     if settings.base_sens_cm < 10.0 || settings.base_sens_cm > 200.0 {
-        return Err("Sensibilidade base deve estar entre 10 e 200 cm/360".to_string());
+        return Err(err_d("invalid_base_sens", "10-200"));
     }
     if settings.spread_percent < 1.0 || settings.spread_percent > 90.0 {
-        return Err("Variação (spread) deve estar entre 1% e 90%".to_string());
+        return Err(err_d("invalid_spread", "1-90"));
     }
     if settings.mouse_dpi < 100.0 || settings.mouse_dpi > 32000.0 {
-        return Err("DPI do mouse deve estar entre 100 e 32000".to_string());
+        return Err(err_d("invalid_dpi", "100-32000"));
     }
 
     let (was_enabled, prev_dpi) = {
@@ -406,12 +408,12 @@ fn test_rawaccel_writer(app: AppHandle, state: State<'_, AppState>, path: Option
         _ => {
             let s = state.settings.lock().unwrap();
             randomizer::detect_rawaccel_dir(s.randomizer.rawaccel_dir.as_deref())
-                .ok_or_else(|| "Nenhum diretório do RawAccel encontrado para teste".to_string())?
+                .ok_or_else(|| err("rawaccel_not_found"))?
         }
     };
 
     if !randomizer::is_valid_rawaccel_dir(&target_dir) {
-        return Err(format!("Diretório inválido: writer.exe ou settings.json ausentes em {}", target_dir.display()));
+        return Err(err_d("invalid_rawaccel_dir", target_dir.display()));
     }
 
     let current_mult = state.randomizer_state.lock().unwrap().active_mult;

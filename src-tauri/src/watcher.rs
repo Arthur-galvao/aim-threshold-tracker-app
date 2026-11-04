@@ -9,6 +9,7 @@ use std::time::Duration;
 use notify::{Event, EventKind, RecursiveMode, Watcher};
 use tauri::{AppHandle, Emitter, Manager, State};
 
+use crate::errors::{err, err_d};
 use crate::model::{ImportStats, KovaakRun};
 use crate::parser;
 use crate::sens_ledger;
@@ -47,7 +48,7 @@ pub fn spawn(app: AppHandle, path: PathBuf) -> Result<WatcherHandle, String> {
             ) {
                 Ok(w) => w,
                 Err(e) => {
-                    let _ = app.emit("watcher_error", format!("Falha ao criar watcher: {e}"));
+                    let _ = app.emit("watcher_error", err_d("watcher_create_failed", e));
                     return;
                 }
             };
@@ -57,7 +58,7 @@ pub fn spawn(app: AppHandle, path: PathBuf) -> Result<WatcherHandle, String> {
                 if let Err(e) = watcher.watch(&path, RecursiveMode::NonRecursive) {
                     let _ = app.emit(
                         "watcher_error",
-                        format!("Falha ao observar a pasta {}: {e}", path.display()),
+                        err_d("watch_dir_failed", format!("{}: {e}", path.display())),
                     );
                 } else {
                     watched_any = true;
@@ -86,7 +87,7 @@ pub fn spawn(app: AppHandle, path: PathBuf) -> Result<WatcherHandle, String> {
                 }
             }
         })
-        .map_err(|e| format!("Falha ao iniciar thread do watcher: {e}"))?;
+        .map_err(|e| err_d("watcher_start_failed", e))?;
 
     Ok(WatcherHandle {
         shutdown,
@@ -174,7 +175,7 @@ fn process_new_aimlab_replay(app: &AppHandle, path: &Path) -> Result<bool, Strin
 
     let mut run = match parsed_run {
         Some(r) => r,
-        None => return Err(format!("Não foi possível ler o Replay do Aim Lab: {}", path.display())),
+        None => return Err(err_d("aimlab_replay_unreadable", path.display())),
     };
 
     // 4. Ledger ANTES do sorteio da próxima sens
@@ -314,12 +315,12 @@ fn wait_for_parse(path: &Path, fallback_dpi: f64) -> Result<KovaakRun, String> {
             return Ok(run);
         }
     }
-    Err(format!("Não foi possível ler o CSV: {}", path.display()))
+    Err(err_d("csv_unreadable", path.display()))
 }
 
 /// Lista os CSVs de stats de uma pasta, em ordem.
 fn list_stats_csvs(dir: &Path) -> Result<Vec<PathBuf>, String> {
-    let entries = fs::read_dir(dir).map_err(|e| format!("Falha ao ler a pasta {}: {e}", dir.display()))?;
+    let entries = fs::read_dir(dir).map_err(|e| err_d("read_dir_failed", format!("{}: {e}", dir.display())))?;
     let mut csvs: Vec<PathBuf> = entries
         .filter_map(|e| e.ok())
         .map(|e| e.path())
@@ -385,7 +386,7 @@ fn import_paths(
             "reason": reason,
         }),
     )
-    .map_err(|e| e.to_string())?;
+    .map_err(|e| err_d("emit_failed", e))?;
     Ok(stats)
 }
 
@@ -397,7 +398,7 @@ pub fn import_existing(app: &AppHandle) -> Result<ImportStats, String> {
         let path = settings
             .kovaak_stats_path
             .clone()
-            .ok_or_else(|| "Nenhuma pasta do KovaaK's configurada".to_string())?;
+            .ok_or_else(|| err("stats_dir_not_configured"))?;
         (PathBuf::from(path), settings.mouse_dpi)
     };
 
@@ -420,7 +421,7 @@ pub fn catch_up_import(app: &AppHandle) -> Result<ImportStats, String> {
         let path = settings
             .kovaak_stats_path
             .clone()
-            .ok_or_else(|| "Nenhuma pasta do KovaaK's configurada".to_string())?;
+            .ok_or_else(|| err("stats_dir_not_configured"))?;
         (PathBuf::from(path), settings.mouse_dpi, settings.last_import_scan_at)
     };
 

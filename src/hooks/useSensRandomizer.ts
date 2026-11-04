@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { useApp } from "@/hooks/useAppData";
 import { useI18n } from "@/lib/i18n";
+import { formatBackendError } from "@/lib/backend-error";
 
 export interface RandomizerSettings {
   enabled: boolean;
@@ -158,7 +159,7 @@ export function RandomizerProvider({ children }: { children: React.ReactNode }) 
         return;
       }
       lastErrorToastRef.current = { msg: payload.message, time: now };
-      showToastRef.current(tRef.current("toast.randomizerError", { error: payload.message }), "error");
+      showToastRef.current(tRef.current("toast.randomizerError", { error: formatBackendError(payload.message, tRef.current) }), "error");
     });
 
     void sub<RandomizerSettings>("randomizer_settings_updated", (payload) => {
@@ -263,7 +264,7 @@ export function RandomizerProvider({ children }: { children: React.ReactNode }) 
         setRandomizerState(updatedState);
         return res;
       } catch (err) {
-        showToastRef.current(tRef.current("toast.rawaccelFailed", { error: String(err) }), "error");
+        showToastRef.current(tRef.current("toast.rawaccelFailed", { error: formatBackendError(err, tRef.current) }), "error");
         throw err;
       } finally {
         setTesting(false);

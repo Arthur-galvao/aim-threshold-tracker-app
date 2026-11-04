@@ -11,6 +11,7 @@ use std::sync::{Mutex, OnceLock};
 
 use serde::{Deserialize, Serialize};
 
+use crate::errors::err_d;
 use crate::model::KovaakRun;
 use crate::sampler::lattice_index;
 use crate::storage;
@@ -53,7 +54,7 @@ impl SensLedger {
 
     pub fn save(&self, path: &Path) -> Result<(), String> {
         let bytes = serde_json::to_vec_pretty(self)
-            .map_err(|e| format!("Falha ao serializar sens_ledger: {e}"))?;
+            .map_err(|e| err_d("json_serialize_failed", e))?;
         storage::atomic_write(path, &bytes)
     }
 

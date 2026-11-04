@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 use serde::de::DeserializeOwned;
 use tauri::{AppHandle, Manager};
 
+use crate::errors::err_d;
 use crate::model::{AppData, AppSettings};
 
 pub const APP_DATA_FILE: &str = "app_data.json";
@@ -37,8 +38,8 @@ pub fn data_dir(app: &AppHandle) -> Result<PathBuf, String> {
     let dir = app
         .path()
         .app_data_dir()
-        .map_err(|e| format!("Falha ao resolver app_data_dir: {e}"))?;
-    fs::create_dir_all(&dir).map_err(|e| format!("Falha ao criar app_data_dir: {e}"))?;
+        .map_err(|e| err_d("app_data_dir_failed", e))?;
+    fs::create_dir_all(&dir).map_err(|e| err_d("app_data_dir_failed", e))?;
     Ok(dir)
 }
 
@@ -129,19 +130,19 @@ pub fn save_rawaccel_backup(app: &AppHandle, backup: &RawAccelBackup) -> Result<
 pub fn atomic_write(path: &Path, bytes: &[u8]) -> Result<(), String> {
     let file_name = path
         .file_name()
-        .ok_or_else(|| format!("Caminho sem nome de arquivo: {}", path.display()))?;
+        .ok_or_else(|| err_d("invalid_path", path.display()))?;
     let mut tmp_name = file_name.to_os_string();
     tmp_name.push(".tmp");
     let tmp_path = path.with_file_name(tmp_name);
 
     if let Err(e) = write_and_sync(&tmp_path, bytes) {
         let _ = fs::remove_file(&tmp_path);
-        return Err(format!("Falha ao escrever arquivo temporário: {e}"));
+        return Err(err_d("write_failed", e));
     }
 
     fs::rename(&tmp_path, path).map_err(|e| {
         let _ = fs::remove_file(&tmp_path);
-        format!("Falha ao substituir arquivo final: {e}")
+        err_d("write_failed", e)
     })
 }
 
@@ -188,7 +189,7 @@ where
             // Só regrava o arquivo principal se o original já está preservado no quarentenado.
             if quarantined.is_some() {
                 let restored = fs::read(&backup)
-                    .map_err(|e| e.to_string())
+                    .map_err(|e| err_d("read_failed", e))
                     .and_then(|bytes| atomic_write(&path, &bytes));
                 if let Err(e) = restored {
                     eprintln!("[storage] falha ao restaurar backup: {e}");
@@ -272,9 +273,9 @@ pub fn rotate_backups(dir: &Path, name: &str, keep: usize) -> Result<(), String>
     }
 
     let backups = dir.join("backups");
-    fs::create_dir_all(&backups).map_err(|e| format!("Falha ao criar pasta de backups: {e}"))?;
+    fs::create_dir_all(&backups).map_err(|e| err_d("backup_failed", e))?;
 
-    let bytes = fs::read(&source).map_err(|e| format!("Falha ao ler para backup: {e}"))?;
+    let bytes = fs::read(&source).map_err(|e| err_d("backup_failed", e))?;
     // Sem mudança desde o último backup: não gira (evita encher os slots com cópias iguais).
     if fs::read(backup_file(dir, name, 1)).is_ok_and(|prev| prev == bytes) {
         return Ok(());
@@ -282,13 +283,13 @@ pub fn rotate_backups(dir: &Path, name: &str, keep: usize) -> Result<(), String>
 
     let oldest = backup_file(dir, name, keep);
     if oldest.exists() {
-        fs::remove_file(&oldest).map_err(|e| format!("Falha ao remover backup antigo: {e}"))?;
+        fs::remove_file(&oldest).map_err(|e| err_d("backup_failed", e))?;
     }
     for index in (1..keep).rev() {
         let from = backup_file(dir, name, index);
         if from.exists() {
             fs::rename(&from, backup_file(dir, name, index + 1))
-                .map_err(|e| format!("Falha ao girar backup: {e}"))?;
+                .map_err(|e| err_d("backup_failed", e))?;
         }
     }
 
@@ -313,21 +314,21 @@ pub fn latest_valid_backup<T: DeserializeOwned>(dir: &Path, name: &str, keep: us
 /// substituição total dos dados (`reason`: "import", "demo", "clear").
 pub fn write_pre_backup(dir: &Path, reason: &str, data: &AppData) -> Result<PathBuf, String> {
     let backups = dir.join("backups");
-    fs::create_dir_all(&backups).map_err(|e| format!("Falha ao criar pasta de backups: {e}"))?;
+    fs::create_dir_all(&backups).map_err(|e| err_d("backup_failed", e))?;
     let stamp = chrono::Local::now().format("%Y%m%d-%H%M%S");
     let target = unique_path(&backups, &format!("pre-{reason}-{stamp}"), "json");
-    let bytes = serde_json::to_vec(data).map_err(|e| e.to_string())?;
+    let bytes = serde_json::to_vec(data).map_err(|e| err_d("json_serialize_failed", e))?;
     atomic_write(&target, &bytes)?;
     Ok(target)
 }
 
 fn read_json<T: serde::de::DeserializeOwned>(path: PathBuf) -> Result<T, String> {
-    let text = fs::read_to_string(&path).map_err(|e| e.to_string())?;
-    serde_json::from_str(&text).map_err(|e| e.to_string())
+    let text = fs::read_to_string(&path).map_err(|e| err_d("read_failed", e))?;
+    serde_json::from_str(&text).map_err(|e| err_d("json_invalid", e))
 }
 
 fn write_json<T: serde::Serialize>(path: &Path, value: &T) -> Result<(), String> {
-    let bytes = serde_json::to_vec(value).map_err(|e| e.to_string())?;
+    let bytes = serde_json::to_vec(value).map_err(|e| err_d("json_serialize_failed", e))?;
     atomic_write(path, &bytes)
 }
 

@@ -10,6 +10,7 @@ import {
 } from "@/components/ui";
 import { syncAimlabSqlite, importAimlabCsv, pickAimlabCsvFile } from "@/lib/tauri-bridge";
 import { useI18n } from "@/lib/i18n";
+import { formatBackendError } from "@/lib/backend-error";
 
 export interface AimLabSyncDialogProps {
   open: boolean;
@@ -44,7 +45,7 @@ export function AimLabSyncDialog({
         onImportComplete(stats);
       }
     } catch (err: unknown) {
-      setError(String(err) || t("aimlab.errSync"));
+      setError(formatBackendError(err, t) || t("aimlab.errSync"));
     } finally {
       setLoading(false);
     }
@@ -67,7 +68,7 @@ export function AimLabSyncDialog({
         onImportComplete(stats);
       }
     } catch (err: unknown) {
-      setError(String(err) || t("aimlab.errImport"));
+      setError(formatBackendError(err, t) || t("aimlab.errImport"));
     } finally {
       setLoading(false);
     }
@@ -80,7 +81,7 @@ export function AimLabSyncDialog({
         await runCsvImport(picked);
       }
     } catch (err: unknown) {
-      setError(String(err) || t("aimlab.errPick"));
+      setError(formatBackendError(err, t) || t("aimlab.errPick"));
     }
   };
 

@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 
 use chrono::NaiveDateTime;
 
+use crate::errors::err_d;
 use crate::model::{AppData, KovaakRun, Session, CURRENT_SCHEMA_VERSION};
 use crate::parser;
 use crate::sens_ledger::{LedgerEntry, ROLE_UNKNOWN};
@@ -75,7 +76,7 @@ fn v1_to_v2(data: &mut AppData, ctx: &MigrationCtx, report: &mut MigrationReport
     match storage::write_pre_backup(ctx.data_dir, "migration-v2", data) {
         Ok(p) => report.backup_path = Some(p),
         Err(e) => {
-            report.error = Some(format!("Backup pré-migração falhou: {e}"));
+            report.error = Some(err_d("backup_failed", e));
             return;
         }
     }
