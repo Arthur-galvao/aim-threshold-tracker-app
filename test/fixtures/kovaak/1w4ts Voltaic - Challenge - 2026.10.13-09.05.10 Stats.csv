@@ -1,0 +1,29 @@
+Kill #,Timestamp,Bot,Weapon,TTK,Shots,Hits,Accuracy,Damage Done,Damage Possible,Efficiency,Cheated,OverShots
+1,09:05:12.137,Target,rifle,0.401s,1,1,1.000000,1.0,1.0,1.000000,false,1
+2,09:05:13.274,Target,rifle,0.402s,1,1,1.000000,1.0,1.0,1.000000,false,0
+3,09:05:14.411,Target,rifle,0.403s,1,1,1.000000,1.0,1.0,1.000000,false,1
+
+Weapon,Shots,Hits,Damage Done,Damage Possible,,Sens Scale,Horiz Sens,Vert Sens,FOV,Hide Gun,Crosshair,Crosshair Scale,Crosshair Color,ADS Sens,ADS Zoom Scale,Avg Target Scale,Avg Time Dilation
+rifle,120,90,900.0,1200.0,,Valorant,0.35,0.35,103.0,true,default.png,1.0,FFFFFF,0.35,1.0,1.0,1.0
+pistol,30,15,150.0,300.0,,Valorant,0.35,0.35,103.0,true,default.png,1.0,FFFFFF,0.35,1.0,1.0,1.0
+
+Kills:,52
+Deaths:,0
+Fight Time:,60.000
+Avg TTK:,1.104
+Damage Done:,1050.0
+Damage Taken:,0.0
+Score:,1043.0
+Scenario:,1w4ts Voltaic
+Hash:,ffee0011
+Game Version:,3.7.2.2025-03-01-1234
+Challenge Start:,09:05:10.500
+Sens Scale:,Valorant
+DPI:,800
+Horiz Sens:,0.35
+Vert Sens:,0.35
+FOV:,103.0
+Resolution:,1920x1080
+Avg FPS:,239.7
+Pause Count:,0
+Pause Duration:,0.0

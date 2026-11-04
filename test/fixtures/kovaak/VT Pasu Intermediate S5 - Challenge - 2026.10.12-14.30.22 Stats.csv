@@ -1,0 +1,41 @@
+Kill #,Timestamp,Bot,Weapon,TTK,Shots,Hits,Accuracy,Damage Done,Damage Possible,Efficiency,Cheated,OverShots
+1,14:30:24.137,Target,pistol,0.401s,1,1,1.000000,1.0,1.0,1.000000,false,1
+2,14:30:25.274,Target,pistol,0.402s,1,1,1.000000,1.0,1.0,1.000000,false,0
+3,14:30:26.411,Target,pistol,0.403s,1,1,1.000000,1.0,1.0,1.000000,false,1
+4,14:30:27.548,Target,pistol,0.404s,1,1,1.000000,1.0,1.0,1.000000,false,0
+5,14:30:28.685,Target,pistol,0.405s,1,1,1.000000,1.0,1.0,1.000000,false,1
+
+Weapon,Shots,Hits,Damage Done,Damage Possible,,Sens Scale,Horiz Sens,Vert Sens,FOV,Hide Gun,Crosshair,Crosshair Scale,Crosshair Color,ADS Sens,ADS Zoom Scale,Avg Target Scale,Avg Time Dilation
+pistol,85,70,70.0,85.0,,cm/360,45.0,45.0,103.0,true,default.png,1.0,FFFFFF,45.0,1.0,1.0,1.0
+
+Kills:,70
+Deaths:,0
+Fight Time:,60.012
+Avg TTK:,0.812
+Damage Done:,70.0
+Damage Taken:,0.0
+Midairs:,0
+Midaired:,0
+Directs:,0
+Directed:,0
+Distance Traveled:,0.0
+Score:,812.5
+Scenario:,VT Pasu Intermediate S5
+Hash:,a1b2c3d4e5f6
+Game Version:,3.7.2.2025-03-01-1234
+Challenge Start:,14:30:22.123
+Input Lag:,0
+Max FPS (config):,0
+Sens Scale:,cm/360
+Horiz Sens:,45.0
+Vert Sens:,45.0
+FOV:,103.0
+Hide Gun:,true
+Crosshair:,default.png
+Crosshair Scale:,1.0
+Crosshair Color:,FFFFFF
+Resolution:,1920x1080
+Avg FPS:,240.1
+Resolution Scale:,100.0
+Pause Count:,1
+Pause Duration:,2.5

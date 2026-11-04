@@ -372,6 +372,7 @@ pub fn parse_aimlab_replay_file(
         fov,
         datetime: iso_dt,
         source_file,
+        ..Default::default()
     })
 }
 
@@ -998,6 +999,7 @@ pub fn sync_aimlab_sqlite(app: AppHandle) -> Result<ImportStats, String> {
                         fov,
                         datetime: create_date,
                         source_file: "AimLab_SQLite".to_string(),
+                        ..Default::default()
                     })
                 })
                 .map_err(|e| format!("Failed to execute query: {}", e))?;
@@ -1028,6 +1030,7 @@ pub fn sync_aimlab_sqlite(app: AppHandle) -> Result<ImportStats, String> {
                         fov: default_fov,
                         datetime: create_date,
                         source_file: "AimLab_SQLite".to_string(),
+                        ..Default::default()
                     })
                 })
                 .map_err(|e| format!("Failed to execute fallback query: {}", e))?;
@@ -1093,6 +1096,7 @@ pub fn import_aimlab_csv(app: AppHandle, path: String) -> Result<ImportStats, St
                 fov: 0.0,
                 datetime,
                 source_file: format!("CSV_{}_{}", file_name, i),
+                ..Default::default()
             });
         }
     }
@@ -1307,6 +1311,7 @@ mod tests {
                             pb: 1000.0,
                             threshold: 950.0,
                             source_file: Some("s1.csv".into()),
+                            ..Default::default()
                         }
                     ],
                 },
@@ -1323,11 +1328,13 @@ mod tests {
                             pb: 1050.0,
                             threshold: 980.0,
                             source_file: Some("s2.csv".into()),
+                            ..Default::default()
                         }
                     ],
                 },
             ],
             playlists: vec![],
+            ..Default::default()
         };
 
         let changed = migrate_existing_aimlab_tasks(&mut data);

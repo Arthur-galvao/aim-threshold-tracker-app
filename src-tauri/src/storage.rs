@@ -357,6 +357,7 @@ mod tests {
                 sessions: vec![],
             }],
             playlists: vec![],
+            ..Default::default()
         }
     }
 
@@ -378,6 +379,7 @@ mod tests {
                             pb: 100.0,
                             threshold: 90.0,
                             source_file: None,
+                            ..Default::default()
                         },
                     ],
                 },
@@ -394,11 +396,13 @@ mod tests {
                             pb: 110.0,
                             threshold: 95.0,
                             source_file: None,
+                            ..Default::default()
                         },
                     ],
                 },
             ],
             playlists: vec![],
+            ..Default::default()
         };
 
         let changed = sanitize_app_data(&mut data);

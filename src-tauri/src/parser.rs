@@ -47,6 +47,7 @@ pub fn parse_stats_file_with_fallback_dpi(path: &Path, fallback_dpi: f64) -> Opt
         fov,
         datetime,
         source_file: file_name,
+        ..Default::default()
     })
 }
 

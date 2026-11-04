@@ -1,0 +1,5 @@
+Kill #,Timestamp,Bot,Weapon,TTK,Shots,Hits,Accuracy,Damage Done,Damage Possible,Efficiency,Cheated,OverShots
+1,10:00:02.137,Target,pistol,0.401s,1,1,1.000000,1.0,1.0,1.000000,false,1
+2,10:00:03.274,Target,pistol,0.402s,1,1,1.000000,1.0,1.0,1.000000,false,0
+3,10:00:04.411,Target,pistol,0.403s,1,1,1.000000,1.0,1.0,1.000000,false,1
+4,10:00:05.548,Target,pistol,0.404s,1,1,1.000000,1.0,1.0,1.000000,false,0

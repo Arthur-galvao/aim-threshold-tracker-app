@@ -482,6 +482,7 @@ mod tests {
                         pb: 120.0,
                         threshold: 110.0,
                         source_file: Some("run1.csv".into()),
+                        ..Default::default()
                     },
                     Session {
                         id: "s2".into(),
@@ -490,10 +491,12 @@ mod tests {
                         pb: 115.0,
                         threshold: 110.0,
                         source_file: Some("run2.csv".into()),
+                        ..Default::default()
                     },
                 ],
             }],
             playlists: Vec::new(),
+            ..Default::default()
         };
 
         let changed = migrate_existing_sensitivities(&mut data, None, 800.0);
@@ -519,8 +522,10 @@ mod tests {
                     pb: 120.0,
                     threshold: 110.0,
                     source_file: None,
+                    ..Default::default()
                 }],
             }],
+            ..Default::default()
         };
 
         let changed = migrate_existing_sensitivities(&mut data, None, 800.0);

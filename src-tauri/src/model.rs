@@ -2,6 +2,12 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 
 pub const DEFAULT_CATEGORY: &str = "Click Timing";
+pub const CURRENT_SCHEMA_VERSION: u32 = 2;
+
+fn default_schema_version() -> u32 {
+    1
+}
+
 pub const DEFAULT_SUBCATEGORY: &str = "Precision";
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -14,6 +20,51 @@ pub struct Session {
     pub threshold: f64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source_file: Option<String>,
+    // --- schema v2 (Plano 03): run completa; todos opcionais ---
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub datetime: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub game: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fov: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub shots: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hits: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub accuracy: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub kills: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub avg_ttk: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub damage_done: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub damage_possible: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fight_time: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pause_count: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pause_duration: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub avg_fps: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub game_version: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hash: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dpi: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sens_role: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub roll_center_cm: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lattice_k: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub run_mode: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub focus: Option<String>,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -56,13 +107,51 @@ pub fn default_playlist_source() -> String {
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AppData {
+    /// Ausente = 1. Atual = `CURRENT_SCHEMA_VERSION`.
+    #[serde(default = "default_schema_version")]
+    pub schema_version: u32,
     pub active_task_id: Option<String>,
     pub tasks: Vec<Task>,
     #[serde(default)]
     pub playlists: Vec<Playlist>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+/// Estatísticas extras da run (schema v2). Campo ausente no CSV = `None`.
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
+#[serde(default, rename_all = "camelCase")]
+pub struct RunStats {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    /// Campo `DPI:` do CSV (autodeclarado; pode estar errado).
+    pub dpi: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub shots: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hits: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub accuracy: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub kills: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub avg_ttk: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub damage_done: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub damage_possible: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fight_time: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pause_count: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pause_duration: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub avg_fps: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub game_version: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hash: Option<String>,
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct KovaakRun {
     pub scenario: String,
     pub score: f64,
@@ -70,6 +159,20 @@ pub struct KovaakRun {
     pub fov: f64,
     pub datetime: String,
     pub source_file: String,
+    /// "kovaak" | "aimlab"
+    #[serde(default)]
+    pub game: String,
+    #[serde(default)]
+    pub stats: RunStats,
+    /// Snapshot do randomizer no momento da run (do ledger de sens; Plano 03/05).
+    #[serde(default)]
+    pub sens_role: Option<String>,
+    #[serde(default)]
+    pub roll_center_cm: Option<f64>,
+    #[serde(default)]
+    pub lattice_k: Option<i32>,
+    #[serde(default)]
+    pub run_mode: Option<String>,
 }
 
 fn default_spread_percent() -> f64 {
@@ -186,6 +289,9 @@ pub struct AppSettings {
     pub auto_advance_on_threshold: bool,
     #[serde(default = "default_dpi")]
     pub mouse_dpi: f64,
+    /// Epoch ms da última varredura de CSVs (catch-up import, Plano 03).
+    #[serde(default)]
+    pub last_import_scan_at: Option<i64>,
 }
 
 impl Default for AppSettings {
@@ -200,6 +306,7 @@ impl Default for AppSettings {
             notify_step_advance: true,
             auto_advance_on_threshold: true,
             mouse_dpi: 800.0,
+            last_import_scan_at: None,
         }
     }
 }

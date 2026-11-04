@@ -213,6 +213,7 @@ pub fn add_manual_sessions(
             pb: *score,
             threshold: 0.0,
             source_file: None,
+            ..Default::default()
         });
         ids.push(id);
     }
@@ -298,6 +299,28 @@ fn session_from_run(run: &KovaakRun) -> Session {
         pb: run.score,
         threshold: 0.0,
         source_file: Some(run.source_file.clone()),
+        datetime: (run.datetime.len() >= 19).then(|| run.datetime[..19].to_string()),
+        game: (!run.game.is_empty()).then(|| run.game.clone()),
+        fov: (run.fov > 0.0).then_some(run.fov),
+        shots: run.stats.shots,
+        hits: run.stats.hits,
+        accuracy: run.stats.accuracy,
+        kills: run.stats.kills,
+        avg_ttk: run.stats.avg_ttk,
+        damage_done: run.stats.damage_done,
+        damage_possible: run.stats.damage_possible,
+        fight_time: run.stats.fight_time,
+        pause_count: run.stats.pause_count,
+        pause_duration: run.stats.pause_duration,
+        avg_fps: run.stats.avg_fps,
+        game_version: run.stats.game_version.clone(),
+        hash: run.stats.hash.clone(),
+        dpi: run.stats.dpi,
+        sens_role: run.sens_role.clone(),
+        roll_center_cm: run.roll_center_cm,
+        lattice_k: run.lattice_k,
+        run_mode: run.run_mode.clone(),
+        ..Default::default()
     }
 }
 
@@ -734,6 +757,7 @@ mod tests {
             fov: 103.0,
             datetime: "2026-10-12T14:30:22".into(),
             source_file: source.into(),
+            ..Default::default()
         }
     }
 

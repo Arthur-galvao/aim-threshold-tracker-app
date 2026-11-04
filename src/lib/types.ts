@@ -5,6 +5,29 @@ export interface Session {
   pb: number;
   threshold: number;
   sourceFile?: string;
+  // --- schema v2 (Plano 03): run completa; todos opcionais ---
+  datetime?: string; // ISO local YYYY-MM-DDTHH:MM:SS
+  game?: "kovaak" | "aimlab" | "manual";
+  fov?: number;
+  shots?: number;
+  hits?: number;
+  accuracy?: number; // 0..1
+  kills?: number;
+  avgTtk?: number;
+  damageDone?: number;
+  damagePossible?: number;
+  fightTime?: number;
+  pauseCount?: number;
+  pauseDuration?: number;
+  avgFps?: number;
+  gameVersion?: string;
+  hash?: string;
+  dpi?: number; // campo DPI do CSV (autodeclarado)
+  sensRole?: "base" | "anchor" | "random" | "off" | "unknown";
+  rollCenterCm?: number;
+  latticeK?: number;
+  runMode?: "measure" | "train" | "free";
+  focus?: "on" | "auto" | null;
 }
 
 export interface Task {
@@ -38,6 +61,8 @@ export interface Playlist {
 }
 
 export interface AppData {
+  /** Ausente = 1; atual = 2 (Plano 03). */
+  schemaVersion?: number;
   activeTaskId: string | null;
   tasks: Task[];
   playlists: Playlist[];
@@ -135,6 +160,7 @@ export interface AppSettings {
   notify_step_advance?: boolean;
   mouse_dpi?: number;
   auto_advance_on_threshold?: boolean;
+  last_import_scan_at?: number | null;
 }
 
 export interface ImportStats {
