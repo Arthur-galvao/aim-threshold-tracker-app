@@ -1,4 +1,4 @@
-import type { AppData } from "./types";
+import type { AppData } from "./types.ts";
 
 export const SAMPLE_DATA: AppData = {
   activeTaskId: "task_1",
@@ -52,9 +52,3 @@ export const SAMPLE_DATA: AppData = {
   ],
 };
 
-export {
-  cloneAppData,
-  findTaskByScenario,
-  createTaskFromScenario,
-  addSessionsFromRun,
-} from "./threshold";

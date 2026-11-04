@@ -304,15 +304,21 @@ pub fn latest_valid_backup<T: DeserializeOwned>(dir: &Path, name: &str, keep: us
     None
 }
 
-/// Cópia do estado atual em `dir/backups/pre-import-<timestamp>.json`, antes de um import.
-pub fn write_pre_import_backup(dir: &Path, data: &AppData) -> Result<PathBuf, String> {
+/// Cópia do estado atual em `dir/backups/pre-<reason>-<timestamp>.json`, antes de uma
+/// substituição total dos dados (`reason`: "import", "demo", "clear").
+pub fn write_pre_backup(dir: &Path, reason: &str, data: &AppData) -> Result<PathBuf, String> {
     let backups = dir.join("backups");
     fs::create_dir_all(&backups).map_err(|e| format!("Falha ao criar pasta de backups: {e}"))?;
     let stamp = chrono::Local::now().format("%Y%m%d-%H%M%S");
-    let target = unique_path(&backups, &format!("pre-import-{stamp}"), "json");
+    let target = unique_path(&backups, &format!("pre-{reason}-{stamp}"), "json");
     let bytes = serde_json::to_vec(data).map_err(|e| e.to_string())?;
     atomic_write(&target, &bytes)?;
     Ok(target)
+}
+
+/// Cópia do estado atual em `dir/backups/pre-import-<timestamp>.json`, antes de um import.
+pub fn write_pre_import_backup(dir: &Path, data: &AppData) -> Result<PathBuf, String> {
+    write_pre_backup(dir, "import", data)
 }
 
 fn read_json<T: serde::de::DeserializeOwned>(path: PathBuf) -> Result<T, String> {
@@ -528,6 +534,15 @@ mod tests {
         assert!(path.ends_with("app_data.2.json"));
         assert_eq!(data.tasks[0].id, "a");
 
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn pre_backup_uses_the_reason_in_the_file_name() {
+        let dir = temp_case_dir("pre_demo");
+        let path = write_pre_backup(&dir, "demo", &sample_data("current")).expect("pre-demo backup");
+        let name = path.file_name().unwrap().to_string_lossy().into_owned();
+        assert!(name.starts_with("pre-demo-") && name.ends_with(".json"));
         let _ = fs::remove_dir_all(&dir);
     }
 

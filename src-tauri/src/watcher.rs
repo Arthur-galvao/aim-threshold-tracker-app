@@ -9,11 +9,8 @@ use std::time::Duration;
 use notify::{Event, EventKind, RecursiveMode, Watcher};
 use tauri::{AppHandle, Emitter, Manager, State};
 
-use crate::model::{
-    AppData, ImportStats, KovaakRun, Session, Task, DEFAULT_CATEGORY, DEFAULT_SUBCATEGORY,
-};
+use crate::model::{AppData, ImportStats, KovaakRun};
 use crate::parser;
-use crate::storage;
 use crate::AppState;
 
 pub struct WatcherHandle {
@@ -185,19 +182,14 @@ fn process_new_aimlab_replay(app: &AppHandle, path: &Path) -> Result<bool, Strin
         );
     }
 
-    let already_imported = {
-        let data = state.data.lock().unwrap();
-        has_source_file(&data.tasks, &run.source_file)
-    };
-    if already_imported {
-        return Ok(false);
-    }
-
     if is_randomizer_enabled && active_sens > 0.0 {
         run.sens = active_sens;
     }
 
-    app.emit("new_run", &run).map_err(|e| e.to_string())?;
+    // Dedupe por source_file dentro do lock do store; `None` = run já registrada.
+    if crate::data_commands::record_run(app, &run)?.is_none() {
+        return Ok(false);
+    }
 
     if is_randomizer_enabled {
         crate::randomizer::record_last_run(app, &run.scenario, run.score);
@@ -271,19 +263,14 @@ fn process_new_csv(app: &AppHandle, path: &Path) -> Result<bool, String> {
         }
     };
 
-    let already_imported = {
-        let data = state.data.lock().unwrap();
-        has_source_file(&data.tasks, &run.source_file)
-    };
-    if already_imported {
-        return Ok(false);
-    }
-
     if is_randomizer_enabled && active_sens > 0.0 {
         run.sens = active_sens;
     }
 
-    app.emit("new_run", &run).map_err(|e| e.to_string())?;
+    // Dedupe por source_file dentro do lock do store; `None` = run já registrada.
+    if crate::data_commands::record_run(app, &run)?.is_none() {
+        return Ok(false);
+    }
 
     if auto_detect_playlist {
         if let Some(playlist) = crate::kovaaak::detect_playlist_in_progress(stats_path.as_deref()) {
@@ -361,55 +348,37 @@ pub fn import_existing(app: &AppHandle) -> Result<ImportStats, String> {
         .collect();
     csvs.sort();
 
+    // Parse (IO pesado) fora de qualquer lock.
     let total = csvs.len();
-    let mut new = 0usize;
-    let mut skipped = 0usize;
-
+    let mut unparsed = 0usize;
+    let mut runs: Vec<KovaakRun> = Vec::with_capacity(total);
     for path in &csvs {
-        let run = match parser::parse_stats_file_with_fallback_dpi(path, mouse_dpi) {
-            Some(r) => r,
-            None => {
-                skipped += 1;
-                continue;
-            }
-        };
-
-        let already = {
-            let data = state.data.lock().unwrap();
-            has_source_file(&data.tasks, &run.source_file)
-        };
-        if already {
-            // Update session sensitivity only if it was stored as an unconverted in-game sensitivity (< 2.5)
-            let mut data = state.data.lock().unwrap();
-            for task in &mut data.tasks {
-                for session in &mut task.sessions {
-                    if session.source_file.as_deref() == Some(&run.source_file)
-                        && session.sens > 0.0
-                        && session.sens < 2.5
-                        && run.sens >= 2.5
-                    {
-                        session.sens = run.sens;
-                        new += 1;
-                    }
-                }
-            }
-            skipped += 1;
-            continue;
+        match parser::parse_stats_file_with_fallback_dpi(path, mouse_dpi) {
+            Some(run) => runs.push(run),
+            None => unparsed += 1,
         }
-
-        add_session_to_data(&state, &run);
-        new += 1;
     }
 
-    if new > 0 {
-        let data = state.data.lock().unwrap().clone();
-        storage::save_app_data(app, &data)?;
-    }
+    // Lote inteiro numa única mutação (uma revisão por import) + flush.
+    // Run já importada: corrige a sens só se estava gravada como sens do jogo (< 2.5).
+    let outcome = crate::data_commands::import_runs(
+        app,
+        &runs,
+        |session, run| {
+            if session.sens > 0.0 && session.sens < 2.5 && run.sens >= 2.5 {
+                session.sens = run.sens;
+                true
+            } else {
+                false
+            }
+        },
+        |_| {},
+    )?;
 
     let stats = ImportStats {
         total,
-        new,
-        skipped,
+        new: outcome.new,
+        skipped: outcome.skipped + unparsed,
     };
     app.emit("import_complete", &stats).map_err(|e| e.to_string())?;
     Ok(stats)
@@ -464,51 +433,10 @@ pub fn unique_id(prefix: &str) -> String {
     format!("{prefix}_{millis}_{count}_{rand_val:x}")
 }
 
-pub fn has_source_file(tasks: &[Task], source_file: &str) -> bool {
-    tasks
-        .iter()
-        .any(|t| t.sessions.iter().any(|s| s.source_file.as_deref() == Some(source_file)))
-}
-
-pub fn add_session_to_data(state: &State<AppState>, run: &KovaakRun) {
-    let date = run.datetime.get(..10).unwrap_or("").to_string();
-    let session = Session {
-        id: unique_id("sess"),
-        date,
-        sens: run.sens,
-        pb: run.score,
-        threshold: 0.0,
-        source_file: Some(run.source_file.clone()),
-    };
-
-    let mut data = state.data.lock().unwrap();
-
-    if let Some(task) = data
-        .tasks
-        .iter_mut()
-        .find(|t| t.name.eq_ignore_ascii_case(&run.scenario))
-    {
-        task.sessions.push(session);
-        return;
-    }
-
-    let task = Task {
-        id: unique_id("task"),
-        name: run.scenario.clone(),
-        category: DEFAULT_CATEGORY.to_string(),
-        subcategory: DEFAULT_SUBCATEGORY.to_string(),
-        sessions: vec![session],
-    };
-
-    if data.active_task_id.is_none() {
-        data.active_task_id = Some(task.id.clone());
-    }
-    data.tasks.push(task);
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::model::{Session, Task};
 
     #[test]
     fn test_update_kovaak_csv_sensitivity() {
@@ -598,27 +526,6 @@ mod tests {
         let changed = migrate_existing_sensitivities(&mut data, None, 800.0);
         assert!(changed, "Sensitividade legada (< 2.5) deve ser migrada");
         assert_eq!(data.tasks[0].sessions[0].sens, 68.0);
-    }
-
-    #[test]
-    fn test_has_source_file() {
-        let tasks = vec![Task {
-            id: "t1".into(),
-            name: "Scenario".into(),
-            category: "Clicking".into(),
-            subcategory: "Dynamic".into(),
-            sessions: vec![Session {
-                id: "s1".into(),
-                date: "2026-09-18".into(),
-                sens: 75.0,
-                pb: 100.0,
-                threshold: 90.0,
-                source_file: Some("target_run.csv".into()),
-            }],
-        }];
-
-        assert!(has_source_file(&tasks, "target_run.csv"));
-        assert!(!has_source_file(&tasks, "other_run.csv"));
     }
 
     #[test]

@@ -573,6 +573,13 @@ export const dict = {
     "recovery.preserved": "O arquivo original foi preservado em {path}.",
     "recovery.openFolder": "Abrir pasta",
     "recovery.ok": "OK",
+    "error.empty_name": "O nome não pode ficar vazio.",
+    "error.task_not_found": "Task não encontrada.",
+    "error.session_not_found": "Registro não encontrado.",
+    "error.playlist_not_found": "Playlist não encontrada.",
+    "error.invalid_payload": "Dados inválidos.",
+    "error.invalid_backup": "Arquivo de backup inválido.",
+    "error.not_implemented": "Recurso ainda não disponível.",
   },
   en: {
     "app.footer": "Aim Threshold Tracker · based on Viscose & Escalate by uno neon",
@@ -1132,6 +1139,13 @@ export const dict = {
     "recovery.preserved": "The original file was preserved at {path}.",
     "recovery.openFolder": "Open folder",
     "recovery.ok": "OK",
+    "error.empty_name": "The name cannot be empty.",
+    "error.task_not_found": "Task not found.",
+    "error.session_not_found": "Record not found.",
+    "error.playlist_not_found": "Playlist not found.",
+    "error.invalid_payload": "Invalid data.",
+    "error.invalid_backup": "Invalid backup file.",
+    "error.not_implemented": "Feature not available yet.",
   },
 } as const;
 

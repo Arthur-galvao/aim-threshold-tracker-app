@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { AppProvider, useApp } from "@/hooks/useAppData";
-import { useKovaakWatcher } from "@/hooks/useKovaakWatcher";
+import { WatcherProvider, useWatcher } from "@/hooks/useKovaakWatcher";
 import { RandomizerProvider, useSensRandomizer } from "@/hooks/useSensRandomizer";
 import { useScenarioCentersSync } from "@/hooks/useScenarioCentersSync";
 import { useWindowActivityGuard } from "@/hooks/useWindowActivityGuard";
@@ -53,7 +53,7 @@ function AppContent() {
     reimportCsvs,
     updateStatsPath,
     detectKovaakPath,
-  } = useKovaakWatcher();
+  } = useWatcher();
 
   const {
     settings: randomizerSettings,
@@ -245,11 +245,13 @@ export default function App() {
     <I18nProvider>
       <ToastProvider>
         <AppProvider>
-          <TrackerWorkspaceProvider>
-            <RandomizerProvider>
-              <AppContent />
-            </RandomizerProvider>
-          </TrackerWorkspaceProvider>
+          <WatcherProvider>
+            <TrackerWorkspaceProvider>
+              <RandomizerProvider>
+                <AppContent />
+              </RandomizerProvider>
+            </TrackerWorkspaceProvider>
+          </WatcherProvider>
         </AppProvider>
       </ToastProvider>
     </I18nProvider>
