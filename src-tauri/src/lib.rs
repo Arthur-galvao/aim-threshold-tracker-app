@@ -14,7 +14,7 @@ pub mod sampler;
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 
-use tauri::menu::{MenuBuilder, MenuItemBuilder, PredefinedMenuItem};
+use tauri::menu::{MenuBuilder, MenuItem, MenuItemBuilder, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Emitter, Manager, State, WindowEvent};
 
@@ -70,6 +70,19 @@ fn get_playlist_in_progress(state: State<'_, AppState>) -> Result<Option<crate::
     Ok(kovaaak::detect_playlist_in_progress(stats_path.as_deref()))
 }
 
+/// Itens do menu da bandeja, guardados para trocar os textos ao mudar o idioma (T8.6).
+pub struct TrayItems {
+    pub open: MenuItem<tauri::Wry>,
+    pub quit: MenuItem<tauri::Wry>,
+}
+
+#[tauri::command]
+fn set_tray_labels(state: State<'_, TrayItems>, open: String, quit: String) -> Result<(), String> {
+    state.open.set_text(open).map_err(|e| e.to_string())?;
+    state.quit.set_text(quit).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 #[tauri::command]
 fn get_settings(state: State<'_, AppState>) -> Result<AppSettings, String> {
     Ok(state.settings.lock().unwrap().clone())
@@ -85,6 +98,7 @@ fn save_settings(
     storage::save_settings(&app, &settings)?;
     *state.settings.lock().unwrap() = settings.clone();
     let _ = app.emit("randomizer_settings_updated", &settings.randomizer);
+    let _ = app.emit("settings_updated", &settings);
 
     if settings.randomizer.enabled {
         let (avail, found_dir, _, _) = randomizer::check_rawaccel_availability(settings.randomizer.rawaccel_dir.as_deref());
@@ -421,6 +435,8 @@ pub fn run() {
         .setup(|app| {
             let (mut data, data_report) = storage::load_app_data(app.handle());
             let (mut settings, settings_report) = storage::load_settings(app.handle());
+            // DPI único (REV-24): AppSettings.mouse_dpi é a fonte; o espelho do randomizer segue ela.
+            settings.randomizer.mouse_dpi = settings.mouse_dpi;
 
             if let Ok(dir) = storage::data_dir(app.handle()) {
                 if data_report.kind == "loaded" {
@@ -569,6 +585,10 @@ pub fn run() {
             let menu = MenuBuilder::new(app)
                 .items(&[&open_item, &separator, &quit_item])
                 .build()?;
+            app.manage(TrayItems {
+                open: open_item.clone(),
+                quit: quit_item.clone(),
+            });
 
             let mut tray_builder = TrayIconBuilder::new()
                 .tooltip("Aim Threshold Tracker")
@@ -650,6 +670,8 @@ pub fn run() {
             data_commands::sync_game_playlists,
             data_commands::replace_all_data,
             data_commands::import_json_backup,
+            data_commands::export_app_data,
+            set_tray_labels,
             get_load_report,
             detect_kovaak_path,
             get_kovaak_playlists,

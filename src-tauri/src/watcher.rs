@@ -65,13 +65,12 @@ pub fn spawn(app: AppHandle, path: PathBuf) -> Result<WatcherHandle, String> {
             }
 
             if let Some(aimlab_replay_dir) = crate::aimlab::find_active_aimlab_replay_dir() {
-                if aimlab_replay_dir != path && aimlab_replay_dir.exists() && aimlab_replay_dir.is_dir() {
-                    if watcher
-                        .watch(&aimlab_replay_dir, RecursiveMode::NonRecursive)
-                        .is_ok()
-                    {
-                        watched_any = true;
-                    }
+                if aimlab_replay_dir != path
+                    && aimlab_replay_dir.exists()
+                    && aimlab_replay_dir.is_dir()
+                    && watcher.watch(&aimlab_replay_dir, RecursiveMode::NonRecursive).is_ok()
+                {
+                    watched_any = true;
                 }
             }
 
@@ -156,11 +155,18 @@ fn process_new_aimlab_replay(app: &AppHandle, path: &Path) -> Result<bool, Strin
     let roll_center = state.sampler.lock().unwrap().last_roll_center_cm;
 
     // 3. Wait for replay JSON flush and parse
-    let name_map = crate::aimlab::build_aimlab_scenario_map();
+    let mut name_map = crate::aimlab::cached_scenario_map(false);
     let mut parsed_run: Option<KovaakRun> = None;
     for _ in 0..8 {
         thread::sleep(Duration::from_millis(350));
-        if let Some(r) = crate::aimlab::parse_aimlab_replay_file(path, &name_map, mouse_dpi) {
+        if let Some(mut r) = crate::aimlab::parse_aimlab_replay_file(path, &name_map, mouse_dpi) {
+            // Nome fora do mapa cacheado: recarrega uma vez e refaz a resolução.
+            if crate::aimlab::replay_task_unmapped(path, &name_map) {
+                name_map = crate::aimlab::cached_scenario_map(true);
+                if let Some(fresh) = crate::aimlab::parse_aimlab_replay_file(path, &name_map, mouse_dpi) {
+                    r = fresh;
+                }
+            }
             parsed_run = Some(r);
             break;
         }

@@ -171,6 +171,22 @@ pub fn get_app_data(state: State<'_, AppState>) -> Result<AppDataSnapshot, Strin
     Ok(AppDataSnapshot { revision, data })
 }
 
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExportResult {
+    pub path: String,
+}
+
+/// Exporta o snapshot atual (formato de backup, aceito por `import_json_backup`) em `path`,
+/// caminho escolhido pelo diálogo nativo de salvar do front.
+#[tauri::command]
+pub fn export_app_data(state: State<'_, AppState>, path: String) -> Result<ExportResult, String> {
+    let (_, data) = state.data.snapshot();
+    let bytes = serde_json::to_vec_pretty(&data).map_err(|e| e.to_string())?;
+    storage::atomic_write(std::path::Path::new(&path), &bytes)?;
+    Ok(ExportResult { path })
+}
+
 #[tauri::command]
 pub fn create_task(
     app: AppHandle,

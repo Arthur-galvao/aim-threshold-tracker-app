@@ -49,4 +49,3 @@ jobs:
         if: success() || failure()
         working-directory: src-tauri
         run: cargo clippy --locked --all-targets -- -D warnings
-        continue-on-error: true

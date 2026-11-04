@@ -321,11 +321,6 @@ pub fn write_pre_backup(dir: &Path, reason: &str, data: &AppData) -> Result<Path
     Ok(target)
 }
 
-/// Cópia do estado atual em `dir/backups/pre-import-<timestamp>.json`, antes de um import.
-pub fn write_pre_import_backup(dir: &Path, data: &AppData) -> Result<PathBuf, String> {
-    write_pre_backup(dir, "import", data)
-}
-
 fn read_json<T: serde::de::DeserializeOwned>(path: PathBuf) -> Result<T, String> {
     let text = fs::read_to_string(&path).map_err(|e| e.to_string())?;
     serde_json::from_str(&text).map_err(|e| e.to_string())
@@ -555,15 +550,4 @@ mod tests {
         let _ = fs::remove_dir_all(&dir);
     }
 
-    #[test]
-    fn pre_import_backup_is_written_under_backups() {
-        let dir = temp_case_dir("pre_import");
-        let path = write_pre_import_backup(&dir, &sample_data("current")).expect("pre-import backup");
-        assert!(path.starts_with(dir.join("backups")));
-        let name = path.file_name().unwrap().to_string_lossy().into_owned();
-        assert!(name.starts_with("pre-import-") && name.ends_with(".json"));
-        let saved: AppData = serde_json::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
-        assert_eq!(saved.tasks[0].id, "current");
-        let _ = fs::remove_dir_all(&dir);
-    }
 }
