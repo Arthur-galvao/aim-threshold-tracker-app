@@ -10,6 +10,7 @@ use crate::model::{AppData, AppSettings};
 pub const APP_DATA_FILE: &str = "app_data.json";
 pub const APP_DATA_BACKUPS: usize = 5;
 pub const SETTINGS_FILE: &str = "settings.json";
+pub const SENS_LEDGER_FILE: &str = "sens_ledger.json";
 pub const SETTINGS_BACKUPS: usize = 3;
 
 /// Resultado do carregamento de um arquivo de dados.
@@ -98,6 +99,10 @@ pub fn load_settings(app: &AppHandle) -> (AppSettings, LoadReport) {
 pub fn save_settings(app: &AppHandle, settings: &AppSettings) -> Result<(), String> {
     let dir = data_dir(app)?;
     write_json(&dir.join(SETTINGS_FILE), settings)
+}
+
+pub fn sens_ledger_path(app: &AppHandle) -> Result<PathBuf, String> {
+    Ok(data_dir(app)?.join(SENS_LEDGER_FILE))
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]

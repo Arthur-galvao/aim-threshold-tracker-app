@@ -6,6 +6,7 @@ mod parser;
 mod randomizer;
 mod storage;
 mod watcher;
+mod sens_ledger;
 mod aimlab;
 pub mod sampler;
 
@@ -138,6 +139,13 @@ fn start_watcher(app: AppHandle, state: State<'_, AppState>) -> Result<(), Strin
 
     let handle = watcher::spawn(app.clone(), std::path::PathBuf::from(&path))?;
     *state.watcher.lock().unwrap() = Some(handle);
+
+    let catch_up_app = app.clone();
+    std::thread::spawn(move || {
+        if let Err(e) = watcher::catch_up_import(&catch_up_app) {
+            eprintln!("[watcher] catch-up import falhou: {e}");
+        }
+    });
 
     let mut settings = state.settings.lock().unwrap();
     settings.watcher_active = true;
