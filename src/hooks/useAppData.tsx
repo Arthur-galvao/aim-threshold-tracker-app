@@ -380,7 +380,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       try {
         const path = await save({
           defaultPath: fileName,
-          title: t("dialog.exportTitle" as string as Key),
+          title: t("dialog.exportTitle"),
           filters: [{ name: "JSON", extensions: ["json"] }],
         });
         if (!path) return;

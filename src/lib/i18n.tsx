@@ -601,6 +601,10 @@ export const dict = {
     "aimlab.errPick": "Erro ao abrir seletor de arquivo CSV",
     "aimlab.errNoPath": "Não foi possível obter o caminho absoluto do arquivo no sistema.",
     "runner.scenarioFallback": "Cenário",
+    "dialog.exportTitle": "Exportar backup",
+    "tray.open": "Abrir Aim Threshold Tracker",
+    "tray.quit": "Sair",
+    "migration.progress": "Atualizando histórico: {done}/{total}",
   },
   en: {
     "app.footer": "Aim Threshold Tracker · based on Viscose & Escalate by uno neon",
@@ -1188,6 +1192,10 @@ export const dict = {
     "aimlab.errPick": "Failed to open the CSV file picker",
     "aimlab.errNoPath": "Could not get the file's absolute path on this system.",
     "runner.scenarioFallback": "Scenario",
+    "dialog.exportTitle": "Export backup",
+    "tray.open": "Open Aim Threshold Tracker",
+    "tray.quit": "Quit",
+    "migration.progress": "Updating history: {done}/{total}",
   },
 } as const;
 

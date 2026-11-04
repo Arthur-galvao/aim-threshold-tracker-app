@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useI18n, type Key } from "@/lib/i18n";
+import { useI18n } from "@/lib/i18n";
 import { onMigrationProgress } from "@/lib/tauri-bridge";
 import { cn } from "@/lib/utils";
 
@@ -39,9 +39,7 @@ export function MigrationProgress() {
 
   const { done, total } = progress;
   const percent = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0;
-  const key = "migration.progress";
-  const label = t(key as string as Key, { done, total });
-  const text = label === key ? `Atualizando histórico: ${done}/${total}` : label;
+  const text = t("migration.progress", { done, total });
 
   return (
     <div
