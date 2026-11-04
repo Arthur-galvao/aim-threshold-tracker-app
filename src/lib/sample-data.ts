@@ -52,9 +52,3 @@ export const SAMPLE_DATA: AppData = {
   ],
 };
 
-export {
-  cloneAppData,
-  findTaskByScenario,
-  createTaskFromScenario,
-  addSessionsFromRun,
-} from "./threshold.ts";

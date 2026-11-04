@@ -18,7 +18,7 @@ use std::thread;
 use std::time::Duration;
 
 use crate::model::{
-    AppData, GamePlaylist, KovaakRun, Playlist, Session, Task, DEFAULT_CATEGORY,
+    AppData, GamePlaylist, KovaakRun, Playlist, PlaylistItem, Session, Task, DEFAULT_CATEGORY,
     DEFAULT_SUBCATEGORY,
 };
 use crate::watcher::unique_id;
@@ -28,7 +28,6 @@ pub const ERR_TASK_NOT_FOUND: &str = "task_not_found";
 pub const ERR_SESSION_NOT_FOUND: &str = "session_not_found";
 pub const ERR_PLAYLIST_NOT_FOUND: &str = "playlist_not_found";
 pub const ERR_INVALID_PAYLOAD: &str = "invalid_payload";
-pub const ERR_NOT_IMPLEMENTED: &str = "not_implemented";
 
 /// Silêncio (sem novas mutações) antes de gravar em disco.
 pub const PERSIST_DEBOUNCE: Duration = Duration::from_millis(400);
@@ -413,16 +412,192 @@ pub fn add_runs_batch(
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct SyncOutcome {
+    /// Playlists de jogo criadas nesta sincronização.
     pub imported: usize,
+    /// Playlists de jogo consideradas (KovaaK's + Aim Lab).
+    pub total: usize,
 }
 
-/// T2.5: sincroniza playlists dos jogos (KovaaK's / Aim Lab) com `data.playlists`.
-/// Ainda não implementado: o front cai no fallback em TS ao receber "not_implemented".
+/// Origens de playlist de jogo (`Playlist.source`). `"user"` nunca é tocada pelo sync.
+pub const SOURCE_KOVAAK: &str = "kovaak";
+pub const SOURCE_AIMLAB: &str = "aimlab";
+
+/// Port de `cleanScenarioName` (src/lib/viscose.ts), mesmas regras e ordem:
+/// "CsLevel.<autor>.<cenário>.<código>" -> "<cenário>" (3 partes: a do meio);
+/// "CsLevel<guid>" -> o que sobra sem o prefixo; qualquer outro nome só é aparado.
+pub fn clean_scenario_name(raw: &str) -> String {
+    let trimmed = raw.trim();
+    if trimmed.starts_with("CsLevel.") {
+        let parts: Vec<&str> = trimmed.split('.').collect();
+        if parts.len() >= 4 {
+            let middle = parts[2..parts.len() - 1].join(".");
+            let middle = middle.trim();
+            if !middle.is_empty() {
+                return middle.to_string();
+            }
+        } else if parts.len() == 3 {
+            let middle = parts[1].trim();
+            if !middle.is_empty() {
+                return middle.to_string();
+            }
+        }
+    }
+    if let Some(rest) = trimmed.strip_prefix("CsLevel") {
+        let stripped = rest.trim_start_matches(['-', '_', '.']).trim();
+        if !stripped.is_empty() {
+            return stripped.to_string();
+        }
+    }
+    trimmed.to_string()
+}
+
+fn norm_key(s: &str) -> String {
+    s.trim().to_lowercase()
+}
+
+/// `item.playCount || 1`, depois `max(1, round(..))`, como no fallback TS.
+fn target_reps(play_count: f64) -> f64 {
+    let pc = if play_count == 0.0 || play_count.is_nan() { 1.0 } else { play_count };
+    pc.round().max(1.0)
+}
+
+/// Monta os itens de uma playlist de jogo, criando as tarefas que faltam (match
+/// case-insensitive pelo nome aparado). Tarefas novas usam categoria padrão; o
+/// `fixupTaskCategories` do front recategoriza depois.
+fn build_items(
+    data: &mut AppData,
+    task_ids: &mut HashMap<String, String>,
+    game: &GamePlaylist,
+) -> Vec<PlaylistItem> {
+    let mut items = Vec::new();
+    for entry in &game.scenario_list {
+        let trimmed = entry.scenario_name.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        let cleaned = clean_scenario_name(trimmed);
+        let name = cleaned.trim();
+        if name.is_empty() {
+            continue;
+        }
+        let key = norm_key(name);
+        let task_id = match task_ids.get(&key).cloned() {
+            Some(id) => id,
+            None => {
+                let id = unique_id("task");
+                data.tasks.push(Task {
+                    id: id.clone(),
+                    name: name.to_string(),
+                    category: DEFAULT_CATEGORY.to_string(),
+                    subcategory: DEFAULT_SUBCATEGORY.to_string(),
+                    sessions: Vec::new(),
+                });
+                task_ids.insert(key, id.clone());
+                id
+            }
+        };
+        items.push(PlaylistItem {
+            id: unique_id("item"),
+            task_id,
+            target_mode: "reps".to_string(),
+            target_value: target_reps(entry.play_count),
+        });
+    }
+    items
+}
+
+/// Atualiza uma playlist já existente com o mesmo nome (case-insensitive).
+/// - `source` "user" (ou desconhecido): intocada, exceto a migração: se os taskIds
+///   forem exatamente os da lista do jogo (mesma ordem), vira playlist de `origin`.
+/// - playlist de jogo: só é reconstruída se a sequência de taskIds mudou; os alvos
+///   (`targetMode`/`targetValue`) são preservados por `taskId`.
+fn refresh_existing(pl: &mut Playlist, items: Vec<PlaylistItem>, origin: &str) {
+    let is_game = pl.source == SOURCE_KOVAAK || pl.source == SOURCE_AIMLAB;
+    let same_order = pl.items.len() == items.len()
+        && pl.items.iter().zip(&items).all(|(old, new)| old.task_id == new.task_id);
+    if !is_game {
+        if !same_order {
+            return;
+        }
+        pl.source = origin.to_string();
+    }
+    if same_order {
+        return;
+    }
+    let rebuilt: Vec<PlaylistItem> = items
+        .into_iter()
+        .map(|mut item| {
+            if let Some(old) = pl.items.iter().find(|o| o.task_id == item.task_id) {
+                item.target_mode = old.target_mode.clone();
+                item.target_value = old.target_value;
+            }
+            item
+        })
+        .collect();
+    pl.items = rebuilt;
+}
+
+/// T2.5: sincroniza playlists dos jogos (KovaaK's em `kovaak`, Aim Lab em `aimlab`) com
+/// `data.playlists`, numa única mutação. Regras:
+/// - nova playlist de jogo -> criada com `source` "kovaak"/"aimlab";
+/// - playlist com mesmo nome e `source` de usuário -> intocada (ou migrada, ver `refresh_existing`);
+/// - playlist de jogo -> atualizada só se a lista de cenários mudou.
+///
+/// Tarefas faltantes são criadas. A tarefa ativa do usuário não muda, a não ser que não
+/// haja nenhuma.
 pub fn sync_game_playlists(
-    _data: &mut AppData,
-    _game_playlists: &[GamePlaylist],
+    data: &mut AppData,
+    kovaak: &[GamePlaylist],
+    aimlab: &[GamePlaylist],
 ) -> Result<SyncOutcome, String> {
-    Err(ERR_NOT_IMPLEMENTED.to_string())
+    let total = kovaak.len() + aimlab.len();
+    let tasks_before = data.tasks.len();
+
+    let mut task_ids: HashMap<String, String> = HashMap::new();
+    for task in &data.tasks {
+        task_ids.entry(norm_key(&task.name)).or_insert_with(|| task.id.clone());
+    }
+    let mut playlist_idx: HashMap<String, usize> = HashMap::new();
+    for (i, pl) in data.playlists.iter().enumerate() {
+        playlist_idx.insert(norm_key(&pl.name), i);
+    }
+
+    let mut imported = 0;
+    let games = kovaak
+        .iter()
+        .map(|g| (SOURCE_KOVAAK, g))
+        .chain(aimlab.iter().map(|g| (SOURCE_AIMLAB, g)));
+    for (origin, game) in games {
+        let name = game.playlist_name.trim();
+        if name.is_empty() {
+            continue;
+        }
+        let items = build_items(data, &mut task_ids, game);
+        if items.is_empty() {
+            continue;
+        }
+        let key = norm_key(name);
+        match playlist_idx.get(&key).copied() {
+            Some(idx) => refresh_existing(&mut data.playlists[idx], items, origin),
+            None => {
+                data.playlists.push(Playlist {
+                    id: unique_id("pl"),
+                    name: name.to_string(),
+                    items,
+                    created_at: chrono::Utc::now().to_rfc3339(),
+                    auto_advance_mode: None,
+                    source: origin.to_string(),
+                });
+                playlist_idx.insert(key, data.playlists.len() - 1);
+                imported += 1;
+            }
+        }
+    }
+
+    if data.tasks.len() > tasks_before && data.active_task_id.is_none() {
+        data.active_task_id = data.tasks.first().map(|t| t.id.clone());
+    }
+    Ok(SyncOutcome { imported, total })
 }
 
 // ---------------------------------------------------------------------------
@@ -789,10 +964,175 @@ mod tests {
         assert_eq!(snap.active_task_id.as_deref(), Some(snap.tasks[0].id.as_str()));
     }
 
+    fn game(name: &str, scenarios: &[(&str, f64)]) -> GamePlaylist {
+        GamePlaylist {
+            playlist_name: name.into(),
+            playlist_id: None,
+            scenario_list: scenarios
+                .iter()
+                .map(|(s, c)| crate::model::GamePlaylistItem {
+                    scenario_name: (*s).into(),
+                    play_count: *c,
+                })
+                .collect(),
+            description: None,
+        }
+    }
+
+    fn task_id_of(data: &AppData, name: &str) -> String {
+        data.tasks.iter().find(|t| t.name == name).expect("task exists").id.clone()
+    }
+
+    fn item(id: &str, task_id: &str, mode: &str, value: f64) -> PlaylistItem {
+        PlaylistItem {
+            id: id.into(),
+            task_id: task_id.into(),
+            target_mode: mode.into(),
+            target_value: value,
+        }
+    }
+
     #[test]
-    fn sync_game_playlists_is_a_stub_for_now() {
+    fn user_playlist_with_same_name_is_untouched() {
         let mut data = AppData::default();
-        assert_eq!(sync_game_playlists(&mut data, &[]).unwrap_err(), "not_implemented");
+        data.tasks.push(Task { id: "t1".into(), name: "Scen A".into(), ..Task::default() });
+        data.playlists.push(Playlist {
+            id: "pl_user".into(),
+            name: "Warmup".into(),
+            items: vec![item("i1", "t1", "time", 90.0)],
+            created_at: "2026-01-01".into(),
+            auto_advance_mode: None,
+            source: "user".into(),
+        });
+        let before = serde_json::to_string(&data.playlists).unwrap();
+
+        let out = sync_game_playlists(
+            &mut data,
+            &[game(" warmup ", &[("Scen A", 3.0), ("Scen B", 2.0)])],
+            &[],
+        )
+        .unwrap();
+
+        assert_eq!(out, SyncOutcome { imported: 0, total: 1 });
+        assert_eq!(serde_json::to_string(&data.playlists).unwrap(), before);
+    }
+
+    #[test]
+    fn reordered_game_playlist_keeps_targets_by_task_id() {
+        let mut data = AppData::default();
+        let first = sync_game_playlists(&mut data, &[game("Routine", &[("A", 1.0), ("B", 1.0)])], &[])
+            .unwrap();
+        assert_eq!(first, SyncOutcome { imported: 1, total: 1 });
+        let (a, b) = (task_id_of(&data, "A"), task_id_of(&data, "B"));
+        {
+            let items = &mut data.playlists[0].items;
+            items[0].target_mode = "time".into();
+            items[0].target_value = 90.0;
+            items[1].target_value = 7.0;
+        }
+
+        let out = sync_game_playlists(
+            &mut data,
+            &[game("Routine", &[("B", 1.0), ("C", 4.0), ("A", 1.0)])],
+            &[],
+        )
+        .unwrap();
+
+        assert_eq!(out, SyncOutcome { imported: 0, total: 1 });
+        let c = task_id_of(&data, "C");
+        let pl = &data.playlists[0];
+        assert_eq!(pl.source, "kovaak");
+        let got: Vec<(&str, &str, f64)> = pl
+            .items
+            .iter()
+            .map(|i| (i.task_id.as_str(), i.target_mode.as_str(), i.target_value))
+            .collect();
+        assert_eq!(
+            got,
+            vec![
+                (b.as_str(), "reps", 7.0),
+                (c.as_str(), "reps", 4.0),
+                (a.as_str(), "time", 90.0),
+            ]
+        );
+    }
+
+    #[test]
+    fn unchanged_game_playlist_is_not_rebuilt() {
+        let mut data = AppData::default();
+        sync_game_playlists(&mut data, &[game("Routine", &[("A", 1.0), ("B", 2.0)])], &[]).unwrap();
+        data.playlists[0].items[0].target_value = 90.0;
+        let before = serde_json::to_string(&data.playlists).unwrap();
+
+        // mesmo conteúdo, com caixa diferente no nome do cenário: mesma tarefa, nada muda
+        let out = sync_game_playlists(&mut data, &[game("Routine", &[("a", 1.0), ("B", 2.0)])], &[])
+            .unwrap();
+
+        assert_eq!(out, SyncOutcome { imported: 0, total: 1 });
+        assert_eq!(serde_json::to_string(&data.playlists).unwrap(), before, "ids e alvos intactos");
+        assert_eq!(data.tasks.len(), 2);
+    }
+
+    #[test]
+    fn new_playlists_get_their_game_source_and_clean_names() {
+        let mut data = AppData::default();
+        let out = sync_game_playlists(
+            &mut data,
+            &[game("Kovaak Pack", &[("CsLevel.Lowgravity56.VT Suave.RX1H0T", 2.0)])],
+            &[game("Aim Lab Path", &[("Pasu Small", 0.0)])],
+        )
+        .unwrap();
+
+        assert_eq!(out, SyncOutcome { imported: 2, total: 2 });
+        let kovaak = data.playlists.iter().find(|p| p.name == "Kovaak Pack").unwrap();
+        assert_eq!(kovaak.source, "kovaak");
+        assert_eq!(kovaak.items[0].target_value, 2.0);
+        assert_eq!(kovaak.items[0].target_mode, "reps");
+        assert_eq!(kovaak.items[0].task_id, task_id_of(&data, "VT Suave"));
+        let aimlab = data.playlists.iter().find(|p| p.name == "Aim Lab Path").unwrap();
+        assert_eq!(aimlab.source, "aimlab");
+        assert_eq!(aimlab.items[0].target_value, 1.0, "0 vira 1");
+        assert!(data.playlists.iter().all(|p| !p.id.is_empty() && !p.created_at.is_empty()));
+        assert_eq!(data.tasks.len(), 2);
+        assert!(data.tasks.iter().all(|t| t.category == DEFAULT_CATEGORY && t.subcategory == DEFAULT_SUBCATEGORY));
+    }
+
+    #[test]
+    fn legacy_user_playlist_with_identical_tasks_is_migrated() {
+        let mut data = AppData::default();
+        data.tasks.push(Task { id: "tA".into(), name: "A".into(), ..Task::default() });
+        data.tasks.push(Task { id: "tB".into(), name: "B".into(), ..Task::default() });
+        data.playlists.push(Playlist {
+            id: "pl_old".into(),
+            name: "Routine".into(),
+            items: vec![item("i1", "tA", "time", 60.0), item("i2", "tB", "reps", 3.0)],
+            created_at: "2026-01-01".into(),
+            auto_advance_mode: None,
+            source: "user".into(),
+        });
+
+        let out = sync_game_playlists(&mut data, &[game("routine", &[("A", 1.0), ("B", 1.0)])], &[])
+            .unwrap();
+
+        assert_eq!(out, SyncOutcome { imported: 0, total: 1 });
+        let pl = &data.playlists[0];
+        assert_eq!(pl.id, "pl_old");
+        assert_eq!(pl.source, "kovaak");
+        assert_eq!(pl.items.len(), 2);
+        assert_eq!((pl.items[0].target_mode.as_str(), pl.items[0].target_value), ("time", 60.0));
+        assert_eq!((pl.items[1].target_mode.as_str(), pl.items[1].target_value), ("reps", 3.0));
+    }
+
+    #[test]
+    fn clean_name_and_target_rules_match_the_ts_fallback() {
+        assert_eq!(clean_scenario_name("CsLevel.Lowgravity56.VT Suave.RX1H0T"), "VT Suave");
+        assert_eq!(clean_scenario_name("CsLevel.VT Float.QZWM5U"), "VT Float");
+        assert_eq!(clean_scenario_name("CsLevel-abc123"), "abc123");
+        assert_eq!(clean_scenario_name("CsLevel"), "CsLevel");
+        assert_eq!(clean_scenario_name("  Plain  "), "Plain");
+        assert_eq!(target_reps(2.5), 3.0);
+        assert_eq!(target_reps(0.2), 1.0);
+        assert_eq!(target_reps(0.0), 1.0);
     }
 
     fn counting_persister(debounce_ms: u64) -> (Arc<DataCore>, Persister, Arc<AtomicUsize>, Arc<Mutex<usize>>) {

@@ -115,10 +115,11 @@ export async function deletePlaylist(playlistId: string): Promise<RevisionResult
   return cmd<RevisionResult>("delete_playlist", { playlistId });
 }
 
-/** Rejeita com `BackendError("not_implemented")` até a T2.5 (o chamador usa fallback). */
-export async function syncGamePlaylistsCommand(): Promise<SyncGamePlaylistsResult> {
+export async function syncGamePlaylistsCommand(
+  detected?: DetectedPlaylistEvent
+): Promise<SyncGamePlaylistsResult> {
   if (!isTauri()) return web(() => getWebBackend().syncGamePlaylists());
-  return cmd<SyncGamePlaylistsResult>("sync_game_playlists");
+  return cmd<SyncGamePlaylistsResult>("sync_game_playlists", { detected: detected ?? null });
 }
 
 export async function replaceAllData(

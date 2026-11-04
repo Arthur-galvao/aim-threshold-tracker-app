@@ -249,9 +249,9 @@ export function createWebBackend(options: WebBackendOptions = {}) {
       return { revision: rev };
     },
 
-    /** O web não lê playlists dos jogos; o front cai no fallback (que não acha nada). */
+    /** O web não lê playlists dos jogos: sincronização vazia, sem mudança de revisão. */
     syncGamePlaylists(): SyncGamePlaylistsResult {
-      throw new BackendError("not_implemented");
+      return { revision, imported: 0, total: 0 };
     },
 
     replaceAllData(next: AppData, reason: ReplaceAllReason): RevisionResult {

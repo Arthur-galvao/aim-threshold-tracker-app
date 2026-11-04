@@ -20,8 +20,6 @@ import type {
 import { SAMPLE_DATA } from "@/lib/sample-data";
 import * as bridge from "@/lib/tauri-bridge";
 import {
-  getKovaakPlaylists,
-  getAimlabPlaylists,
   getPlaylistInProgress,
   listenKovaakPlaylistActive,
   getSettings,
@@ -29,12 +27,6 @@ import {
 import { dataStore, type DataStoreBackend } from "@/lib/data-store";
 import { createTaskDeriver } from "@/lib/derived-tasks";
 import { errorCode } from "@/lib/backend-error";
-import {
-  ensureDetectedPlaylist,
-  fromRawKovaakPlaylists,
-  syncGamePlaylistsFallback,
-  type PlaylistSyncApi,
-} from "@/lib/game-playlist-sync";
 import {
   isPermissionGranted,
   requestPermission,
@@ -49,14 +41,21 @@ const storeBackend: DataStoreBackend = {
   onAppDataChanged: bridge.onAppDataChanged,
 };
 
-/** Fallback (TODO(T2.5): remove) usa create_task + upsert_playlist em sequência. */
-const playlistSyncApi: PlaylistSyncApi = {
-  getData: () => dataStore.getSnapshot().data,
-  createTask: bridge.createTask,
-  upsertPlaylist: bridge.upsertPlaylist,
-  setActiveTask: bridge.setActiveTask,
-  waitForRevision: (revision) => dataStore.waitForRevision(revision),
-};
+/**
+ * Playlist detectada no jogo: procura no snapshot atual; se não existir, sincroniza as
+ * playlists de jogo e procura de novo no snapshot DEPOIS da revisão do próprio comando.
+ */
+async function findDetectedPlaylist(event: DetectedPlaylistEvent): Promise<Playlist | null> {
+  const wanted = event.playlist_name.trim().toLowerCase();
+  const find = () =>
+    dataStore.getSnapshot().data.playlists.find((p) => p.name.trim().toLowerCase() === wanted) ??
+    null;
+  const found = find();
+  if (found) return found;
+  const res = await bridge.syncGamePlaylistsCommand(event);
+  await dataStore.waitForRevision(res.revision);
+  return find();
+}
 
 interface AppContextValue {
   /** Snapshot do Rust com thresholds legados derivados (memoizados por task). */
@@ -173,27 +172,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       try {
         let imported = 0;
         let total = 0;
-        try {
-          const res = await bridge.syncGamePlaylistsCommand();
-          await dataStore.waitForRevision(res.revision);
-          imported = res.imported;
-          total = res.total;
-        } catch (err) {
-          if (errorCode(err) !== "not_implemented") throw err;
-          // TODO(T2.5): remove fallback (a lógica passa a viver em Rust).
-          const rawKovaak = await getKovaakPlaylists();
-          const rawAimlab = await getAimlabPlaylists();
-          const raw = [...(rawKovaak || []), ...(rawAimlab || [])];
-          total = raw.length;
-          if (total > 0) {
-            const result = await syncGamePlaylistsFallback(
-              playlistSyncApi,
-              fromRawKovaakPlaylists(raw, true)
-            );
-            await dataStore.waitForRevision(result.lastRevision);
-            imported = result.imported;
-          }
-        }
+        const res = await bridge.syncGamePlaylistsCommand();
+        await dataStore.waitForRevision(res.revision);
+        imported = res.imported;
+        total = res.total;
+        // Tasks novas criadas pelo Rust nascem na categoria padrão: recategoriza.
+        if (imported > 0) await fixupTaskCategories();
 
         if (imported > 0) {
           showToast(t("toast.gamePlaylistsImported", { n: imported }), "success");
@@ -206,7 +190,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return { imported: 0, total: 0 };
       }
     },
-    [showToast, t]
+    [showToast, t, fixupTaskCategories]
   );
 
   // Ajustes de uma vez por abertura do app, depois do primeiro snapshot.
@@ -295,15 +279,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const eventPlaylistName = event.playlist_name.trim();
         if (!eventPlaylistName) return;
 
-        // Procura no snapshot ATUAL; se não existir, cria via comandos e lê o resultado
-        // do snapshot depois de esperar a revisão da própria escrita.
-        const targetPlaylist = await ensureDetectedPlaylist(playlistSyncApi, {
-          name: eventPlaylistName,
-          items: (event.scenario_list ?? []).map((item) => ({
-            scenarioName: item.scenario_name,
-            playCount: item.play_count,
-          })),
-        });
+        // Procura no snapshot ATUAL; se não existir, sincroniza com o jogo e lê o snapshot
+        // retornado (ver findDetectedPlaylist).
+        const targetPlaylist = await findDetectedPlaylist(event);
 
         if (!targetPlaylist) return;
 

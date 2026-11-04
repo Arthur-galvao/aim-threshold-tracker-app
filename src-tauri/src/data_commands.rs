@@ -252,19 +252,28 @@ pub fn delete_playlist(app: AppHandle, playlist_id: String) -> Result<RevisionRe
     Ok(RevisionResult { revision })
 }
 
-/// Lógica em `data_store::sync_game_playlists` (T2.5). Enquanto devolver
-/// "not_implemented", o front usa o fallback em TS.
+/// Lógica em `data_store::sync_game_playlists` (T2.5): lê as playlists dos dois jogos do
+/// disco e sincroniza numa única mutação.
 #[tauri::command]
 pub fn sync_game_playlists(
     app: AppHandle,
     state: State<'_, AppState>,
+    detected: Option<crate::model::GamePlaylist>,
 ) -> Result<SyncGamePlaylistsResult, String> {
     let stats_path = state.settings.lock().unwrap().kovaak_stats_path.clone();
-    let mut game = crate::kovaaak::load_all_kovaak_playlists(stats_path.as_deref());
-    game.extend(crate::aimlab::load_all_aimlab_playlists());
-    let total = game.len();
-    let (outcome, revision) = mutate(&app, |d| data_store::sync_game_playlists(d, &game))?;
-    Ok(SyncGamePlaylistsResult { revision, imported: outcome.imported, total })
+    let mut kovaak = crate::kovaaak::load_all_kovaak_playlists(stats_path.as_deref());
+    // Playlist em andamento no KovaaK's que não está salva na pasta de playlists:
+    // entra na sincronização como playlist do jogo (antes o front a criava a partir do evento).
+    if let Some(det) = detected {
+        let wanted = det.playlist_name.trim().to_lowercase();
+        if !wanted.is_empty() && !kovaak.iter().any(|p| p.playlist_name.trim().to_lowercase() == wanted) {
+            kovaak.push(det);
+        }
+    }
+    let aimlab = crate::aimlab::load_all_aimlab_playlists();
+    let (outcome, revision) =
+        mutate(&app, |d| data_store::sync_game_playlists(d, &kovaak, &aimlab))?;
+    Ok(SyncGamePlaylistsResult { revision, imported: outcome.imported, total: outcome.total })
 }
 
 /// Troca TODOS os dados (demo / limpar / importar), com backup `pre-<reason>-<ts>.json`

@@ -59,7 +59,7 @@ describe("web-backend (mesmo contrato do Rust)", () => {
     assert.equal(code(() => backend.deleteSession(taskId, "nope")), "session_not_found");
     assert.equal(code(() => backend.deletePlaylist("nope")), "playlist_not_found");
     assert.equal(code(() => backend.addManualSessions(taskId, "2026-10-12", 45, [])), "invalid_payload");
-    assert.equal(code(() => backend.syncGamePlaylists()), "not_implemented");
+    assert.deepEqual(backend.syncGamePlaylists(), { revision: rev, imported: 0, total: 0 });
     assert.equal(code(() => backend.importJsonBackup("{not json")), "invalid_backup");
     assert.equal(code(() => backend.importJsonBackup('{"tasks":1}')), "invalid_backup");
     assert.equal(backend.getAppData().revision, rev);
