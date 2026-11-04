@@ -30,7 +30,7 @@ import {
 import { dataStore } from "@/lib/data-store";
 import { deriveTask } from "@/lib/derived-tasks";
 import { getTargetThresholdForTask } from "@/lib/threshold";
-import { useI18n, type Key } from "@/lib/i18n";
+import { useI18n } from "@/lib/i18n";
 import { useApp } from "./useAppData";
 import { useSettings } from "./useSettings";
 
@@ -110,8 +110,8 @@ export function WatcherProvider({ children }: { children: ReactNode }) {
           }
           if (granted) {
             sendNotification({
-              title: tRef.current("notif.newRunTitle" as Key),
-              body: tRef.current("notif.newRunBody" as Key, {
+              title: tRef.current("notif.newRunTitle"),
+              body: tRef.current("notif.newRunBody", {
                 score: event.score,
                 scenario: event.scenario,
               }),

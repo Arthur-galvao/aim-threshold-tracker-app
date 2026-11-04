@@ -240,11 +240,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       try {
         if (settingsRef.current?.notify_step_advance !== false) {
           if (isFinished) {
-            await sendNotificationHelper(APP_NOTIFICATION_TITLE, t("notif.playlistDone" as Key));
+            await sendNotificationHelper(APP_NOTIFICATION_TITLE, t("notif.playlistDone"));
           } else if (scenarioName) {
             await sendNotificationHelper(
               APP_NOTIFICATION_TITLE,
-              t("notif.stepAdvanced" as Key, { name: scenarioName })
+              t("notif.stepAdvanced", { name: scenarioName })
             );
           }
         }
@@ -288,7 +288,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           if (settings?.notify_step_advance !== false) {
             await sendNotificationHelper(
               APP_NOTIFICATION_TITLE,
-              t("notif.playlistDetected" as Key, { name: targetPlaylist.name })
+              t("notif.playlistDetected", { name: targetPlaylist.name })
             );
           }
         } else {

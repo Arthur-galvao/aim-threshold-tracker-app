@@ -109,7 +109,7 @@ export function TopBar({
             className="rounded-full px-3.5"
           >
             <span className="hidden sm:inline">
-              {t("session.title") || "Registrar sessão"}
+              {t("session.title")}
             </span>
             <span className="sm:hidden">Run</span>
           </Button>

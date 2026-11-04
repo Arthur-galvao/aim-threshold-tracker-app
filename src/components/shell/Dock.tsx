@@ -8,7 +8,7 @@ import {
 } from "@phosphor-icons/react";
 import { Kbd, Tooltip, TooltipProvider } from "@/components/ui";
 import { useApp } from "@/hooks/useAppData";
-import { useI18n, type Key } from "@/lib/i18n";
+import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
 export type NavTab = "dashboard" | "randomizer" | "playlist";
@@ -102,7 +102,7 @@ export function Dock({
   if (variant === "mobile-float") {
     return (
       <nav
-        aria-label={t("dock.mobileNav" as Key)}
+        aria-label={t("dock.mobileNav")}
         className={cn(
           "md:hidden fixed bottom-3 left-1/2 -translate-x-1/2 z-40 liquid-float p-1.5 flex items-center gap-1 rounded-full shadow-float",
           className
@@ -166,7 +166,7 @@ export function Dock({
   return (
     <TooltipProvider>
       <nav
-        aria-label={t("dock.mainNav" as Key)}
+        aria-label={t("dock.mainNav")}
         className={cn(
           "liquid-well p-1 inline-flex items-center gap-1 rounded-full select-none",
           className

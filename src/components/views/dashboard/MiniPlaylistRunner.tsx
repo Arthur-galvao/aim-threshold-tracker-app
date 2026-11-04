@@ -9,7 +9,7 @@ import {
   Queue,
 } from "@phosphor-icons/react";
 import { useApp } from "@/hooks/useAppData";
-import { useI18n, type Key } from "@/lib/i18n";
+import { useI18n } from "@/lib/i18n";
 import { Badge, Button } from "@/components/ui";
 import { cn } from "@/lib/utils";
 
@@ -154,7 +154,7 @@ export function MiniPlaylistRunner({ className }: MiniPlaylistRunnerProps) {
                 </Badge>
               </div>
               <div className="text-[11px] text-text-secondary truncate mt-0.5">
-                <span>{currentTask ? currentTask.name : t("runner.scenarioFallback" as Key)}</span>
+                <span>{currentTask ? currentTask.name : t("runner.scenarioFallback")}</span>
               </div>
             </div>
           </div>

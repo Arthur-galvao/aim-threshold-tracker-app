@@ -6,7 +6,7 @@ import {
   WarningCircle,
   Wrench,
 } from "@phosphor-icons/react";
-import { useI18n, type Key } from "@/lib/i18n";
+import { useI18n } from "@/lib/i18n";
 import { useApp } from "@/hooks/useAppData";
 import { detectDpiMismatch } from "@/lib/dpi-check";
 import type {
@@ -214,7 +214,7 @@ export function TelemetryCard({
         <div className="px-3.5 py-2 rounded-control bg-amber-soft border border-amber-edge text-xs text-amber flex items-center gap-2">
           <WarningCircle size={15} weight="fill" className="shrink-0" />
           <span className="font-medium">
-            {t("randomizer.dpiMismatch" as Key, {
+            {t("randomizer.dpiMismatch", {
               csv: Math.round(dpiMismatch.csvDpi),
               app: Math.round(dpiMismatch.appDpi),
             })}
