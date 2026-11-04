@@ -566,6 +566,13 @@ export const dict = {
     "coach.flickMicro": "Cluster de Microajuste: minimize o tempo de confirmação pós-transição mantendo tensão fásica mínima entre alvos próximos.",
     "coach.flickPost": "Estabilização Pós-Flick: mantenha LMB pressionado e garanta que o cursor permaneça imóvel dentro da esfera após o impacto balístico.",
     "coach.qeSwitching": "Transfira o olhar sacádico para o próximo alvo assim que a eliminação do alvo atual estiver garantida.",
+    "recovery.title": "Dados recuperados",
+    "recovery.bodyCorrupt": "Seus dados estavam corrompidos.",
+    "recovery.bodyRestored": "Restauramos os dados a partir do backup {backup}.",
+    "recovery.bodyEmpty": "Iniciamos com dados vazios.",
+    "recovery.preserved": "O arquivo original foi preservado em {path}.",
+    "recovery.openFolder": "Abrir pasta",
+    "recovery.ok": "OK",
   },
   en: {
     "app.footer": "Aim Threshold Tracker · based on Viscose & Escalate by uno neon",
@@ -1118,6 +1125,13 @@ export const dict = {
     "coach.flickMicro": "Micro-Adjustment Cluster: minimize post-transition confirmation time by keeping minimal phasic tension between close targets.",
     "coach.flickPost": "Post-Flick Stabilization: keep LMB held and ensure the cursor stays motionless inside the sphere after ballistic impact.",
     "coach.qeSwitching": "Shift saccadic gaze to the next target the instant current target elimination is guaranteed.",
+    "recovery.title": "Data recovered",
+    "recovery.bodyCorrupt": "Your data was corrupted.",
+    "recovery.bodyRestored": "We restored your data from the backup {backup}.",
+    "recovery.bodyEmpty": "We started with empty data.",
+    "recovery.preserved": "The original file was preserved at {path}.",
+    "recovery.openFolder": "Open folder",
+    "recovery.ok": "OK",
   },
 } as const;
 

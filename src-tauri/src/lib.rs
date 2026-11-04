@@ -210,32 +210,6 @@ fn import_existing_csvs(app: AppHandle) -> Result<ImportStats, String> {
 }
 
 #[tauri::command]
-fn open_url(url: String) -> Result<(), String> {
-    #[cfg(target_os = "windows")]
-    {
-        use std::os::windows::process::CommandExt;
-        std::process::Command::new("cmd")
-            .args(["/c", "start", "", &url])
-            .creation_flags(0x08000000)
-            .spawn()
-            .map_err(|e| format!("Erro ao abrir link: {e}"))?;
-        Ok(())
-    }
-    #[cfg(not(target_os = "windows"))]
-    {
-        #[cfg(target_os = "macos")]
-        let cmd = "open";
-        #[cfg(not(target_os = "macos"))]
-        let cmd = "xdg-open";
-        std::process::Command::new(cmd)
-            .arg(&url)
-            .spawn()
-            .map_err(|e| format!("Erro ao abrir link: {e}"))?;
-        Ok(())
-    }
-}
-
-#[tauri::command]
 fn check_rawaccel_available(state: State<'_, AppState>) -> Result<RandomizerState, String> {
     let (configured_dir, base_cm) = {
         let s = state.settings.lock().unwrap();
@@ -456,8 +430,16 @@ fn test_rawaccel_writer(app: AppHandle, state: State<'_, AppState>, path: Option
 
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+            if let Some(w) = app.get_webview_window("main") {
+                let _ = w.show();
+                let _ = w.unminimize();
+                let _ = w.set_focus();
+            }
+        }))
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             let (mut data, data_report) = storage::load_app_data(app.handle());
             let (mut settings, settings_report) = storage::load_settings(app.handle());
@@ -635,7 +617,6 @@ pub fn run() {
             stop_watcher,
             get_watcher_status,
             import_existing_csvs,
-            open_url,
             check_rawaccel_available,
             get_randomizer_settings,
             save_randomizer_settings,

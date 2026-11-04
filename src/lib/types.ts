@@ -88,6 +88,12 @@ export interface WatcherStatus {
   error: string | null;
 }
 
+export interface LoadReport {
+  kind: "loaded" | "missing" | "recovered";
+  quarantined: string | null;
+  fromBackup: string | null;
+}
+
 export type ToastType = "info" | "success" | "error" | "warning";
 
 export interface ToastState {

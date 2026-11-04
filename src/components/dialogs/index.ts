@@ -10,3 +10,4 @@ export * from "./PlaylistManagerDialog";
 export * from "./PlaylistEditor";
 export * from "./PlaylistItemRow";
 export * from "./AimLabSyncDialog";
+export * from "./RecoveryNotice";

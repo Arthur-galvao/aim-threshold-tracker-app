@@ -18,6 +18,7 @@ import {
   NewScenarioDialog,
   PlaylistManagerDialog,
   AimLabSyncDialog,
+  RecoveryNotice,
 } from "@/components/dialogs";
 import type { AppSettings, Playlist } from "@/lib/types";
 import { getSettings, saveSettings } from "@/lib/tauri-bridge";
@@ -233,6 +234,8 @@ function AppContent() {
           );
         }}
       />
+
+      <RecoveryNotice />
     </AppShell>
   );
 }

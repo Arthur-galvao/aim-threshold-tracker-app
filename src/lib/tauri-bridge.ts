@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
+import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import type {
   AppData,
   AppSettings,
@@ -8,6 +9,7 @@ import type {
   ImportStats,
   KovaakPlaylistRaw,
   KovaakRun,
+  LoadReport,
   WatcherStatus,
 } from "./types";
 import { SAMPLE_DATA } from "./sample-data";
@@ -233,14 +235,28 @@ export function listenKovaakPlaylistActive(
   });
 }
 
+export async function getLoadReport(): Promise<LoadReport | null> {
+  if (!isTauri()) return null;
+  return invoke<LoadReport | null>("get_load_report");
+}
+
 export async function openExternalUrl(url: string): Promise<void> {
   if (isTauri()) {
     try {
-      await invoke("open_url", { url });
-      return;
+      await openUrl(url);
     } catch (err) {
       console.error("Erro ao abrir URL no Tauri:", err);
     }
+    return;
   }
   window.open(url, "_blank", "noopener,noreferrer");
+}
+
+export async function revealInFolder(path: string): Promise<void> {
+  if (!isTauri()) return;
+  try {
+    await revealItemInDir(path);
+  } catch (err) {
+    console.error("Erro ao abrir pasta:", err);
+  }
 }
