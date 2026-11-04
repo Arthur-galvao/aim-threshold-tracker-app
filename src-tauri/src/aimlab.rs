@@ -652,7 +652,9 @@ pub fn build_aimlab_scenario_map() -> HashMap<String, String> {
 /// Validade do cache do mapa de cenários (T3.7).
 const SCENARIO_MAP_TTL: Duration = Duration::from_secs(600);
 
-static NAME_MAP: OnceLock<Mutex<Option<(Instant, HashMap<String, String>)>>> = OnceLock::new();
+type CachedScenarioMap = Option<(Instant, HashMap<String, String>)>;
+
+static NAME_MAP: OnceLock<Mutex<CachedScenarioMap>> = OnceLock::new();
 
 /// Mapa de cenários com cache: reconstrói se estiver vazio, com mais de 10 min, ou se `force_refresh`.
 pub fn cached_scenario_map(force_refresh: bool) -> HashMap<String, String> {
