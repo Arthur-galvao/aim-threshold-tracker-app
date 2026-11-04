@@ -1,6 +1,7 @@
 mod data_commands;
 mod data_store;
 mod kovaaak;
+mod migrations;
 mod model;
 mod parser;
 mod randomizer;
@@ -18,6 +19,9 @@ use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent}
 use tauri::{AppHandle, Emitter, Manager, State, WindowEvent};
 
 use model::{AppSettings, ImportStats, RandomizerSettings, RandomizerState, WatcherStatus};
+
+/// Acima disso o re-parse dos CSVs da migração v2 roda em background.
+const MAX_SYNC_REPARSE: usize = 500;
 
 pub struct AppState {
     /// Única fonte da verdade do `AppData` (Plano 02). Toda mutação via `data_commands::mutate`.
@@ -434,12 +438,44 @@ pub fn run() {
                 eprintln!("[storage] settings.json recuperado: {settings_report:?}");
             }
 
-            if watcher::migrate_existing_sensitivities(&mut data, settings.kovaak_stats_path.as_deref(), settings.mouse_dpi) {
-                let _ = storage::save_app_data(app.handle(), &data);
-            }
-
-            if aimlab::migrate_existing_aimlab_tasks(&mut data) {
-                let _ = storage::save_app_data(app.handle(), &data);
+            // Migração versionada (T3.6): roda uma vez por versão de schema, antes do AppState.
+            let mut backfill: Option<(Vec<String>, std::path::PathBuf, f64)> = None;
+            match storage::data_dir(app.handle()) {
+                Ok(dir) => {
+                    let ledger = sens_ledger::SensLedger::load(
+                        &storage::sens_ledger_path(app.handle()).unwrap_or_else(|_| dir.join("sens_ledger.json")),
+                    );
+                    let lookup = |sf: &str| ledger.get(sf).cloned();
+                    let emit_handle = app.handle().clone();
+                    let progress = move |done: usize, total: usize| {
+                        let _ = emit_handle.emit("migration_progress", serde_json::json!({ "done": done, "total": total }));
+                    };
+                    let dpi = if settings.mouse_dpi > 0.0 { settings.mouse_dpi } else { 800.0 };
+                    let hook = |d: &mut model::AppData| aimlab::migrate_existing_aimlab_tasks(d);
+                    let ctx = migrations::MigrationCtx {
+                        data_dir: &dir,
+                        stats_dir: settings.kovaak_stats_path.as_deref().map(std::path::PathBuf::from),
+                        fallback_dpi: dpi,
+                        ledger_lookup: &lookup,
+                        progress: &progress,
+                        max_sync_reparse: MAX_SYNC_REPARSE,
+                        pre_dedupe_hook: Some(&hook),
+                    };
+                    let report = migrations::run_migrations(&mut data, &ctx);
+                    if let Some(e) = &report.error {
+                        eprintln!("[migrations] abortada (dados intactos): {e}");
+                    } else if report.changed {
+                        if let Err(e) = storage::save_app_data(app.handle(), &data) {
+                            eprintln!("[migrations] falha ao salvar após migrar: {e}");
+                        }
+                    }
+                    if report.deferred_reparse {
+                        if let Some(sd) = ctx.stats_dir.clone() {
+                            backfill = Some((migrations::reparse_candidates(&data, &sd), sd, dpi));
+                        }
+                    }
+                }
+                Err(e) => eprintln!("[migrations] sem pasta de dados, migração adiada: {e}"),
             }
 
             let (avail, found_dir, err_msg, gui_running) = randomizer::check_rawaccel_availability(settings.randomizer.rawaccel_dir.as_deref());
@@ -486,6 +522,23 @@ pub fn run() {
                 upcoming_scenario: Mutex::new(None),
                 load_report: Mutex::new(Some(data_report)),
             });
+
+            // Backfill dos CSVs (passo c da migração v2) fora do caminho de boot: parse em thread,
+            // aplicação numa única mutação.
+            if let Some((files, stats_dir, dpi)) = backfill {
+                let handle = app.handle().clone();
+                std::thread::spawn(move || {
+                    let h = handle.clone();
+                    let progress = move |done: usize, total: usize| {
+                        let _ = h.emit("migration_progress", serde_json::json!({ "done": done, "total": total }));
+                    };
+                    let parsed = migrations::collect_reparse(&files, &stats_dir, dpi, &progress);
+                    if let Err(e) = data_commands::mutate(&handle, |d| Ok(migrations::apply_reparse(d, &parsed))) {
+                        eprintln!("[migrations] backfill falhou: {e}");
+                    }
+                    let _ = handle.emit("migration_progress", serde_json::json!({ "done": files.len(), "total": files.len() }));
+                });
+            }
 
             if is_randomizer_enabled && avail {
                 let handle = app.handle().clone();

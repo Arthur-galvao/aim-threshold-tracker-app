@@ -9,7 +9,7 @@ use std::time::Duration;
 use notify::{Event, EventKind, RecursiveMode, Watcher};
 use tauri::{AppHandle, Emitter, Manager, State};
 
-use crate::model::{AppData, ImportStats, KovaakRun};
+use crate::model::{ImportStats, KovaakRun};
 use crate::parser;
 use crate::sens_ledger;
 use crate::storage;
@@ -441,43 +441,6 @@ pub fn catch_up_import(app: &AppHandle) -> Result<ImportStats, String> {
     Ok(stats)
 }
 
-pub fn migrate_existing_sensitivities(data: &mut AppData, stats_dir: Option<&str>, mouse_dpi: f64) -> bool {
-    let mut updated = false;
-    let base_dir = stats_dir.map(PathBuf::from);
-    let effective_dpi = if mouse_dpi > 0.0 { mouse_dpi } else { 800.0 };
-
-    for task in &mut data.tasks {
-        for session in &mut task.sessions {
-            // Any sensitivity < 2.5 is clearly an in-game sens rather than physical cm/360
-            if session.sens > 0.0 && session.sens < 2.5 {
-                let mut converted = false;
-
-                // Try to re-parse from source file if available
-                if let (Some(ref dir), Some(ref file_name)) = (&base_dir, &session.source_file) {
-                    let csv_path = dir.join(file_name);
-                    if csv_path.exists() {
-                        if let Some(run) = parser::parse_stats_file_with_fallback_dpi(&csv_path, effective_dpi) {
-                            if run.sens > 2.5 {
-                                session.sens = run.sens;
-                                converted = true;
-                                updated = true;
-                            }
-                        }
-                    }
-                }
-
-                // If source file not found or couldn't be parsed, fallback to Valorant conversion
-                if !converted {
-                    session.sens = parser::convert_sens_to_cm(session.sens, Some("Valorant"), effective_dpi);
-                    updated = true;
-                }
-            }
-        }
-    }
-
-    updated
-}
-
 static ID_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
 pub fn unique_id(prefix: &str) -> String {
@@ -493,7 +456,6 @@ pub fn unique_id(prefix: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::{Session, Task};
 
     #[test]
     fn test_is_aimlab_replay_json() {
@@ -503,74 +465,6 @@ mod tests {
         assert!(is_aimlab_replay_json(p1));
         assert!(!is_aimlab_replay_json(p2));
         assert!(!is_aimlab_replay_json(p3));
-    }
-
-    #[test]
-    fn test_migrate_preserves_randomized_and_cm_sens() {
-        let mut data = AppData {
-            active_task_id: Some("t1".into()),
-            tasks: vec![Task {
-                id: "t1".into(),
-                name: "1w2ts Pasu".into(),
-                category: "Clicking".into(),
-                subcategory: "Dynamic".into(),
-                sessions: vec![
-                    Session {
-                        id: "s1".into(),
-                        date: "2026-09-18".into(),
-                        sens: 75.0,
-                        pb: 120.0,
-                        threshold: 110.0,
-                        source_file: Some("run1.csv".into()),
-                        ..Default::default()
-                    },
-                    Session {
-                        id: "s2".into(),
-                        date: "2026-09-18".into(),
-                        sens: 50.0,
-                        pb: 115.0,
-                        threshold: 110.0,
-                        source_file: Some("run2.csv".into()),
-                        ..Default::default()
-                    },
-                ],
-            }],
-            playlists: Vec::new(),
-            ..Default::default()
-        };
-
-        let changed = migrate_existing_sensitivities(&mut data, None, 800.0);
-        assert!(!changed, "Sensitividades em cm/360 não devem ser modificadas");
-        assert_eq!(data.tasks[0].sessions[0].sens, 75.0);
-        assert_eq!(data.tasks[0].sessions[1].sens, 50.0);
-    }
-
-    #[test]
-    fn test_migrate_converts_legacy_in_game_sens() {
-        let mut data = AppData {
-            active_task_id: Some("t1".into()),
-            playlists: Vec::new(),
-            tasks: vec![Task {
-                id: "t1".into(),
-                name: "1w2ts Pasu".into(),
-                category: "Clicking".into(),
-                subcategory: "Dynamic".into(),
-                sessions: vec![Session {
-                    id: "s1".into(),
-                    date: "2026-09-18".into(),
-                    sens: 0.24,
-                    pb: 120.0,
-                    threshold: 110.0,
-                    source_file: None,
-                    ..Default::default()
-                }],
-            }],
-            ..Default::default()
-        };
-
-        let changed = migrate_existing_sensitivities(&mut data, None, 800.0);
-        assert!(changed, "Sensitividade legada (< 2.5) deve ser migrada");
-        assert_eq!(data.tasks[0].sessions[0].sens, 68.0);
     }
 
     #[test]

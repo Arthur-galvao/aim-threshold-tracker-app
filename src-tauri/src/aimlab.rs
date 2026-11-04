@@ -854,49 +854,10 @@ pub fn migrate_existing_aimlab_tasks(data: &mut AppData) -> bool {
         }
     }
 
-    // 2. Deduplicate tasks that now have identical names (case-insensitive)
-    let mut deduplicated: Vec<crate::model::Task> = Vec::new();
-    let mut id_redirects: HashMap<String, String> = HashMap::new();
-
-    for task in data.tasks.drain(..) {
-        if let Some(existing) = deduplicated
-            .iter_mut()
-            .find(|t| t.name.eq_ignore_ascii_case(&task.name))
-        {
-            id_redirects.insert(task.id, existing.id.clone());
-            for sess in task.sessions {
-                if let Some(dup_sess) = existing.sessions.iter_mut().find(|s| {
-                    (s.source_file.is_some() && s.source_file == sess.source_file)
-                        || (s.date == sess.date && (s.pb - sess.pb).abs() < f64::EPSILON)
-                }) {
-                    if dup_sess.sens <= 0.0 && sess.sens > 0.0 {
-                        dup_sess.sens = sess.sens;
-                    }
-                } else {
-                    existing.sessions.push(sess);
-                }
-            }
-            changed = true;
-        } else {
-            deduplicated.push(task);
-        }
-    }
-    data.tasks = deduplicated;
-
-    // 3. Update active_task_id if redirected
-    if let Some(ref current_id) = data.active_task_id {
-        if let Some(target_id) = id_redirects.get(current_id) {
-            data.active_task_id = Some(target_id.clone());
-        }
-    }
-
-    // 4. Update playlists item taskIds
-    for pl in &mut data.playlists {
-        for item in &mut pl.items {
-            if let Some(target_id) = id_redirects.get(&item.task_id) {
-                item.task_id = target_id.clone();
-            }
-        }
+    // 2-4. Dedupe de tasks com o mesmo nome + redirecionamento de active_task_id/playlists.
+    // A lógica pura vive em `migrations` (sem dependência de Tauri/SQLite).
+    if crate::migrations::dedupe_tasks_by_name(data) {
+        changed = true;
     }
 
     changed
@@ -1083,8 +1044,13 @@ pub fn import_aimlab_csv(app: AppHandle, path: String) -> Result<ImportStats, St
 
             let cleaned_task_name = clean_aimlab_task_name(&record.task_name, &name_map);
             let raw_sens = record.sens.unwrap_or(0.0);
-            let sens = if raw_sens > 0.0 {
-                crate::parser::convert_sens_to_cm(raw_sens, None, fallback_dpi)
+            // O parser não chuta mais a escala (sem escala, fora de 5..=150 devolve 0.0). O CSV do
+            // Aim Lab não declara escala, então preservamos o comportamento antigo explicitamente:
+            // 5..=150 já é cm/360; abaixo de 5 é sens in-game (Valorant).
+            let sens = if (5.0..=150.0).contains(&raw_sens) {
+                crate::parser::convert_sens_to_cm(raw_sens, Some("cm360"), fallback_dpi)
+            } else if raw_sens > 0.0 && raw_sens < 5.0 {
+                crate::parser::convert_sens_to_cm(raw_sens, Some("valorant"), fallback_dpi)
             } else {
                 0.0
             };
