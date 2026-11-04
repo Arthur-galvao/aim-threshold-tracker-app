@@ -25,12 +25,16 @@ export interface PlaylistItem {
   targetValue: number; // reps/threshold: número de sessões; time: segundos
 }
 
+export type PlaylistSource = "user" | "kovaak" | "aimlab";
+
 export interface Playlist {
   id: string;
   name: string;
   items: PlaylistItem[];
   createdAt: string;
   autoAdvanceMode?: PlaylistAutoAdvanceMode;
+  /** Origem da playlist (Rust usa "user" por padrão). Plano 02 / T2.5. */
+  source?: PlaylistSource;
 }
 
 export interface AppData {
@@ -38,6 +42,63 @@ export interface AppData {
   tasks: Task[];
   playlists: Playlist[];
 }
+
+// ---------------------------------------------------------------------------
+// Contrato Rust <-> front (Plano 02): snapshots versionados, comandos de mutação.
+// ---------------------------------------------------------------------------
+
+/** Payload do evento `app_data_changed` e retorno de `get_app_data`. */
+export interface AppDataSnapshot {
+  revision: number;
+  data: AppData;
+}
+
+/** Retorno de todos os comandos de mutação. */
+export interface RevisionResult {
+  revision: number;
+}
+
+export interface CreateTaskResult extends RevisionResult {
+  taskId: string;
+}
+
+export interface UpsertPlaylistResult extends RevisionResult {
+  playlistId: string;
+}
+
+export interface SyncGamePlaylistsResult extends RevisionResult {
+  imported: number;
+  total: number;
+}
+
+export interface TaskMetaPatch {
+  name?: string;
+  category?: string;
+  subcategory?: string;
+}
+
+export type ReplaceAllReason = "demo" | "clear" | "import";
+
+/** Payload do evento `run_recorded` (toast / notificação / runner). */
+export interface RunRecordedEvent {
+  revision: number;
+  taskId: string;
+  sessionId: string;
+  scenario: string;
+  score: number;
+  sensCm: number;
+  isNewTask: boolean;
+}
+
+/** Códigos de erro devolvidos pelos comandos (o front traduz). */
+export type BackendErrorCode =
+  | "empty_name"
+  | "task_not_found"
+  | "session_not_found"
+  | "playlist_not_found"
+  | "invalid_payload"
+  | "invalid_backup"
+  | "not_implemented";
 
 export interface KovaakRun {
   scenario: string;

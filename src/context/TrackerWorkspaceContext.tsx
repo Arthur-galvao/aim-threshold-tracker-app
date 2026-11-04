@@ -8,7 +8,7 @@ import {
 } from "react";
 import type { Task, WatcherStatus } from "@/lib/types";
 import { useApp } from "@/hooks/useAppData";
-import { useKovaakWatcher } from "@/hooks/useKovaakWatcher";
+import { useWatcher } from "@/hooks/useKovaakWatcher";
 import {
   computeDayThreshold,
   computeTaskMetrics,
@@ -99,7 +99,7 @@ export function TrackerWorkspaceProvider({ children }: { children: ReactNode }) 
     watcherStatus,
     toggleWatcher: appToggleWatcher,
     updateStatsPath,
-  } = useKovaakWatcher();
+  } = useWatcher();
 
   const [activeCategory, setActiveCategory] = useState<string>("All");
   const [draftRuns, setDraftRuns] = useState<number[]>([]);

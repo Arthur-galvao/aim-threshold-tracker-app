@@ -4,46 +4,134 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import type {
   AppData,
+  AppDataSnapshot,
   AppSettings,
+  CreateTaskResult,
   DetectedPlaylistEvent,
   ImportStats,
   KovaakPlaylistRaw,
-  KovaakRun,
   LoadReport,
+  Playlist,
+  ReplaceAllReason,
+  RevisionResult,
+  RunRecordedEvent,
+  SyncGamePlaylistsResult,
+  TaskMetaPatch,
+  UpsertPlaylistResult,
   WatcherStatus,
 } from "./types";
-import { SAMPLE_DATA } from "./sample-data";
+import { toBackendError } from "./backend-error";
+import { getWebBackend } from "./web-backend";
 
 const isTauri = () =>
   typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
-export async function loadAppData(): Promise<AppData> {
-  if (!isTauri()) {
-    const stored = localStorage.getItem("AIM_THRESHOLD_TRACKER_DATA");
-    if (stored) return JSON.parse(stored);
-    return SAMPLE_DATA;
+// ---------------------------------------------------------------------------
+// Dados do app (Plano 02): o Rust é o dono do AppData. O front chama comandos de
+// mutação e recebe snapshots versionados via "app_data_changed". Sem Tauri, o
+// `web-backend` implementa o mesmo contrato sobre localStorage.
+// ---------------------------------------------------------------------------
+
+async function cmd<T>(name: string, args?: Record<string, unknown>): Promise<T> {
+  try {
+    return await invoke<T>(name, args);
+  } catch (err) {
+    throw toBackendError(err);
   }
-  return invoke<AppData>("load_app_data");
 }
 
-export async function saveAppData(data: AppData): Promise<void> {
-  if (!isTauri()) {
-    localStorage.setItem("AIM_THRESHOLD_TRACKER_DATA", JSON.stringify(data));
-    return;
+/** Executa o comando web (síncrono) com o mesmo formato de erro do Rust. */
+async function web<T>(run: () => T): Promise<T> {
+  try {
+    return run();
+  } catch (err) {
+    throw toBackendError(err);
   }
-  await invoke("save_app_data", { data });
 }
 
-export async function importJsonBackup(json: string): Promise<AppData> {
-  if (!isTauri()) {
-    const parsed = JSON.parse(json) as AppData;
-    if (!parsed || !Array.isArray(parsed.tasks)) {
-      throw new Error("JSON inválido");
-    }
-    await saveAppData(parsed);
-    return parsed;
-  }
-  return invoke<AppData>("import_json_backup", { json });
+export async function getAppData(): Promise<AppDataSnapshot> {
+  if (!isTauri()) return web(() => getWebBackend().getAppData());
+  return cmd<AppDataSnapshot>("get_app_data");
+}
+
+export function onAppDataChanged(
+  callback: (snapshot: AppDataSnapshot) => void
+): Promise<UnlistenFn> {
+  if (!isTauri()) return Promise.resolve(getWebBackend().subscribe(callback));
+  return listen<AppDataSnapshot>("app_data_changed", (event) => callback(event.payload));
+}
+
+export function onRunRecorded(callback: (event: RunRecordedEvent) => void): Promise<UnlistenFn> {
+  if (!isTauri()) return Promise.resolve(() => {});
+  return listen<RunRecordedEvent>("run_recorded", (event) => callback(event.payload));
+}
+
+export async function createTask(
+  name: string,
+  category: string,
+  subcategory: string
+): Promise<CreateTaskResult> {
+  if (!isTauri()) return web(() => getWebBackend().createTask(name, category, subcategory));
+  return cmd<CreateTaskResult>("create_task", { name, category, subcategory });
+}
+
+export async function updateTaskMeta(taskId: string, patch: TaskMetaPatch): Promise<RevisionResult> {
+  if (!isTauri()) return web(() => getWebBackend().updateTaskMeta(taskId, patch));
+  return cmd<RevisionResult>("update_task_meta", { taskId, ...patch });
+}
+
+export async function deleteTask(taskId: string): Promise<RevisionResult> {
+  if (!isTauri()) return web(() => getWebBackend().deleteTask(taskId));
+  return cmd<RevisionResult>("delete_task", { taskId });
+}
+
+export async function setActiveTask(taskId: string | null): Promise<RevisionResult> {
+  if (!isTauri()) return web(() => getWebBackend().setActiveTask(taskId));
+  return cmd<RevisionResult>("set_active_task", { taskId });
+}
+
+export async function addManualSessions(
+  taskId: string,
+  date: string,
+  sensCm: number,
+  scores: number[]
+): Promise<RevisionResult> {
+  if (!isTauri()) return web(() => getWebBackend().addManualSessions(taskId, date, sensCm, scores));
+  return cmd<RevisionResult>("add_manual_sessions", { taskId, date, sensCm, scores });
+}
+
+export async function deleteSession(taskId: string, sessionId: string): Promise<RevisionResult> {
+  if (!isTauri()) return web(() => getWebBackend().deleteSession(taskId, sessionId));
+  return cmd<RevisionResult>("delete_session", { taskId, sessionId });
+}
+
+export async function upsertPlaylist(playlist: Playlist): Promise<UpsertPlaylistResult> {
+  if (!isTauri()) return web(() => getWebBackend().upsertPlaylist(playlist));
+  return cmd<UpsertPlaylistResult>("upsert_playlist", { playlist });
+}
+
+export async function deletePlaylist(playlistId: string): Promise<RevisionResult> {
+  if (!isTauri()) return web(() => getWebBackend().deletePlaylist(playlistId));
+  return cmd<RevisionResult>("delete_playlist", { playlistId });
+}
+
+/** Rejeita com `BackendError("not_implemented")` até a T2.5 (o chamador usa fallback). */
+export async function syncGamePlaylistsCommand(): Promise<SyncGamePlaylistsResult> {
+  if (!isTauri()) return web(() => getWebBackend().syncGamePlaylists());
+  return cmd<SyncGamePlaylistsResult>("sync_game_playlists");
+}
+
+export async function replaceAllData(
+  data: AppData,
+  reason: ReplaceAllReason
+): Promise<RevisionResult> {
+  if (!isTauri()) return web(() => getWebBackend().replaceAllData(data, reason));
+  return cmd<RevisionResult>("replace_all_data", { data, reason });
+}
+
+export async function importJsonBackup(json: string): Promise<RevisionResult> {
+  if (!isTauri()) return web(() => getWebBackend().importJsonBackup(json));
+  return cmd<RevisionResult>("import_json_backup", { json });
 }
 
 export async function detectKovaakPath(): Promise<string | null> {
@@ -194,13 +282,6 @@ export async function syncAimlabSqlite(): Promise<ImportStats> {
 export async function importAimlabCsv(path: string): Promise<ImportStats> {
   if (!isTauri()) return { total: 0, new: 0, skipped: 0 };
   return invoke<ImportStats>("import_aimlab_csv", { path });
-}
-
-export function onNewRun(callback: (run: KovaakRun) => void): Promise<UnlistenFn> {
-  if (!isTauri()) {
-    return Promise.resolve(() => {});
-  }
-  return listen<KovaakRun>("new_run", (event) => callback(event.payload));
 }
 
 export function onWatcherError(callback: (error: string) => void): Promise<UnlistenFn> {

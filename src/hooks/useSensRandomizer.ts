@@ -117,13 +117,14 @@ export function RandomizerProvider({ children }: { children: React.ReactNode }) 
     let cancelled = false;
     const unlistens: Array<() => void> = [];
 
-    const sub = async <T,>(name: string, cb: (p: T) => void) => {
-      const un = await listen<T>(name, (e) => cb(e.payload));
-      if (cancelled) {
-        un();
-      } else {
-        unlistens.push(un);
-      }
+    // Padrão anti-vazamento: se o efeito foi desfeito antes do listen() resolver, desfaz já.
+    const sub = <T,>(name: string, cb: (p: T) => void) => {
+      listen<T>(name, (e) => cb(e.payload))
+        .then((un) => {
+          if (cancelled) un();
+          else unlistens.push(un);
+        })
+        .catch((err) => console.error(`Erro ao registrar listener ${name}:`, err));
     };
 
     void sub<RandomizerState>("sens_updated", (payload) => {

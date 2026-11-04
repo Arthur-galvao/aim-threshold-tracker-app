@@ -7,8 +7,7 @@ use chrono::{DateTime, NaiveDateTime, Utc};
 use tauri::{AppHandle, Manager, State, Emitter};
 
 use crate::model::{KovaakRun, ImportStats, AppData};
-use crate::watcher::{has_source_file, add_session_to_data};
-use crate::{AppState, storage};
+use crate::AppState;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AimlabCsvRecord {
@@ -23,52 +22,27 @@ pub struct AimlabCsvRecord {
 }
 
 fn process_runs(app: &AppHandle, runs: Vec<KovaakRun>) -> Result<ImportStats, String> {
-    let state: State<AppState> = app.state();
     let total = runs.len();
-    let mut new = 0usize;
-    let mut skipped = 0usize;
 
-    for run in runs {
-        let already = {
-            let data = state.data.lock().unwrap();
-            has_source_file(&data.tasks, &run.source_file)
-        };
-
-        if already {
-            if run.sens > 0.0 {
-                let mut data = state.data.lock().unwrap();
-                let mut updated_sens = false;
-                for task in &mut data.tasks {
-                    for session in &mut task.sessions {
-                        if session.source_file.as_deref() == Some(&run.source_file)
-                            && session.sens <= 0.0
-                        {
-                            session.sens = run.sens;
-                            updated_sens = true;
-                        }
-                    }
-                }
-                if updated_sens {
-                    new += 1;
-                    continue;
-                }
+    // Lote inteiro numa única mutação (uma revisão) + flush. Run já importada: só
+    // completa a sens se estava zerada.
+    let outcome = crate::data_commands::import_runs(
+        app,
+        &runs,
+        |session, run| {
+            if run.sens > 0.0 && session.sens <= 0.0 {
+                session.sens = run.sens;
+                true
+            } else {
+                false
             }
-            skipped += 1;
-            continue;
-        }
+        },
+        |data| {
+            migrate_existing_aimlab_tasks(data);
+        },
+    )?;
 
-        add_session_to_data(&state, &run);
-        new += 1;
-    }
-
-    if new > 0 {
-        let mut data = state.data.lock().unwrap().clone();
-        migrate_existing_aimlab_tasks(&mut data);
-        *state.data.lock().unwrap() = data.clone();
-        storage::save_app_data(app, &data).map_err(|e| e.to_string())?;
-    }
-
-    let stats = ImportStats { total, new, skipped };
+    let stats = ImportStats { total, new: outcome.new, skipped: outcome.skipped };
     let _ = app.emit("import_complete", &stats);
 
     Ok(stats)

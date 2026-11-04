@@ -6,47 +6,67 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
   type ReactNode,
 } from "react";
-import type { AppData, Playlist, PlaylistItem, Task, ToastState, DetectedPlaylistEvent } from "@/lib/types";
-import { cloneAppData, SAMPLE_DATA } from "@/lib/sample-data";
+import type {
+  AppData,
+  Playlist,
+  PlaylistItem,
+  Task,
+  ToastState,
+  DetectedPlaylistEvent,
+} from "@/lib/types";
+import { SAMPLE_DATA } from "@/lib/sample-data";
+import * as bridge from "@/lib/tauri-bridge";
 import {
-  loadAppData,
-  saveAppData,
-  importJsonBackup,
   getKovaakPlaylists,
   getAimlabPlaylists,
   getPlaylistInProgress,
   listenKovaakPlaylistActive,
   getSettings,
 } from "@/lib/tauri-bridge";
+import { dataStore, type DataStoreBackend } from "@/lib/data-store";
+import { createTaskDeriver } from "@/lib/derived-tasks";
+import { errorCode } from "@/lib/backend-error";
+import {
+  ensureDetectedPlaylist,
+  fromRawKovaakPlaylists,
+  syncGamePlaylistsFallback,
+  type PlaylistSyncApi,
+} from "@/lib/game-playlist-sync";
 import {
   isPermissionGranted,
   requestPermission,
   sendNotification,
 } from "@tauri-apps/plugin-notification";
-import {
-  recalculateAllTaskThresholds,
-  recalculateAllTasks,
-  sanitizeAppData,
-} from "@/lib/threshold";
-import {
-  categorizeScenario,
-  cleanScenarioName,
-  migrateAndCategorizeTasks,
-} from "@/lib/viscose";
-import { useI18n } from "@/lib/i18n";
+import { migrateAndCategorizeTasks } from "@/lib/viscose";
+import { useI18n, type Key } from "@/lib/i18n";
 import { usePlaylistRunner, type PlaylistRunnerState } from "./usePlaylistRunner";
 
+const storeBackend: DataStoreBackend = {
+  getAppData: bridge.getAppData,
+  onAppDataChanged: bridge.onAppDataChanged,
+};
+
+/** Fallback (TODO(T2.5): remove) usa create_task + upsert_playlist em sequência. */
+const playlistSyncApi: PlaylistSyncApi = {
+  getData: () => dataStore.getSnapshot().data,
+  createTask: bridge.createTask,
+  upsertPlaylist: bridge.upsertPlaylist,
+  setActiveTask: bridge.setActiveTask,
+  waitForRevision: (revision) => dataStore.waitForRevision(revision),
+};
+
 interface AppContextValue {
+  /** Snapshot do Rust com thresholds legados derivados (memoizados por task). */
   appData: AppData;
   activeTask: Task | null;
   toast: ToastState;
   showToast: (message: string, type?: ToastState["type"]) => void;
   setActiveTaskId: (id: string) => void;
-  refreshData: () => Promise<void>;
-  saveData: (data: AppData) => Promise<void>;
-  updateAppData: (updater: (prev: AppData) => AppData) => Promise<void>;
+  /** Corrige categoria/nome de tasks pelo catálogo (só envia `update_task_meta` do que mudou). */
+  fixupTaskCategories: () => Promise<void>;
   loadDemoData: () => Promise<void>;
   clearAllData: () => Promise<void>;
   exportData: () => void;
@@ -66,7 +86,8 @@ const AppContext = createContext<AppContextValue | null>(null);
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const { t } = useI18n();
-  const [appData, setAppData] = useState<AppData>({ activeTaskId: null, tasks: [], playlists: [] });
+  const snapshot = useSyncExternalStore(dataStore.subscribe, dataStore.getSnapshot);
+  const loaded = snapshot.revision >= 0;
   const [toast, setToast] = useState<ToastState>({
     message: "",
     type: "info",
@@ -83,167 +104,125 @@ export function AppProvider({ children }: { children: ReactNode }) {
     []
   );
 
-  const refreshData = useCallback(async () => {
-    const data = await loadAppData();
-    if (!data.playlists) data.playlists = [];
-    const sanitized = sanitizeAppData(data);
-    recalculateAllTasks(data.tasks);
-    const recategorized = migrateAndCategorizeTasks(data.tasks);
-    setAppData(data);
-    if (sanitized || recategorized) {
-      void saveAppData(data);
+  // Fonte única: get_app_data + app_data_changed (listener sem vazamento em StrictMode,
+  // garantido pelo DataStore: init/dispose usam um contador de geração).
+  useEffect(() => {
+    dataStore.init(storeBackend).catch((err) => {
+      console.error("Erro ao carregar dados do app:", err);
+    });
+    return () => dataStore.dispose();
+  }, []);
+
+  // Derivados: thresholds legados recalculados em CÓPIAS, memoizados por task.
+  const deriverRef = useRef(createTaskDeriver());
+  const appData = useMemo<AppData>(
+    () => ({
+      activeTaskId: snapshot.data.activeTaskId,
+      tasks: deriverRef.current(snapshot.data.tasks),
+      playlists: snapshot.data.playlists ?? [],
+    }),
+    [snapshot]
+  );
+
+  const activeTask = useMemo(
+    () => appData.tasks.find((task) => task.id === appData.activeTaskId) ?? null,
+    [appData]
+  );
+
+  /** Mostra um erro de comando (códigos curtos do backend, traduzidos aqui). */
+  const reportError = useCallback(
+    (err: unknown) => {
+      const code = errorCode(err);
+      console.error("Erro no comando do backend:", err);
+      const key = `error.${code}` as Key;
+      const text = t(key);
+      showToast(text === key ? code : text, "error");
+    },
+    [showToast, t]
+  );
+
+  const fixupTaskCategories = useCallback(async () => {
+    const current = dataStore.getSnapshot().data.tasks;
+    // migrateAndCategorizeTasks muta; roda em cópias leves (sem sessões).
+    const work: Task[] = current.map((task) => ({
+      id: task.id,
+      name: task.name,
+      category: task.category,
+      subcategory: task.subcategory,
+      sessions: [],
+    }));
+    migrateAndCategorizeTasks(work);
+    for (let i = 0; i < current.length; i++) {
+      const before = current[i];
+      const after = work[i];
+      const patch: { name?: string; category?: string; subcategory?: string } = {};
+      if (after.name !== before.name) patch.name = after.name;
+      if (after.category !== before.category) patch.category = after.category;
+      if (after.subcategory !== before.subcategory) patch.subcategory = after.subcategory;
+      if (Object.keys(patch).length === 0) continue;
+      try {
+        await bridge.updateTaskMeta(before.id, patch);
+      } catch (err) {
+        console.error("Erro ao recategorizar task:", err);
+      }
     }
   }, []);
-
-  const saveData = useCallback(async (data: AppData) => {
-    recalculateAllTasks(data.tasks);
-    await saveAppData(data);
-    setAppData(cloneAppData(data));
-  }, []);
-
-  const updateAppData = useCallback(
-    async (updater: (prev: AppData) => AppData) => {
-      setAppData((prev) => {
-        const next = cloneAppData(updater(prev));
-        recalculateAllTasks(next.tasks);
-        void saveAppData(next);
-        return next;
-      });
-    },
-    []
-  );
 
   const syncGamePlaylists = useCallback(
     async (manual: boolean = false): Promise<{ imported: number; total: number }> => {
       try {
-        const rawKovaak = await getKovaakPlaylists();
-        const rawAimlab = await getAimlabPlaylists();
-        const rawPlaylists = [...(rawKovaak || []), ...(rawAimlab || [])];
-        if (!rawPlaylists || rawPlaylists.length === 0) {
-          if (manual) {
-            showToast(t("toast.noNewGamePlaylists"), "info");
+        let imported = 0;
+        let total = 0;
+        try {
+          const res = await bridge.syncGamePlaylistsCommand();
+          await dataStore.waitForRevision(res.revision);
+          imported = res.imported;
+          total = res.total;
+        } catch (err) {
+          if (errorCode(err) !== "not_implemented") throw err;
+          // TODO(T2.5): remove fallback (a lógica passa a viver em Rust).
+          const rawKovaak = await getKovaakPlaylists();
+          const rawAimlab = await getAimlabPlaylists();
+          const raw = [...(rawKovaak || []), ...(rawAimlab || [])];
+          total = raw.length;
+          if (total > 0) {
+            const result = await syncGamePlaylistsFallback(
+              playlistSyncApi,
+              fromRawKovaakPlaylists(raw, true)
+            );
+            await dataStore.waitForRevision(result.lastRevision);
+            imported = result.imported;
           }
-          return { imported: 0, total: 0 };
         }
 
-        let importedCount = 0;
-
-        await updateAppData((prev) => {
-          const currentPlaylists = prev.playlists ?? [];
-          const updatedTasks = [...prev.tasks];
-          const updatedPlaylists = [...currentPlaylists];
-
-          for (const kpl of rawPlaylists) {
-            const cleanName = kpl.playlistName.trim();
-            if (!cleanName) continue;
-
-            const items: PlaylistItem[] = [];
-
-            for (let idx = 0; idx < kpl.scenarioList.length; idx++) {
-              const item = kpl.scenarioList[idx];
-              const rawName = item.scenarioName.trim();
-              if (!rawName) continue;
-              const scenarioName = cleanScenarioName(rawName);
-              if (!scenarioName) continue;
-
-              let task = updatedTasks.find(
-                (t) => t.name.trim().toLowerCase() === scenarioName.toLowerCase()
-              );
-
-              if (!task) {
-                const { category, subcategory } = categorizeScenario(scenarioName);
-                task = {
-                  id: `task_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-                  name: scenarioName,
-                  category,
-                  subcategory,
-                  sessions: [],
-                };
-                updatedTasks.push(task);
-              }
-
-              items.push({
-                id: `item_${Date.now()}_${idx}_${Math.random().toString(36).substring(2, 5)}`,
-                taskId: task.id,
-                targetMode: "reps",
-                targetValue: Math.max(1, Math.round(item.playCount || 1)),
-              });
-            }
-
-            if (items.length > 0) {
-              const existingIdx = updatedPlaylists.findIndex(
-                (p) => p.name.trim().toLowerCase() === cleanName.toLowerCase()
-              );
-              if (existingIdx >= 0) {
-                const existing = updatedPlaylists[existingIdx];
-                const refreshedItems = items.map((newItem, i) => {
-                  const existingItem = existing.items[i];
-                  return {
-                    ...newItem,
-                    targetMode: existingItem?.targetMode ?? newItem.targetMode,
-                    targetValue: existingItem?.targetValue ?? newItem.targetValue,
-                  };
-                });
-                updatedPlaylists[existingIdx] = {
-                  ...existing,
-                  items: refreshedItems,
-                };
-              } else {
-                updatedPlaylists.push({
-                  id: `pl_${Date.now()}_${updatedPlaylists.length}_${Math.random().toString(36).substring(2, 6)}`,
-                  name: cleanName,
-                  items,
-                  createdAt: new Date().toISOString(),
-                });
-                importedCount++;
-              }
-            }
-          }
-
-          return {
-            ...prev,
-            tasks: updatedTasks,
-            playlists: updatedPlaylists,
-            activeTaskId: prev.activeTaskId ?? (updatedTasks[0]?.id ?? null),
-          };
-        });
-
-        if (importedCount > 0) {
-          showToast(t("toast.gamePlaylistsImported", { n: importedCount }), "success");
+        if (imported > 0) {
+          showToast(t("toast.gamePlaylistsImported", { n: imported }), "success");
         } else if (manual) {
           showToast(t("toast.noNewGamePlaylists"), "info");
         }
-
-        return { imported: importedCount, total: rawPlaylists.length };
+        return { imported, total };
       } catch (err) {
         console.error("Erro ao sincronizar playlists do KovaaK:", err);
         return { imported: 0, total: 0 };
       }
     },
-    [updateAppData, showToast, t]
+    [showToast, t]
   );
 
-  const initialSyncDone = useRef(false);
-
+  // Ajustes de uma vez por abertura do app, depois do primeiro snapshot.
+  const startupDone = useRef(false);
   useEffect(() => {
-    void refreshData().then(() => {
-      if (!initialSyncDone.current) {
-        initialSyncDone.current = true;
-        void syncGamePlaylists(false);
-      }
-    });
-  }, [refreshData, syncGamePlaylists]);
-
-  const activeTask = useMemo(
-    () => appData.tasks.find((t) => t.id === appData.activeTaskId) ?? null,
-    [appData]
-  );
+    if (!loaded || startupDone.current) return;
+    startupDone.current = true;
+    void fixupTaskCategories().then(() => syncGamePlaylists(false));
+  }, [loaded, fixupTaskCategories, syncGamePlaylists]);
 
   const setActiveTaskId = useCallback(
     (id: string) => {
-      void updateAppData((prev) => ({ ...prev, activeTaskId: id }));
+      if (dataStore.getSnapshot().data.activeTaskId === id) return;
+      bridge.setActiveTask(id).catch(reportError);
     },
-    [updateAppData]
+    [reportError]
   );
 
   const sendNotificationHelper = useCallback(async (title: string, body: string) => {
@@ -316,72 +295,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const eventPlaylistName = event.playlist_name.trim();
         if (!eventPlaylistName) return;
 
-        let targetPlaylist: Playlist | null =
-          (appDataRef.current.playlists || []).find(
-            (p) => p.name.trim().toLowerCase() === eventPlaylistName.toLowerCase()
-          ) ?? null;
-
-        if (!targetPlaylist && event.scenario_list && event.scenario_list.length > 0) {
-          await updateAppData((prev) => {
-            const currentPlaylists = prev.playlists ?? [];
-            const existing = currentPlaylists.find(
-              (p) => p.name.trim().toLowerCase() === eventPlaylistName.toLowerCase()
-            );
-            if (existing) {
-              targetPlaylist = existing;
-              return prev;
-            }
-
-            const updatedTasks = [...prev.tasks];
-            const items: PlaylistItem[] = [];
-
-            for (let idx = 0; idx < event.scenario_list.length; idx++) {
-              const sItem = event.scenario_list[idx];
-              const scenarioName = sItem.scenario_name.trim();
-              if (!scenarioName) continue;
-
-              let task = updatedTasks.find(
-                (t) => t.name.trim().toLowerCase() === scenarioName.toLowerCase()
-              );
-              if (!task) {
-                const { category, subcategory } = categorizeScenario(scenarioName);
-                task = {
-                  id: `task_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-                  name: scenarioName,
-                  category,
-                  subcategory,
-                  sessions: [],
-                };
-                updatedTasks.push(task);
-              }
-
-              items.push({
-                id: `item_${Date.now()}_${idx}_${Math.random().toString(36).substring(2, 5)}`,
-                taskId: task.id,
-                targetMode: "reps",
-                targetValue: Math.max(1, Math.round(sItem.play_count || 1)),
-              });
-            }
-
-            if (items.length === 0) return prev;
-
-            const newPl: Playlist = {
-              id: `pl_${Date.now()}_${Math.random().toString(36).substring(2, 5)}`,
-              name: eventPlaylistName,
-              items,
-              createdAt: new Date().toISOString(),
-            };
-
-            targetPlaylist = newPl;
-
-            return {
-              ...prev,
-              tasks: updatedTasks,
-              playlists: [...currentPlaylists, newPl],
-              activeTaskId: prev.activeTaskId ?? (updatedTasks[0]?.id ?? null),
-            };
-          });
-        }
+        // Procura no snapshot ATUAL; se não existir, cria via comandos e lê o resultado
+        // do snapshot depois de esperar a revisão da própria escrita.
+        const targetPlaylist = await ensureDetectedPlaylist(playlistSyncApi, {
+          name: eventPlaylistName,
+          items: (event.scenario_list ?? []).map((item) => ({
+            scenarioName: item.scenario_name,
+            playCount: item.play_count,
+          })),
+        });
 
         if (!targetPlaylist) return;
 
@@ -418,44 +340,52 @@ export function AppProvider({ children }: { children: ReactNode }) {
         console.error("Erro ao sincronizar playlist ativa do KovaaK:", err);
       }
     },
-    [updateAppData, sendNotificationHelper]
+    [sendNotificationHelper]
   );
 
   useEffect(() => {
-    let unlisten: (() => void) | undefined;
-    let isMounted = true;
+    let cancelled = false;
+    let un: (() => void) | undefined;
 
-    const setupListeners = async () => {
-      unlisten = await listenKovaakPlaylistActive((event: DetectedPlaylistEvent) => {
-        if (!isMounted) return;
-        void handleDetectedPlaylist(event);
-      });
+    listenKovaakPlaylistActive((event: DetectedPlaylistEvent) => {
+      if (cancelled) return;
+      void handleDetectedPlaylist(event);
+    }).then((fn) => {
+      if (cancelled) fn();
+      else un = fn;
+    });
 
-      try {
-        const initialPip = await getPlaylistInProgress();
-        if (isMounted && initialPip && initialPip.playlist_name) {
+    void getPlaylistInProgress()
+      .then((initialPip) => {
+        if (!cancelled && initialPip && initialPip.playlist_name) {
           void handleDetectedPlaylist(initialPip);
         }
-      } catch {}
-    };
-
-    void setupListeners();
+      })
+      .catch(() => {});
 
     return () => {
-      isMounted = false;
-      unlisten?.();
+      cancelled = true;
+      un?.();
     };
   }, [handleDetectedPlaylist]);
 
   const loadDemoData = useCallback(async () => {
-    await saveData(cloneAppData(SAMPLE_DATA));
-    showToast(t("toast.demoLoaded"), "success");
-  }, [saveData, showToast, t]);
+    try {
+      await bridge.replaceAllData(SAMPLE_DATA, "demo");
+      showToast(t("toast.demoLoaded"), "success");
+    } catch (err) {
+      reportError(err);
+    }
+  }, [showToast, reportError, t]);
 
   const clearAllData = useCallback(async () => {
-    await updateAppData(() => ({ activeTaskId: null, tasks: [], playlists: [] }));
-    showToast(t("toast.dataCleared"), "info");
-  }, [updateAppData, showToast, t]);
+    try {
+      await bridge.replaceAllData({ activeTaskId: null, tasks: [], playlists: [] }, "clear");
+      showToast(t("toast.dataCleared"), "info");
+    } catch (err) {
+      reportError(err);
+    }
+  }, [showToast, reportError, t]);
 
   const exportData = useCallback(() => {
     const dataStr =
@@ -472,129 +402,120 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const importData = useCallback(
     async (file: File) => {
-      const text = await file.text();
-      const parsed = await importJsonBackup(text);
-      recalculateAllTasks(parsed.tasks);
-      setAppData(parsed);
-      showToast(t("toast.imported"), "success");
+      try {
+        const text = await file.text();
+        await bridge.importJsonBackup(text);
+        showToast(t("toast.imported"), "success");
+      } catch (err) {
+        reportError(err);
+      }
     },
-    [showToast, t]
+    [showToast, reportError, t]
   );
 
   const createTask = useCallback(
     async (name: string, category: string, subcategory: string) => {
-      const newTask: Task = {
-        id: `task_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-        name: name.trim(),
-        category,
-        subcategory,
-        sessions: [],
-      };
-      await updateAppData((prev) => ({
-        ...prev,
-        tasks: [...prev.tasks, newTask],
-        activeTaskId: newTask.id,
-      }));
-      showToast(t("toast.taskCreated", { name: newTask.name }), "success");
+      try {
+        await bridge.createTask(name, category, subcategory);
+        showToast(t("toast.taskCreated", { name: name.trim() }), "success");
+      } catch (err) {
+        reportError(err);
+      }
     },
-    [updateAppData, showToast, t]
+    [showToast, reportError, t]
   );
 
   const deleteCurrentTask = useCallback(async () => {
-    if (!appData.activeTaskId) return;
-    await updateAppData((prev) => ({
-      ...prev,
-      tasks: prev.tasks.filter((t) => t.id !== prev.activeTaskId),
-      activeTaskId:
-        prev.tasks.filter((t) => t.id !== prev.activeTaskId)[0]?.id ?? null,
-    }));
-    showToast(t("toast.taskRemoved"), "info");
-  }, [appData.activeTaskId, updateAppData, showToast, t]);
+    const activeId = dataStore.getSnapshot().data.activeTaskId;
+    if (!activeId) return;
+    try {
+      await bridge.deleteTask(activeId);
+      showToast(t("toast.taskRemoved"), "info");
+    } catch (err) {
+      reportError(err);
+    }
+  }, [showToast, reportError, t]);
 
   const addManualSessions = useCallback(
     async (date: string, sens: number, scores: number[]) => {
-      if (!appData.activeTaskId) {
+      const activeId = dataStore.getSnapshot().data.activeTaskId;
+      if (!activeId) {
         showToast(t("toast.selectTask"), "error");
         return;
       }
-      await updateAppData((prev) => {
-        const next = cloneAppData(prev);
-        const task = next.tasks.find((t) => t.id === next.activeTaskId);
-        if (!task) return prev;
-
-        scores.forEach((score, index) => {
-          task.sessions.push({
-            id: `sess_${Date.now()}_${index}_${Math.random().toString(36).slice(2, 7)}`,
-            date,
-            sens,
-            pb: score,
-            threshold: 0,
-          });
-        });
-        recalculateAllTaskThresholds(task);
-        return next;
-      });
-      showToast(t("toast.sessionsAdded", { n: scores.length }), "success");
+      try {
+        await bridge.addManualSessions(activeId, date, sens, scores);
+        showToast(t("toast.sessionsAdded", { n: scores.length }), "success");
+      } catch (err) {
+        reportError(err);
+      }
     },
-    [appData.activeTaskId, updateAppData, showToast, t]
+    [showToast, reportError, t]
   );
 
   const deleteSession = useCallback(
     async (sessionId: string) => {
-      if (!appData.activeTaskId) return;
-      await updateAppData((prev) => {
-        const next = cloneAppData(prev);
-        const task = next.tasks.find((t) => t.id === next.activeTaskId);
-        if (!task) return prev;
-        task.sessions = task.sessions.filter((s) => s.id !== sessionId);
-        recalculateAllTaskThresholds(task);
-        return next;
-      });
-      showToast(t("toast.sessionDeleted"), "info");
+      const activeId = dataStore.getSnapshot().data.activeTaskId;
+      if (!activeId) return;
+      try {
+        await bridge.deleteSession(activeId, sessionId);
+        showToast(t("toast.sessionDeleted"), "info");
+      } catch (err) {
+        reportError(err);
+      }
     },
-    [appData.activeTaskId, updateAppData, showToast, t]
+    [showToast, reportError, t]
   );
 
   const createPlaylist = useCallback(
     async (name: string, items: PlaylistItem[] = []): Promise<Playlist> => {
-      const newPlaylist: Playlist = {
-        id: `pl_${Date.now()}`,
+      const draft: Playlist = {
+        id: "", // o Rust gera o id
         name: name.trim(),
         items,
-        createdAt: new Date().toISOString(),
+        createdAt: "",
       };
-      await updateAppData((prev) => ({
-        ...prev,
-        playlists: [...(prev.playlists ?? []), newPlaylist],
-      }));
-      showToast(t("toast.playlistCreated", { name: newPlaylist.name }), "success");
-      return newPlaylist;
+      try {
+        const res = await bridge.upsertPlaylist(draft);
+        await dataStore.waitForRevision(res.revision);
+        const created =
+          dataStore.getSnapshot().data.playlists.find((p) => p.id === res.playlistId) ?? {
+            ...draft,
+            id: res.playlistId,
+          };
+        showToast(t("toast.playlistCreated", { name: created.name }), "success");
+        return created;
+      } catch (err) {
+        reportError(err);
+        throw err;
+      }
     },
-    [updateAppData, showToast, t]
+    [showToast, reportError, t]
   );
 
   const updatePlaylist = useCallback(
     async (playlist: Playlist) => {
-      await updateAppData((prev) => ({
-        ...prev,
-        playlists: (prev.playlists ?? []).map((p) =>
-          p.id === playlist.id ? playlist : p
-        ),
-      }));
-      showToast(t("toast.playlistUpdated"), "success");
+      try {
+        // Edição pelo usuário: a playlist deixa de ser gerenciada pelo sync dos jogos.
+        await bridge.upsertPlaylist({ ...playlist, source: "user" });
+        showToast(t("toast.playlistUpdated"), "success");
+      } catch (err) {
+        reportError(err);
+      }
     },
-    [updateAppData, showToast, t]
+    [showToast, reportError, t]
   );
 
   const deletePlaylist = useCallback(
     async (id: string) => {
-      await updateAppData((prev) => ({
-        ...prev,
-        playlists: (prev.playlists ?? []).filter((p) => p.id !== id),
-      }));
-      showToast(t("toast.playlistDeleted"), "info");
+      try {
+        await bridge.deletePlaylist(id);
+        showToast(t("toast.playlistDeleted"), "info");
+      } catch (err) {
+        reportError(err);
+      }
     },
-    [updateAppData, showToast, t]
+    [showToast, reportError, t]
   );
 
   const value: AppContextValue = {
@@ -603,9 +524,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     toast,
     showToast,
     setActiveTaskId,
-    refreshData,
-    saveData,
-    updateAppData,
+    fixupTaskCategories,
     loadDemoData,
     clearAllData,
     exportData,
@@ -629,5 +548,3 @@ export function useApp() {
   if (!ctx) throw new Error("useApp must be used within AppProvider");
   return ctx;
 }
-
-

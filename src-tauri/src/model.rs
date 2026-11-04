@@ -44,6 +44,13 @@ pub struct Playlist {
     pub created_at: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub auto_advance_mode: Option<String>,
+    /// "user" | "kovaak" | "aimlab" (T2.5: o sync só mexe em playlists com `source != "user"`).
+    #[serde(default = "default_playlist_source")]
+    pub source: String,
+}
+
+pub fn default_playlist_source() -> String {
+    "user".to_string()
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -325,6 +332,13 @@ mod serde_default_tests {
         assert!(parsed.randomizer.enabled);
         assert_eq!(parsed.randomizer.range_mode, "cm360");
         assert_eq!(parsed.randomizer.mouse_dpi, 800.0);
+    }
+
+    #[test]
+    fn playlist_without_source_defaults_to_user() {
+        let json = r#"{"id":"p1","name":"Warmup","items":[],"createdAt":"2026-10-10"}"#;
+        let parsed: Playlist = serde_json::from_str(json).expect("legacy playlist must parse");
+        assert_eq!(parsed.source, "user");
     }
 
     #[test]

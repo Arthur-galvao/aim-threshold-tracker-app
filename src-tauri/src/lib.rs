@@ -1,3 +1,5 @@
+mod data_commands;
+mod data_store;
 mod kovaaak;
 mod model;
 mod parser;
@@ -8,16 +10,18 @@ mod aimlab;
 pub mod sampler;
 
 use std::collections::{HashMap, HashSet};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use tauri::menu::{MenuBuilder, MenuItemBuilder, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Emitter, Manager, State, WindowEvent};
 
-use model::{AppData, AppSettings, ImportStats, RandomizerSettings, RandomizerState, WatcherStatus};
+use model::{AppSettings, ImportStats, RandomizerSettings, RandomizerState, WatcherStatus};
 
 pub struct AppState {
-    pub data: Mutex<AppData>,
+    /// Única fonte da verdade do `AppData` (Plano 02). Toda mutação via `data_commands::mutate`.
+    pub data: Arc<data_store::DataCore>,
+    pub persister: data_store::Persister,
     pub settings: Mutex<AppSettings>,
     pub watcher: Mutex<Option<watcher::WatcherHandle>>,
     pub emitted: Mutex<HashSet<String>>,
@@ -27,44 +31,6 @@ pub struct AppState {
     pub scenario_centers: Mutex<HashMap<String, f64>>,
     pub upcoming_scenario: Mutex<Option<String>>,
     pub load_report: Mutex<Option<storage::LoadReport>>,
-}
-
-#[tauri::command]
-fn load_app_data(state: State<'_, AppState>) -> Result<AppData, String> {
-    Ok(state.data.lock().unwrap().clone())
-}
-
-#[tauri::command]
-fn save_app_data(
-    app: AppHandle,
-    state: State<'_, AppState>,
-    data: AppData,
-) -> Result<(), String> {
-    storage::save_app_data(&app, &data)?;
-    *state.data.lock().unwrap() = data;
-    Ok(())
-}
-
-#[tauri::command]
-fn import_json_backup(
-    app: AppHandle,
-    state: State<'_, AppState>,
-    json: String,
-) -> Result<AppData, String> {
-    let raw: serde_json::Value = serde_json::from_str(&json).map_err(|e| format!("JSON inválido: {e}"))?;
-    if !raw.is_object() || !raw.get("tasks").is_some_and(|t| t.is_array()) {
-        return Err("invalid_backup".to_string());
-    }
-    let mut data: AppData = serde_json::from_value(raw).map_err(|e| format!("JSON inválido: {e}"))?;
-    storage::sanitize_app_data(&mut data);
-
-    let dir = storage::data_dir(&app)?;
-    let current = state.data.lock().unwrap().clone();
-    storage::write_pre_import_backup(&dir, &current)?;
-
-    storage::save_app_data(&app, &data)?;
-    *state.data.lock().unwrap() = data.clone();
-    Ok(data)
 }
 
 #[tauri::command]
@@ -491,8 +457,17 @@ pub fn run() {
 
             let is_randomizer_enabled = settings.randomizer.enabled;
 
+            let core = Arc::new(data_store::DataCore::new(data));
+            let persist_handle = app.handle().clone();
+            let persister = data_store::Persister::spawn(
+                core.clone(),
+                data_store::PERSIST_DEBOUNCE,
+                move |snapshot| storage::save_app_data(&persist_handle, snapshot),
+            );
+
             app.manage(AppState {
-                data: Mutex::new(data),
+                data: core,
+                persister,
                 settings: Mutex::new(settings),
                 watcher: Mutex::new(None),
                 emitted: Mutex::new(HashSet::new()),
@@ -602,9 +577,18 @@ pub fn run() {
             }
         })
         .invoke_handler(tauri::generate_handler![
-            load_app_data,
-            save_app_data,
-            import_json_backup,
+            data_commands::get_app_data,
+            data_commands::create_task,
+            data_commands::update_task_meta,
+            data_commands::delete_task,
+            data_commands::set_active_task,
+            data_commands::add_manual_sessions,
+            data_commands::delete_session,
+            data_commands::upsert_playlist,
+            data_commands::delete_playlist,
+            data_commands::sync_game_playlists,
+            data_commands::replace_all_data,
+            data_commands::import_json_backup,
             get_load_report,
             detect_kovaak_path,
             get_kovaak_playlists,
@@ -634,6 +618,7 @@ pub fn run() {
         .expect("erro ao construir o aplicativo Tauri")
         .run(|app, event| {
             if let tauri::RunEvent::Exit = event {
+                data_commands::flush_now(app);
                 randomizer::restore_on_exit(app);
             }
         });
