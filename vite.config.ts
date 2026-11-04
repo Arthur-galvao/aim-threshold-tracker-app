@@ -17,10 +17,19 @@ export default defineConfig({
       ignored: ["**/src-tauri/target/**", "**/node_modules/**"],
     },
   },
-  envPrefix: ["VITE_", "TAURI_"],
+  envPrefix: ["VITE_", "TAURI_ENV_"],
   build: {
-    target: process.env.TAURI_PLATFORM === "windows" ? "chrome105" : "safari13",
-    minify: !process.env.TAURI_DEBUG ? "esbuild" : false,
-    sourcemap: !!process.env.TAURI_DEBUG,
+    // Tauri 2 WebView2 (Windows) is evergreen Chromium; fixed target.
+    target: "chrome120",
+    minify: process.env.TAURI_ENV_DEBUG ? false : "esbuild",
+    sourcemap: !!process.env.TAURI_ENV_DEBUG,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          chart: ["chart.js", "react-chartjs-2"],
+          motion: ["motion"],
+        },
+      },
+    },
   },
 });

@@ -139,11 +139,6 @@ pub fn is_aimlab_replay_json(path: &Path) -> bool {
         .unwrap_or(false)
 }
 
-#[allow(dead_code)]
-pub fn plan_roll(enabled: bool, dedupe_hit: bool) -> bool {
-    enabled && !dedupe_hit
-}
-
 fn process_new_aimlab_replay(app: &AppHandle, path: &Path) -> Result<bool, String> {
     let state: State<AppState> = app.state();
     let file_name = path
@@ -635,14 +630,6 @@ mod tests {
             assert!(set.insert(id), "Colisão detectada na geração de IDs únicos");
         }
         assert_eq!(set.len(), 10_000);
-    }
-
-    #[test]
-    fn test_plan_roll_decisions() {
-        assert!(plan_roll(true, false));
-        assert!(!plan_roll(true, true), "Dedupe hit prevents re-roll");
-        assert!(!plan_roll(false, false), "Disabled randomizer prevents roll");
-        assert!(!plan_roll(false, true));
     }
 
     #[test]
