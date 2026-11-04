@@ -4,8 +4,8 @@ use serde::{Deserialize, Serialize};
 pub const DEFAULT_CATEGORY: &str = "Click Timing";
 pub const DEFAULT_SUBCATEGORY: &str = "Precision";
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
 pub struct Session {
     pub id: String,
     pub date: String,
@@ -16,8 +16,8 @@ pub struct Session {
     pub source_file: Option<String>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
 pub struct Task {
     pub id: String,
     pub name: String,
@@ -26,8 +26,8 @@ pub struct Task {
     pub sessions: Vec<Session>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
 pub struct PlaylistItem {
     pub id: String,
     pub task_id: String,
@@ -35,8 +35,8 @@ pub struct PlaylistItem {
     pub target_value: f64,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
 pub struct Playlist {
     pub id: String,
     pub name: String,
@@ -78,7 +78,7 @@ fn default_predictor_profile() -> String {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(default, rename_all = "camelCase")]
 pub struct RandomizerSettings {
     pub enabled: bool,
     pub base_sens_cm: f64,
@@ -311,4 +311,26 @@ pub struct GamePlaylist {
     pub scenario_list: Vec<GamePlaylistItem>,
     #[serde(default)]
     pub description: Option<String>,
+}
+
+#[cfg(test)]
+mod serde_default_tests {
+    use super::*;
+
+    #[test]
+    fn partial_randomizer_does_not_reset_settings() {
+        let json = r#"{"kovaak_stats_path":"C:\\stats","randomizer":{"enabled":true}}"#;
+        let parsed: AppSettings = serde_json::from_str(json).expect("partial randomizer must parse");
+        assert_eq!(parsed.kovaak_stats_path.as_deref(), Some("C:\\stats"));
+        assert!(parsed.randomizer.enabled);
+        assert_eq!(parsed.randomizer.range_mode, "cm360");
+        assert_eq!(parsed.randomizer.mouse_dpi, 800.0);
+    }
+
+    #[test]
+    fn session_without_pb_defaults_to_zero() {
+        let json = r#"{"id":"s1","date":"2026-10-10","sens":40.0,"threshold":0.0}"#;
+        let parsed: Session = serde_json::from_str(json).expect("session without pb must parse");
+        assert_eq!(parsed.pb, 0.0);
+    }
 }
