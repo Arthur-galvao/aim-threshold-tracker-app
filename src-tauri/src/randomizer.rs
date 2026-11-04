@@ -208,15 +208,6 @@ pub fn generate_next_sens<R: Rng>(
 
 use crate::storage::{self, RawAccelBackup};
 
-pub fn atomic_write(path: &Path, content: &str) -> Result<(), String> {
-    let tmp_path = path.with_extension("tmp");
-    fs::write(&tmp_path, content)
-        .map_err(|e| format!("Falha ao escrever arquivo temporário: {e}"))?;
-    fs::rename(&tmp_path, path)
-        .map_err(|e| format!("Falha ao substituir arquivo final: {e}"))?;
-    Ok(())
-}
-
 pub type RawaccelLiveValues = (Option<f64>, Option<f64>, Option<f64>);
 
 pub fn parse_rawaccel_live_values(json_content: &str) -> Result<RawaccelLiveValues, String> {
@@ -403,7 +394,7 @@ pub fn update_and_apply_scale(app: &AppHandle, rawaccel_dir: &Path, mult: f64, m
         .map_err(|e| format!("Falha ao ler settings.json: {e}"))?;
 
     let updated_content = apply_scale_to_rawaccel_json(&content, &backup, mouse_dpi, mult)?;
-    atomic_write(&settings_path, &updated_content)?;
+    storage::atomic_write(&settings_path, updated_content.as_bytes())?;
 
     backup.last_written_output_dpi = Some((mouse_dpi * mult * 100.0).round() / 100.0);
     backup.last_written_scale = Some(mult);
@@ -428,7 +419,7 @@ pub fn restore_from_backup(app: &AppHandle, rawaccel_dir: &Path) -> Result<(), S
         }
     };
 
-    atomic_write(&settings_path, &updated_content)?;
+    storage::atomic_write(&settings_path, updated_content.as_bytes())?;
     run_writer(rawaccel_dir)
 }
 
@@ -778,7 +769,7 @@ mod tests {
         let target_file = tmp_dir.join("test_settings.json");
 
         let test_content = "{\"hello\":\"world\"}";
-        atomic_write(&target_file, test_content).expect("atomic write should succeed");
+        storage::atomic_write(&target_file, test_content.as_bytes()).expect("atomic write should succeed");
 
         let read_back = std::fs::read_to_string(&target_file).expect("should read target file");
         assert_eq!(read_back, test_content);

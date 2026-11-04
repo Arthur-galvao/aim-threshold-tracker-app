@@ -26,6 +26,7 @@ pub struct AppState {
     pub roll_lock: Mutex<()>,
     pub scenario_centers: Mutex<HashMap<String, f64>>,
     pub upcoming_scenario: Mutex<Option<String>>,
+    pub load_report: Mutex<Option<storage::LoadReport>>,
 }
 
 #[tauri::command]
@@ -50,10 +51,25 @@ fn import_json_backup(
     state: State<'_, AppState>,
     json: String,
 ) -> Result<AppData, String> {
-    let data: AppData = serde_json::from_str(&json).map_err(|e| format!("JSON inválido: {e}"))?;
+    let raw: serde_json::Value = serde_json::from_str(&json).map_err(|e| format!("JSON inválido: {e}"))?;
+    if !raw.is_object() || !raw.get("tasks").is_some_and(|t| t.is_array()) {
+        return Err("invalid_backup".to_string());
+    }
+    let mut data: AppData = serde_json::from_value(raw).map_err(|e| format!("JSON inválido: {e}"))?;
+    storage::sanitize_app_data(&mut data);
+
+    let dir = storage::data_dir(&app)?;
+    let current = state.data.lock().unwrap().clone();
+    storage::write_pre_import_backup(&dir, &current)?;
+
     storage::save_app_data(&app, &data)?;
     *state.data.lock().unwrap() = data.clone();
     Ok(data)
+}
+
+#[tauri::command]
+fn get_load_report(state: State<'_, AppState>) -> Result<Option<storage::LoadReport>, String> {
+    Ok(state.load_report.lock().unwrap().clone())
 }
 
 #[tauri::command]
@@ -443,8 +459,24 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
         .setup(|app| {
-            let mut data = storage::load_app_data(app.handle());
-            let mut settings = storage::load_settings(app.handle());
+            let (mut data, data_report) = storage::load_app_data(app.handle());
+            let (mut settings, settings_report) = storage::load_settings(app.handle());
+
+            if let Ok(dir) = storage::data_dir(app.handle()) {
+                if data_report.kind == "loaded" {
+                    if let Err(e) = storage::rotate_backups(&dir, storage::APP_DATA_FILE, storage::APP_DATA_BACKUPS) {
+                        eprintln!("[storage] falha ao rotacionar backups de app_data: {e}");
+                    }
+                }
+                if settings_report.kind == "loaded" {
+                    if let Err(e) = storage::rotate_backups(&dir, storage::SETTINGS_FILE, storage::SETTINGS_BACKUPS) {
+                        eprintln!("[storage] falha ao rotacionar backups de settings: {e}");
+                    }
+                }
+            }
+            if settings_report.kind == "recovered" {
+                eprintln!("[storage] settings.json recuperado: {settings_report:?}");
+            }
 
             if watcher::migrate_existing_sensitivities(&mut data, settings.kovaak_stats_path.as_deref(), settings.mouse_dpi) {
                 let _ = storage::save_app_data(app.handle(), &data);
@@ -487,6 +519,7 @@ pub fn run() {
                 roll_lock: Mutex::new(()),
                 scenario_centers: Mutex::new(HashMap::new()),
                 upcoming_scenario: Mutex::new(None),
+                load_report: Mutex::new(Some(data_report)),
             });
 
             if is_randomizer_enabled && avail {
@@ -590,6 +623,7 @@ pub fn run() {
             load_app_data,
             save_app_data,
             import_json_backup,
+            get_load_report,
             detect_kovaak_path,
             get_kovaak_playlists,
             get_playlist_in_progress,
