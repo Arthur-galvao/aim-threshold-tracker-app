@@ -1,0 +1,14 @@
+{
+  "pt": {
+    "dialog.exportTitle": "Exportar backup",
+    "tray.open": "Abrir Aim Threshold Tracker",
+    "tray.quit": "Sair",
+    "migration.progress": "Atualizando histórico: {done}/{total}"
+  },
+  "en": {
+    "dialog.exportTitle": "Export backup",
+    "tray.open": "Open Aim Threshold Tracker",
+    "tray.quit": "Quit",
+    "migration.progress": "Updating history: {done}/{total}"
+  }
+}

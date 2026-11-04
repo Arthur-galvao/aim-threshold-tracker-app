@@ -6,9 +6,10 @@ import { WatcherProvider, useWatcher } from "@/hooks/useKovaakWatcher";
 import { RandomizerProvider, useSensRandomizer } from "@/hooks/useSensRandomizer";
 import { useScenarioCentersSync } from "@/hooks/useScenarioCentersSync";
 import { useWindowActivityGuard } from "@/hooks/useWindowActivityGuard";
+import { useTrayLabels } from "@/hooks/useTrayLabels";
 import { TrackerWorkspaceProvider } from "@/context/TrackerWorkspaceContext";
 import { I18nProvider, useI18n } from "@/lib/i18n";
-import { ToastProvider, useToast } from "@/components/ui";
+import { ToastProvider, useToast, MigrationProgress } from "@/components/ui";
 import { AppShell, type NavTab } from "@/components/shell";
 import { DashboardView } from "@/components/views/dashboard";
 import { RandomizerView } from "@/components/views/randomizer";
@@ -26,6 +27,7 @@ import { applyTheme, getStoredTheme, type AppTheme } from "@/lib/theme";
 
 function AppContent() {
   useWindowActivityGuard();
+  useTrayLabels();
   const { t } = useI18n();
   const { showToast } = useToast();
 
@@ -237,6 +239,7 @@ function AppContent() {
       />
 
       <RecoveryNotice />
+      <MigrationProgress />
     </AppShell>
   );
 }

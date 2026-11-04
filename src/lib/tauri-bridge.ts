@@ -135,6 +135,28 @@ export async function importJsonBackup(json: string): Promise<RevisionResult> {
   return cmd<RevisionResult>("import_json_backup", { json });
 }
 
+/** Rust grava o snapshot atual dos dados no caminho escolhido (Plano 08, T8.8). */
+export async function exportAppData(path: string): Promise<{ path: string }> {
+  if (!isTauri()) return { path };
+  return cmd<{ path: string }>("export_app_data", { path });
+}
+
+/** Rótulos do menu da bandeja (Plano 08, T8.6). Sem Tauri é no-op. */
+export async function setTrayLabels(open: string, quit: string): Promise<void> {
+  if (!isTauri()) return;
+  await cmd<null>("set_tray_labels", { open, quit });
+}
+
+/** Progresso do backfill de estatísticas a partir dos CSVs antigos no primeiro boot pós-update. */
+export function onMigrationProgress(
+  callback: (progress: { done: number; total: number }) => void
+): Promise<UnlistenFn> {
+  if (!isTauri()) return Promise.resolve(() => {});
+  return listen<{ done: number; total: number }>("migration_progress", (event) =>
+    callback(event.payload)
+  );
+}
+
 export async function detectKovaakPath(): Promise<string | null> {
   if (!isTauri()) return null;
   return invoke<string | null>("detect_kovaak_path");

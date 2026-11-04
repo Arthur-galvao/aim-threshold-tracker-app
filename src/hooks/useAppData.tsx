@@ -17,6 +17,7 @@ import type {
   ToastState,
   DetectedPlaylistEvent,
 } from "@/lib/types";
+import { save } from "@tauri-apps/plugin-dialog";
 import { SAMPLE_DATA } from "@/lib/sample-data";
 import * as bridge from "@/lib/tauri-bridge";
 import {
@@ -358,17 +359,38 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [showToast, reportError, t]);
 
   const exportData = useCallback(() => {
-    const dataStr =
-      "data:text/json;charset=utf-8," +
-      encodeURIComponent(JSON.stringify(appData, null, 2));
-    const anchor = document.createElement("a");
-    anchor.href = dataStr;
-    anchor.download = `aim_thresholds_backup_${new Date().toISOString().split("T")[0]}.json`;
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
-    showToast(t("toast.exported"), "success");
-  }, [appData, showToast, t]);
+    const fileName = `aim_thresholds_backup_${new Date().toISOString().split("T")[0]}.json`;
+    const inTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+
+    if (!inTauri) {
+      const dataStr =
+        "data:text/json;charset=utf-8," +
+        encodeURIComponent(JSON.stringify(appData, null, 2));
+      const anchor = document.createElement("a");
+      anchor.href = dataStr;
+      anchor.download = fileName;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      showToast(t("toast.exported"), "success");
+      return;
+    }
+
+    void (async () => {
+      try {
+        const path = await save({
+          defaultPath: fileName,
+          title: t("dialog.exportTitle" as string as Key),
+          filters: [{ name: "JSON", extensions: ["json"] }],
+        });
+        if (!path) return;
+        await bridge.exportAppData(path);
+        showToast(t("toast.exported"), "success");
+      } catch (err) {
+        reportError(err);
+      }
+    })();
+  }, [appData, showToast, reportError, t]);
 
   const importData = useCallback(
     async (file: File) => {
