@@ -1,6 +1,7 @@
 import { ChartLineUp, Eye, EyeSlash } from "@phosphor-icons/react";
 import { Segmented } from "@/components/ui/Segmented";
 import { useI18n } from "@/lib/i18n";
+import { useAdvancedStats } from "@/hooks/useAdvancedStats";
 import { cn } from "@/lib/utils";
 
 export type ChartPeriod = "7D" | "30D" | "all";
@@ -27,6 +28,7 @@ export function ChartToolbar({
   onToggleMu,
 }: ChartToolbarProps) {
   const { t } = useI18n();
+  const advanced = useAdvancedStats();
 
   return (
     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 select-none">
@@ -36,9 +38,9 @@ export function ChartToolbar({
         </span>
         <div>
           <h2 className="text-[13px] font-semibold text-text-secondary">
-            {t("skill.chart.title")}
+            {advanced ? t("skill.chart.title") : t("simple.chart.title")}
           </h2>
-          <p className="text-xs text-text-faint">{t("skill.chart.subtitle")}</p>
+          <p className="text-xs text-text-faint">{advanced ? t("skill.chart.subtitle") : t("simple.chart.subtitle")}</p>
         </div>
       </div>
 
@@ -57,7 +59,7 @@ export function ChartToolbar({
             title={t("chart.toggleSeries")}
           >
             {showTarget ? <Eye size={13} /> : <EyeSlash size={13} />}
-            <span>{t("skill.series.target")}</span>
+            <span>{advanced ? t("skill.series.target") : t("simple.series.target")}</span>
           </button>
 
           <button
@@ -72,7 +74,7 @@ export function ChartToolbar({
             title={t("chart.toggleSeries")}
           >
             {showPB ? <Eye size={13} /> : <EyeSlash size={13} />}
-            <span>{t("skill.series.pb")}</span>
+            <span>{advanced ? t("skill.series.pb") : t("simple.series.best")}</span>
           </button>
 
           <button
@@ -87,7 +89,7 @@ export function ChartToolbar({
             title={t("chart.toggleSeries")}
           >
             {showMu ? <Eye size={13} /> : <EyeSlash size={13} />}
-            <span>{t("skill.series.mu")}</span>
+            <span>{advanced ? t("skill.series.mu") : t("simple.series.level")}</span>
           </button>
         </div>
 

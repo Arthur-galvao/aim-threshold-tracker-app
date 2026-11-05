@@ -14,6 +14,9 @@ import { useTrackerWorkspace } from "@/context/TrackerWorkspaceContext";
 import { useApp } from "@/hooks/useAppData";
 import { useAllRuns, useAllSkills } from "@/hooks/useSkill";
 import { useSettings } from "@/hooks/useSettings";
+import { useAdvancedStats } from "@/hooks/useAdvancedStats";
+import { formatScore } from "@/lib/chart-format";
+import type { WeaknessItem } from "@/lib/skill/weakness";
 import { VISCOSE_CATEGORIES } from "@/lib/viscose";
 import { computeTaskMetrics } from "@/lib/threshold";
 import { groupTrainingSessions } from "@/lib/skill/sessions";
@@ -30,13 +33,23 @@ function signed(v: number, digits = 1): string {
   return v > 0 ? `+${s}` : s;
 }
 
+/** Motivo da fraqueza em palavras simples (chave i18n). */
+function weaknessWhyKey(item: WeaknessItem) {
+  if (item.hitRate14 !== null && item.hitRate14 < 0.35) return "simple.weak.whyLowHit" as const;
+  if (item.trend === "down") return "simple.weak.whyDown" as const;
+  if (item.suggestion === "stress") return "simple.weak.whyStalled" as const;
+  if (item.daysSinceTrained === null || item.daysSinceTrained >= 7) return "simple.weak.whyStale" as const;
+  return "simple.weak.whyReview" as const;
+}
+
 export interface ScenarioBreakdownProps {
   className?: string;
   embedded?: boolean;
 }
 
 export function ScenarioBreakdown({ className, embedded = false }: ScenarioBreakdownProps) {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
+  const advanced = useAdvancedStats();
   // Chaves novas vivem em docs/plans/i18n-pending/T7-dashboard.json até a integração (o tipo Key ainda não as conhece).
   const { appData } = useApp();
   const { settings } = useSettings();
@@ -236,7 +249,7 @@ export function ScenarioBreakdown({ className, embedded = false }: ScenarioBreak
           <button
             type="button"
             onClick={() => setWeaknessFocus((prev) => !prev)}
-            title={t("weak.tooltip")}
+            title={advanced ? t("weak.tooltip") : t("simple.weak.tooltip")}
             className={cn(
               "px-2.5 py-0.5 text-[11px] font-medium rounded-full transition-all shrink-0 cursor-pointer press flex items-center gap-1",
               weaknessFocus
@@ -245,7 +258,7 @@ export function ScenarioBreakdown({ className, embedded = false }: ScenarioBreak
             )}
           >
             <TrendDown size={12} weight="bold" />
-            <span>{t("weak.button")}</span>
+            <span>{advanced ? t("weak.button") : t("simple.weak.button")}</span>
           </button>
 
           <div className="h-3.5 w-[1px] bg-edge shrink-0 mx-0.5" />
@@ -271,12 +284,16 @@ export function ScenarioBreakdown({ className, embedded = false }: ScenarioBreak
         </div>
       </div>
 
-      {/* Top 3 weaknesses (T7.10) */}
+      {/* Onde focar (T7.10) */}
       {weaknessFocus && (
         <div className="mb-3 space-y-1.5">
-          <div className="text-[11px] font-semibold text-text-secondary">{t("weak.top3Title")}</div>
+          <div className="text-[11px] font-semibold text-text-secondary">
+            {advanced ? t("weak.top3Title") : t("simple.weak.title")}
+          </div>
           {weaknessTop.length === 0 ? (
-            <p className="text-[11px] text-text-faint">{t("weak.empty")}</p>
+            <p className="text-[11px] text-text-faint">
+              {advanced ? t("weak.empty") : t("simple.weak.empty")}
+            </p>
           ) : (
             <>
               {weaknessTop.map((item) => (
@@ -285,22 +302,34 @@ export function ScenarioBreakdown({ className, embedded = false }: ScenarioBreak
                   className="p-2.5 rounded-control border border-edge glass-inset flex items-center justify-between gap-2"
                 >
                   <div className="min-w-0">
-                    <div className="text-xs font-semibold text-text-main truncate" title={`${item.category} · ${item.subcategory}`}>
-                      {item.category} · {item.subcategory}
+                    <div className="text-xs font-semibold text-text-main" title={`${item.category} · ${item.subcategory}`}>
+                      {advanced
+                        ? `${item.category} · ${item.subcategory}`
+                        : t("simple.weak.item", { sub: item.subcategory, why: t(weaknessWhyKey(item)) })}
                     </div>
-                    <div className="text-[10px] text-text-faint font-mono">
-                      {t("weak.priority", { n: Math.round(item.priority * 100) })} · {t(`skill.trend.${item.trend}`)}
-                      {item.hitRate14 !== null ? ` · ${t("scenario.hit", { v: Math.round(item.hitRate14 * 100) })}` : ""}
-                    </div>
+                    {advanced ? (
+                      <div className="text-[10px] text-text-faint font-mono">
+                        {t("weak.priority", { n: Math.round(item.priority * 100) })} · {t(`skill.trend.${item.trend}`)}
+                        {item.hitRate14 !== null ? ` · ${t("scenario.hit", { v: Math.round(item.hitRate14 * 100) })}` : ""}
+                      </div>
+                    ) : (
+                      item.suggestion && (
+                        <div className="text-[11px] text-text-secondary leading-snug mt-0.5">
+                          {item.suggestion === "refine" ? t("simple.weak.refine") : t("simple.weak.stress")}
+                        </div>
+                      )
+                    )}
                   </div>
-                  {item.suggestion && (
+                  {advanced && item.suggestion && (
                     <Badge variant={item.suggestion === "refine" ? "amber" : "emerald"} className="text-[10px] shrink-0">
                       {item.suggestion === "refine" ? t("weak.refine") : t("weak.stress")}
                     </Badge>
                   )}
                 </div>
               ))}
-              <p className="text-[10px] text-text-faint">{t("weak.variantHint")}</p>
+              <p className="text-[10px] text-text-faint">
+                {advanced ? t("weak.variantHint") : t("simple.weak.variantHint")}
+              </p>
             </>
           )}
         </div>
@@ -330,6 +359,15 @@ export function ScenarioBreakdown({ className, embedded = false }: ScenarioBreak
             const metrics = computeTaskMetrics(task, allSkills.get(task.id));
             const q = quality.get(task.id);
             const hasQualityTrend = q !== undefined && (q.accuracySlope !== null || q.ttkSlope !== null);
+            // Modo simples: no máximo um aviso, em frase.
+            const accuracyDropping = q?.accuracySlope != null && q.accuracySlope < -0.005;
+            const warnKey = q?.possibleAutopilot
+              ? ("simple.scn.warnAutopilot" as const)
+              : accuracyDropping
+                ? ("simple.scn.warnAccuracy" as const)
+                : allSkills.get(task.id)?.trend === "down"
+                  ? ("simple.scn.warnTrend" as const)
+                  : null;
 
             return (
               <div
@@ -378,34 +416,63 @@ export function ScenarioBreakdown({ className, embedded = false }: ScenarioBreak
                   </span>
                 </div>
 
-                <div className="pt-2 border-t border-edge flex items-center justify-between text-xs font-mono">
-                  <div className="flex items-center gap-1 text-score">
-                    <Trophy size={13} weight="regular" />
-                    <span className="font-bold tabular">{pb !== null ? `${pb} pts` : "—"}</span>
+                {advanced ? (
+                  <div className="pt-2 border-t border-edge flex items-center justify-between text-xs font-mono">
+                    <div className="flex items-center gap-1 text-score">
+                      <Trophy size={13} weight="regular" />
+                      <span className="font-bold tabular">{pb !== null ? `${pb} pts` : "—"}</span>
+                    </div>
+                    <div className="flex items-center gap-1 text-emerald">
+                      <ShieldCheck size={13} weight="regular" />
+                      <span className="font-semibold tabular">
+                        {metrics.targetThreshold !== null ? `${metrics.targetThreshold} pts` : "—"}
+                      </span>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-1 text-emerald">
-                    <ShieldCheck size={13} weight="regular" />
-                    <span className="font-semibold tabular">
-                      {metrics.targetThreshold !== null ? `${metrics.targetThreshold} pts` : "—"}
+                ) : (
+                  <div className="pt-2 border-t border-edge flex items-center gap-3 text-xs">
+                    <span className="inline-flex items-center gap-1 text-score">
+                      <Trophy size={13} weight="regular" />
+                      <span className="font-semibold tabular">
+                        {pb !== null
+                          ? metrics.targetThreshold !== null
+                            ? t("simple.scn.line", {
+                                pb: formatScore(pb, lang),
+                                target: formatScore(metrics.targetThreshold, lang),
+                              })
+                            : t("simple.scn.lineNoTarget", { pb: formatScore(pb, lang) })
+                          : "—"}
+                      </span>
                     </span>
                   </div>
-                </div>
+                )}
 
-                {(metrics.hitRate !== null || hasQualityTrend || q?.possibleAutopilot) && (
-                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] font-mono text-text-faint">
-                    {metrics.hitRate !== null && <span>{t("scenario.hit", { v: metrics.hitRate.toFixed(0) })}</span>}
-                    {q?.accuracySlope != null && (
-                      <span>{t("quality.accTrend", { v: signed(q.accuracySlope * 100) })}</span>
-                    )}
-                    {q?.ttkSlope != null && <span>{t("quality.ttkTrend", { v: signed(q.ttkSlope) })}</span>}
-                    {q?.possibleAutopilot && (
-                      <span title={t("quality.autopilotHint")}>
-                        <Badge variant="amber" className="text-[10px]">
-                          {t("quality.autopilot")}
-                        </Badge>
-                      </span>
-                    )}
-                  </div>
+                {advanced ? (
+                  (metrics.hitRate !== null || hasQualityTrend || q?.possibleAutopilot) && (
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] font-mono text-text-faint">
+                      {metrics.hitRate !== null && <span>{t("scenario.hit", { v: metrics.hitRate.toFixed(0) })}</span>}
+                      {q?.accuracySlope != null && (
+                        <span>{t("quality.accTrend", { v: signed(q.accuracySlope * 100) })}</span>
+                      )}
+                      {q?.ttkSlope != null && <span>{t("quality.ttkTrend", { v: signed(q.ttkSlope) })}</span>}
+                      {q?.possibleAutopilot && (
+                        <span title={t("quality.autopilotHint")}>
+                          <Badge variant="amber" className="text-[10px]">
+                            {t("quality.autopilot")}
+                          </Badge>
+                        </span>
+                      )}
+                    </div>
+                  )
+                ) : (
+                  (metrics.hitRate !== null || warnKey) && (
+                    <div className="flex flex-col gap-0.5 text-[11px] text-text-faint">
+                      {metrics.hitRate !== null && (
+                        <span>{t("simple.scn.hits", { v: metrics.hitRate.toFixed(0) })}</span>
+                      )}
+                      {warnKey && <span className="text-amber">{t(warnKey)}</span>}
+                    </div>
+                  )
                 )}
               </div>
             );

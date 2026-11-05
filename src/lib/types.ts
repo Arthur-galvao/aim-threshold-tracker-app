@@ -194,6 +194,8 @@ export interface TrainingSettings {
   focusPrompt: boolean;
   fatigueAlerts: boolean;
   weeklyMeasureReminder: boolean;
+  /** Mostra μ, CV, z e demais estatísticas no dashboard (modo simples por padrão). */
+  showAdvancedStats: boolean;
 }
 
 export const DEFAULT_TRAINING_SETTINGS: TrainingSettings = {
@@ -206,6 +208,7 @@ export const DEFAULT_TRAINING_SETTINGS: TrainingSettings = {
   focusPrompt: true,
   fatigueAlerts: true,
   weeklyMeasureReminder: true,
+  showAdvancedStats: false,
 };
 
 export interface LabSettings {

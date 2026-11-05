@@ -7,12 +7,14 @@ import {
 } from "@phosphor-icons/react";
 import { useTrackerWorkspace } from "@/context/TrackerWorkspaceContext";
 import { useI18n } from "@/lib/i18n";
+import { useAdvancedStats } from "@/hooks/useAdvancedStats";
 import { EmptyState, Segmented } from "@/components/ui";
 import { KPIStrip } from "./KPIStrip";
 import { SessionHistory } from "./SessionHistory";
 import { ScenarioBreakdown } from "./ScenarioBreakdown";
 import { MiniPlaylistRunner } from "./MiniPlaylistRunner";
 import { TargetAnalytics } from "./TargetAnalytics";
+import { WarmupSuggestion } from "./WarmupSuggestion";
 import { cn } from "@/lib/utils";
 
 // T8.9: chart.js só carrega quando o dashboard monta os gráficos (fora do chunk inicial).
@@ -35,6 +37,7 @@ type SidePanelMode = "history" | "scenarios";
 
 export function DashboardView({ className }: DashboardViewProps) {
   const { t } = useI18n();
+  const advanced = useAdvancedStats();
   const { state } = useTrackerWorkspace();
   const { tasks, activeTask } = state;
 
@@ -130,11 +133,15 @@ export function DashboardView({ className }: DashboardViewProps) {
         <TargetAnalytics />
       </div>
 
-      {/* 5. Intra-session curve + warm-up calibration (Plano 07, T7.3) */}
-      <div className="col-span-12">
-        <Suspense fallback={<ChartFallback />}>
-          <IntraSessionChart />
-        </Suspense>
+      {/* 5. Aquecimento: curva intrassessão só no avançado; no simples, apenas a sugestão (Plano 07, T7.3) */}
+      <div className="col-span-12 empty:hidden">
+        {advanced ? (
+          <Suspense fallback={<ChartFallback />}>
+            <IntraSessionChart />
+          </Suspense>
+        ) : (
+          <WarmupSuggestion />
+        )}
       </div>
     </div>
   );

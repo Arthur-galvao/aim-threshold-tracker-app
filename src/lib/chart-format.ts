@@ -11,3 +11,32 @@ export function formatSensSummary(sens: number[]): { text: string; count: number
     count: distinct.length,
   };
 }
+
+/** Score legível para leigo: separador de milhar do idioma (1.110 / 1,110) e no máximo 1 casa. */
+export function formatScore(value: number, lang: "pt" | "en"): string {
+  if (!Number.isFinite(value)) return "—";
+  const rounded = value >= 100 ? Math.round(value) : Math.round(value * 10) / 10;
+  return rounded.toLocaleString(lang === "pt" ? "pt-BR" : "en-US", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 1,
+  });
+}
+
+export interface XLabelCandidate {
+  x: number;
+  label: string;
+}
+
+/**
+ * Escolhe os rótulos do eixo X sem sobreposição: descarta rótulos repetidos em sequência
+ * (mesma data em sessões vizinhas) e os que ficam a menos de `minGap` do último mantido.
+ */
+export function pickXLabels<T extends XLabelCandidate>(items: T[], minGap: number): T[] {
+  const kept: T[] = [];
+  for (const item of items) {
+    const last = kept[kept.length - 1];
+    if (last && (item.label === last.label || item.x - last.x < minGap)) continue;
+    kept.push(item);
+  }
+  return kept;
+}

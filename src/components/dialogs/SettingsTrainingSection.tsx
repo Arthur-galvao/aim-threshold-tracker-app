@@ -195,6 +195,17 @@ export function SettingsTrainingSection() {
             />
           }
         />
+
+        <Row
+          title={t("settings.training.advancedStats")}
+          desc={t("settings.training.advancedStatsDesc")}
+          control={
+            <Switch
+              checked={training.showAdvancedStats}
+              onCheckedChange={(val) => void save({ showAdvancedStats: val })}
+            />
+          }
+        />
       </div>
     </section>
   );

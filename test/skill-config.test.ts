@@ -14,6 +14,7 @@ const training: TrainingSettings = {
   focusPrompt: true,
   fatigueAlerts: true,
   weeklyMeasureReminder: true,
+  showAdvancedStats: false,
 };
 
 describe("skillConfigFromTraining", () => {
