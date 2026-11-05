@@ -1,4 +1,4 @@
-# O que falta — estado em 05/11/2026 (v3.0.1)
+# O que falta — estado em 05/11/2026 (v3.1.0)
 
 ## Concluído
 - Planos 01, 02, 03 (ondas 1–3).
