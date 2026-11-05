@@ -20,8 +20,26 @@ export interface RandomizerSettings {
   scenarioIdealCm?: number;
   mouseDpi: number;
   centerOverrides?: Record<string, number>;
+  /** LEGADO (Plano 05): só leitura de settings antigos; não usar em código novo. */
   predictorProfile?: string;
+  // --- Randomizer v2 (Plano 05, T5.1). O Rust aplica estes defaults se ausentes. ---
+  mode: RandomizerMode;
+  /** Migração: settings antigos sem este campo => "personal_relative" (equivale ao antigo autoScenarioSens=true). */
+  centerSource: RandomizerCenterSource;
+  /** Chave "Categoria/Subcategoria" -> direção. Ausente = tabela padrão da Viscose. */
+  directionOverrides: Record<string, RandomizerDirection>;
+  reactivationRuns: number;
+  anchorEvery: number;
+  alternatingBlock: number;
+  /** Categoria ausente = habilitada. */
+  categoryEnabled: Record<string, boolean>;
 }
+
+export type RandomizerMode = "center" | "directed" | "alternating" | "explore";
+export type RandomizerCenterSource = "personal_relative" | "viscose_absolute" | "base" | "lab";
+export type RandomizerDirection = "fast" | "slow" | "neutral";
+export type RandomizerActiveRole = "base" | "anchor" | "random" | "off";
+export type RandomizerMuscleCue = "fast" | "slow" | "base";
 
 export interface RandomizerState {
   available: boolean;
@@ -33,6 +51,9 @@ export interface RandomizerState {
   errorMessage: string | null;
   rawaccelGuiRunning?: boolean;
   lastRollReason?: string | null;
+  activeRole?: RandomizerActiveRole | null;
+  activeCenterCm?: number | null;
+  muscleCue?: RandomizerMuscleCue | null;
 }
 
 const DEFAULT_SETTINGS: RandomizerSettings = {
@@ -50,6 +71,13 @@ const DEFAULT_SETTINGS: RandomizerSettings = {
   scenarioIdealCm: undefined,
   mouseDpi: 800,
   predictorProfile: "equilibrado",
+  mode: "center",
+  centerSource: "personal_relative",
+  directionOverrides: {},
+  reactivationRuns: 2,
+  anchorEvery: 5,
+  alternatingBlock: 3,
+  categoryEnabled: {},
 };
 
 const DEFAULT_STATE: RandomizerState = {
@@ -62,6 +90,9 @@ const DEFAULT_STATE: RandomizerState = {
   errorMessage: null,
   rawaccelGuiRunning: false,
   lastRollReason: null,
+  activeRole: null,
+  activeCenterCm: null,
+  muscleCue: null,
 };
 
 export interface RandomizerContextValue {

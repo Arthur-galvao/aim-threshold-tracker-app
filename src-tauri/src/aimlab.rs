@@ -1307,6 +1307,7 @@ mod tests {
                     name: "VT Suave".into(),
                     category: "Flick Tech".into(),
                     subcategory: "Speed".into(),
+                    intent_cue: None,
                     sessions: vec![
                         Session {
                             id: "s1".into(),
@@ -1324,6 +1325,7 @@ mod tests {
                     name: "CsLevel.Lowgravity56.VT Suave.RX1H0T".into(),
                     category: "Click Timing".into(),
                     subcategory: "Precision".into(),
+                    intent_cue: None,
                     sessions: vec![
                         Session {
                             id: "s2".into(),

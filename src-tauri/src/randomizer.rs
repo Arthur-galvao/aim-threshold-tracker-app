@@ -10,8 +10,9 @@ use serde_json::Value;
 use tauri::{AppHandle, Emitter, Manager, State};
 
 use crate::errors::{err, err_d};
-use crate::model::{RandomizerSettings, RandomizerState};
-use crate::sampler::{draw_index, grid_bounds, lattice_cm, SamplerState, MIN_CM};
+use crate::model::{RandomizerSettings, RandomizerState, ScenarioMeta};
+use crate::roll_plan::{self, Role, RollPlan};
+use crate::sampler::{draw_index, grid_bounds, lattice_cm, SamplerSnapshot, SamplerState, MIN_CM};
 use crate::AppState;
 
 pub fn get_candidate_paths(configured_dir: Option<&str>) -> Vec<PathBuf> {
@@ -139,6 +140,34 @@ pub fn check_rawaccel_availability(configured_dir: Option<&str>) -> (bool, Optio
     }
 }
 
+/// Checagem completa (tasklist + disco + registro) e atualização do cache do RawAccel (REV-10).
+/// Só deve ser chamada fora do hot path: boot, mudança de caminho/settings, aba aberta, "Testar".
+pub fn refresh_rawaccel_cache(
+    state: &AppState,
+    configured_dir: Option<&str>,
+) -> (bool, Option<PathBuf>, Option<String>, bool) {
+    let result = check_rawaccel_availability(configured_dir);
+    *state.rawaccel_cache.lock().unwrap() = result.1.clone().map(|dir| (dir, result.0));
+    result
+}
+
+/// Disponibilidade a partir do cache, sem `tasklist`, `read_dir` nem registro. Cache vazio
+/// (nunca preenchido) faz uma checagem completa uma vez.
+pub fn cached_availability(
+    state: &AppState,
+    configured_dir: Option<&str>,
+) -> (bool, Option<PathBuf>, Option<String>) {
+    let cached = state.rawaccel_cache.lock().unwrap().clone();
+    match cached {
+        Some((dir, true)) => (true, Some(dir), None),
+        Some((dir, false)) => (false, Some(dir), Some(err("rawaccel_driver_not_registered"))),
+        None => {
+            let (avail, dir, msg, _) = refresh_rawaccel_cache(state, configured_dir);
+            (avail, dir, msg)
+        }
+    }
+}
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RangePreview {
@@ -165,7 +194,12 @@ pub fn resolve_range_cm(s: &RandomizerSettings, center_override: Option<f64>) ->
 
 pub fn preview_sens_range_calc(s: &RandomizerSettings, center_cm: Option<f64>) -> RangePreview {
     let base = if s.base_sens_cm > 0.0 { s.base_sens_cm } else { 40.0 };
-    let (min_cm, max_cm) = resolve_range_cm(s, center_cm);
+    let meta = ScenarioMeta {
+        center_cm: center_cm.or(s.scenario_ideal_cm).unwrap_or(0.0),
+        ..ScenarioMeta::default()
+    };
+    let center = roll_plan::effective_center(s, &meta);
+    let (min_cm, max_cm) = roll_plan::random_range(s, &meta, center, None);
     let (lo, hi) = grid_bounds(min_cm, max_cm);
     let grid_cm: Vec<f64> = (lo..=hi).map(lattice_cm).collect();
     let min_mult = ((base / max_cm) * 10000.0).round() / 10000.0;
@@ -179,6 +213,41 @@ pub fn preview_sens_range_calc(s: &RandomizerSettings, center_cm: Option<f64>) -
     }
 }
 
+fn round4(v: f64) -> f64 {
+    (v * 10000.0).round() / 10000.0
+}
+
+fn min_gap_for(avoid_repeats: bool, lo: i32, hi: i32) -> i32 {
+    if !avoid_repeats {
+        0
+    } else if hi - lo + 1 >= 6 {
+        2
+    } else {
+        1
+    }
+}
+
+/// Converte o plano em (cm/360, multiplicador). So `Random` consome o saco.
+pub fn realize_plan<R: Rng>(
+    settings: &RandomizerSettings,
+    plan: &RollPlan,
+    st: &mut SamplerState,
+    rng: &mut R,
+) -> (f64, f64) {
+    let base_cm = if settings.base_sens_cm > 0.0 { settings.base_sens_cm } else { 40.0 };
+    match plan.role {
+        Role::Off => (base_cm, 1.0),
+        Role::Base | Role::Anchor => (plan.lo_cm, round4(base_cm / plan.lo_cm)),
+        Role::Random => {
+            let (lo, hi) = grid_bounds(plan.lo_cm, plan.hi_cm);
+            let k = draw_index(st, &plan.bag_key, lo, hi, min_gap_for(settings.avoid_repeats, lo, hi), rng);
+            let cm = lattice_cm(k);
+            (cm, round4(base_cm / cm))
+        }
+    }
+}
+
+#[cfg(test)]
 pub fn generate_next_sens<R: Rng>(
     settings: &RandomizerSettings,
     center_override: Option<f64>,
@@ -192,16 +261,8 @@ pub fn generate_next_sens<R: Rng>(
     };
     let (min_cm, max_cm) = resolve_range_cm(settings, center_override);
     let (lo, hi) = grid_bounds(min_cm, max_cm);
-    let min_gap = if settings.avoid_repeats {
-        if hi - lo + 1 >= 6 {
-            2
-        } else {
-            1
-        }
-    } else {
-        0
-    };
-    let k = draw_index(st, lo, hi, min_gap, rng);
+    let min_gap = min_gap_for(settings.avoid_repeats, lo, hi);
+    let k = draw_index(st, &format!("{lo}:{hi}:legacy:0"), lo, hi, min_gap, rng);
     let cm = lattice_cm(k);
     let mult = ((base_cm / cm) * 10000.0).round() / 10000.0;
     (cm, mult)
@@ -466,19 +527,25 @@ pub fn apply_next_sens(
     let state: State<AppState> = app.state();
     let _roll_guard = state.roll_lock.lock().unwrap();
 
-    let settings = state.settings.lock().unwrap().randomizer.clone();
+    let (settings, gap_min) = {
+        let s = state.settings.lock().unwrap();
+        (s.randomizer.clone(), s.training.session_gap_minutes)
+    };
+    let measuring = *state.measuring.lock().unwrap();
 
-    let (available, found_dir, err_msg, gui_running) = check_rawaccel_availability(settings.rawaccel_dir.as_deref());
+    // Hot path: disponibilidade vem do cache (sem tasklist/read_dir/registro).
+    let (available, found_dir, cache_err) = cached_availability(&state, settings.rawaccel_dir.as_deref());
+    let gui_running = state.randomizer_state.lock().unwrap().rawaccel_gui_running;
 
     if !available {
         let mut r_state = state.randomizer_state.lock().unwrap();
         r_state.available = false;
-        r_state.rawaccel_gui_running = gui_running;
-        r_state.error_message = err_msg.clone();
+        r_state.error_message = cache_err.clone();
         drop(r_state);
-        let _ = app.emit("randomizer_error", serde_json::json!({ "message": err_msg }));
-        return Err(err_msg.unwrap_or_else(|| err("rawaccel_unavailable")));
+        let _ = app.emit("randomizer_error", serde_json::json!({ "message": cache_err }));
+        return Err(cache_err.unwrap_or_else(|| err("rawaccel_unavailable")));
     }
+    let err_msg = gui_running.then(|| err("rawaccel_gui_running"));
 
     let target_dir = found_dir.ok_or_else(|| err("rawaccel_dir_unset"))?;
 
@@ -487,31 +554,56 @@ pub fn apply_next_sens(
         upcoming.or_else(|| ctx.finished_scenario.clone())
     };
 
-    let effective_center = target_scenario.as_ref().and_then(|scen| {
+    // Centro: override manual > meta (o front ja aplicou a fonte do centro) > ideal legado > base.
+    let mut meta = ScenarioMeta::default();
+    if let Some(scen) = target_scenario.as_ref() {
         let norm = scen.trim().to_lowercase();
-        settings.center_overrides.get(&norm).copied()
-            .or_else(|| state.scenario_centers.lock().unwrap().get(&norm).copied())
-    }).or(settings.scenario_ideal_cm);
+        if let Some(m) = state.scenario_meta.lock().unwrap().get(&norm) {
+            meta = m.clone();
+        }
+        if let Some(c) = settings.center_overrides.get(&norm).copied().filter(|c| *c > 0.0) {
+            meta.center_cm = c;
+        }
+    }
+    if meta.center_cm <= 0.0 {
+        if let Some(c) = settings.scenario_ideal_cm.filter(|c| *c > 0.0) {
+            meta.center_cm = c;
+        }
+    }
 
-    let (next_cm, next_mult) = {
+    // Reroll/manual/medicao refazem o plano da MESMA run: nao consomem contadores da sessao.
+    let replan = matches!(ctx.reason.as_str(), "reroll" | "manual" | "measuring");
+    let now_ms = crate::sens_ledger::now_ms();
+    let (plan, next_cm, next_mult) = {
+        let mut sess = state.roll_session.lock().unwrap();
+        if replan {
+            sess.rewind();
+        }
+        let plan = roll_plan::plan_roll(&settings, &mut sess, &meta, now_ms, gap_min, measuring);
         let mut sampler = state.sampler.lock().unwrap();
         let mut rng = rand::thread_rng();
-        let (cm, mult) = generate_next_sens(&settings, effective_center, &mut sampler, &mut rng);
-        let actual_center = effective_center.unwrap_or(if settings.base_sens_cm > 0.0 { settings.base_sens_cm } else { 40.0 });
-        sampler.last_roll_center_cm = Some(actual_center);
-        (cm, mult)
+        let (cm, mult) = realize_plan(&settings, &plan, &mut sampler, &mut rng);
+        sampler.last_roll_center_cm = Some(plan.center_cm);
+        (plan, cm, mult)
     };
 
-    update_and_apply_scale(app, &target_dir, next_mult, settings.mouse_dpi)?;
+    if let Err(e) = update_and_apply_scale(app, &target_dir, next_mult, settings.mouse_dpi) {
+        state.roll_session.lock().unwrap().rewind();
+        return Err(e);
+    }
+
+    persist_sampler_state(app, &state);
 
     let now_iso = chrono::Local::now().to_rfc3339();
 
     let new_state = {
         let mut r_state = state.randomizer_state.lock().unwrap();
         r_state.available = true;
-        r_state.rawaccel_gui_running = gui_running;
         r_state.active_sens_cm = next_cm;
         r_state.active_mult = next_mult;
+        r_state.active_role = Some(plan.role.as_str().to_string());
+        r_state.active_center_cm = Some(plan.center_cm);
+        r_state.muscle_cue = Some(roll_plan::muscle_cue(next_cm, plan.center_cm).to_string());
         r_state.last_run_scenario = ctx.finished_scenario.or(r_state.last_run_scenario.clone());
         r_state.last_roll_reason = Some(ctx.reason);
         r_state.last_updated = Some(now_iso);
@@ -523,6 +615,17 @@ pub fn apply_next_sens(
         .map_err(|e| err_d("sens_emit_failed", e))?;
 
     Ok(new_state)
+}
+
+/// Salva sacos + sessao em `sampler_state.json`. Erro vira log (estado descartavel).
+pub fn persist_sampler_state(app: &AppHandle, state: &AppState) {
+    let snapshot = SamplerSnapshot {
+        sampler: state.sampler.lock().unwrap().clone(),
+        roll_session: state.roll_session.lock().unwrap().clone(),
+    };
+    if let Err(e) = storage::save_sampler_state(app, &snapshot) {
+        eprintln!("[randomizer] falha ao salvar sampler_state.json: {e}");
+    }
 }
 
 #[cfg(test)]

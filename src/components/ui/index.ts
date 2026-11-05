@@ -14,3 +14,4 @@ export * from "./EmptyState";
 export * from "./Toast";
 export * from "./MigrationProgress";
 export * from "./Kbd";
+export * from "./FocusPrompt";

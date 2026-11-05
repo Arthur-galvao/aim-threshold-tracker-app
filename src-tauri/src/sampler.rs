@@ -1,6 +1,9 @@
 use std::collections::HashMap;
 use rand::seq::SliceRandom;
 use rand::Rng;
+use serde::{Deserialize, Serialize};
+
+use crate::roll_plan::RollSessionState;
 
 pub const LATTICE_ANCHOR_CM: f64 = 50.0;
 pub const LATTICE_RATIO: f64 = 1.05;
@@ -37,16 +40,29 @@ pub fn grid_bounds(min_cm: f64, max_cm: f64) -> (i32, i32) {
     (lo, hi)
 }
 
-#[derive(Default, Debug)]
+/// Estado do sorteio. `bags` é indexado por `bag_key` ("{lo_k}:{hi_k}:{mode}:{phase}"),
+/// então cada faixa/modo/metade do alternado tem o seu próprio saco. Persistido em
+/// `sampler_state.json` (T5.4).
+#[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
 pub struct SamplerState {
-    pub bags: HashMap<(i32, i32), Vec<i32>>,
+    pub bags: HashMap<String, Vec<i32>>,
     pub last_k: Option<i32>,
     pub last_roll_center_cm: Option<f64>,
 }
 
-/// Sorteio sem reposicao dentro de [lo, hi]. Cada faixa (lo, hi) tem seu proprio saco.
+/// Conteúdo de `sampler_state.json`: sacos + contadores da sessão de treino.
+#[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct SamplerSnapshot {
+    pub sampler: SamplerState,
+    pub roll_session: RollSessionState,
+}
+
+/// Sorteio sem reposicao dentro de [lo, hi]. Cada `bag_key` tem o seu proprio saco.
 pub fn draw_index<R: Rng>(
     st: &mut SamplerState,
+    bag_key: &str,
     lo: i32,
     hi: i32,
     min_gap: i32,
@@ -54,7 +70,8 @@ pub fn draw_index<R: Rng>(
 ) -> i32 {
     let (lo, hi) = (lo.min(hi), lo.max(hi));
     let last = st.last_k.filter(|l| (lo..=hi).contains(l));
-    let bag = st.bags.entry((lo, hi)).or_default();
+    let bag = st.bags.entry(bag_key.to_string()).or_default();
+    bag.retain(|k| (lo..=hi).contains(k));
     if bag.is_empty() {
         *bag = (lo..=hi).collect();
         bag.shuffle(rng);
@@ -129,7 +146,7 @@ mod tests {
 
         let mut drawn = Vec::new();
         for _ in 0..total {
-            drawn.push(draw_index(&mut st, lo, hi, 1, &mut rng));
+            drawn.push(draw_index(&mut st, "t", lo, hi, 1, &mut rng));
         }
 
         assert_eq!(drawn.len(), total as usize);
@@ -147,7 +164,7 @@ mod tests {
 
         let mut prev: Option<i32> = None;
         for _ in 0..30 {
-            let next = draw_index(&mut st, lo, hi, 2, &mut rng);
+            let next = draw_index(&mut st, "t", lo, hi, 2, &mut rng);
             if let Some(p) = prev {
                 // Se o saco tinha opcoes, o gap deve ser respeitado
                 assert!((next - p).abs() >= 1);
@@ -161,11 +178,25 @@ mod tests {
         let mut st = SamplerState::default();
         let mut rng = StdRng::seed_from_u64(999);
 
-        let k1 = draw_index(&mut st, 1, 5, 1, &mut rng);
-        let k2 = draw_index(&mut st, 10, 15, 1, &mut rng);
+        let k1 = draw_index(&mut st, "1:5", 1, 5, 1, &mut rng);
+        let k2 = draw_index(&mut st, "10:15", 10, 15, 1, &mut rng);
 
         assert!((1..=5).contains(&k1));
         assert!((10..=15).contains(&k2));
         assert_eq!(st.bags.len(), 2);
+    }
+
+    #[test]
+    fn test_snapshot_roundtrip_and_invalid_default() {
+        let mut st = SamplerState::default();
+        let mut rng = StdRng::seed_from_u64(7);
+        draw_index(&mut st, "1:8:center:0", 1, 8, 1, &mut rng);
+        let snap = SamplerSnapshot { sampler: st, roll_session: RollSessionState::default() };
+        let json = serde_json::to_string(&snap).unwrap();
+        let back: SamplerSnapshot = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, snap);
+        // campos ausentes -> default
+        let empty: SamplerSnapshot = serde_json::from_str("{}").unwrap();
+        assert_eq!(empty, SamplerSnapshot::default());
     }
 }

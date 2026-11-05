@@ -1,6 +1,6 @@
 import { ArrowUp, ArrowDown, Trash } from "@phosphor-icons/react";
 import { Input } from "@/components/ui";
-import type { PlaylistItem, Task } from "@/lib/types";
+import { DEFAULT_STEP_MAX_ATTEMPTS, DEFAULT_STEP_MAX_MINUTES, type PlaylistItem, type Task } from "@/lib/types";
 import { getRecommendedSens } from "@/lib/viscose";
 import { useI18n } from "@/lib/i18n";
 
@@ -12,7 +12,7 @@ export interface PlaylistItemRowProps {
   onMove: (index: number, direction: "up" | "down") => void;
   onUpdate: (
     index: number,
-    partial: Partial<Pick<PlaylistItem, "targetMode" | "targetValue">>
+    partial: Partial<Pick<PlaylistItem, "targetMode" | "targetValue" | "stepKind" | "maxAttempts" | "maxMinutes">>
   ) => void;
   onRemove: (index: number) => void;
 }
@@ -27,7 +27,9 @@ export function PlaylistItemRow({
   onRemove,
 }: PlaylistItemRowProps) {
   const { t } = useI18n();
+  // Chaves novas vivem em docs/plans/i18n-pending/T7-playlist.json até a integração (o tipo Key ainda não as conhece).
   const recSens = task ? getRecommendedSens(task.category, task.subcategory) : null;
+  const isMeasure = item.stepKind === "measure";
 
   return (
     <div className="p-2.5 rounded-control bg-surface border border-edge flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 shadow-xs">
@@ -70,7 +72,21 @@ export function PlaylistItemRow({
         </div>
       </div>
 
-      <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+      <div className="flex flex-wrap items-center gap-2 shrink-0 self-end sm:self-auto">
+        <button
+          type="button"
+          aria-pressed={isMeasure}
+          title={t("playlist.stepMeasureHint")}
+          onClick={() => onUpdate(index, { stepKind: isMeasure ? "train" : "measure" })}
+          className={`px-2 py-0.5 rounded-control text-[10px] font-mono font-semibold transition border ${
+            isMeasure
+              ? "bg-amber/15 text-amber border-amber/40"
+              : "text-text-secondary border-edge hover:text-text-main"
+          }`}
+        >
+          {t("playlist.stepMeasure")}
+        </button>
+
         <div className="flex items-center glass-inset p-0.5 rounded-control">
           <button
             type="button"
@@ -133,6 +149,39 @@ export function PlaylistItemRow({
           }}
           className="w-16 font-mono text-xs text-center tabular-nums py-0.5 px-1.5"
         />
+
+        {item.targetMode === "threshold" && (
+          <div className="flex items-center gap-1 text-[10px] text-text-faint font-mono">
+            <Input
+              type="number"
+              min="1"
+              max="50"
+              title={t("playlist.maxAttemptsHint")}
+              aria-label={t("playlist.maxAttempts")}
+              value={item.maxAttempts ?? DEFAULT_STEP_MAX_ATTEMPTS}
+              onChange={(e) => {
+                const val = Math.min(50, Math.max(1, parseInt(e.target.value) || 1));
+                onUpdate(index, { maxAttempts: val });
+              }}
+              className="w-14 font-mono text-xs text-center tabular-nums py-0.5 px-1.5"
+            />
+            <span title={t("playlist.maxAttemptsHint")}>{t("playlist.maxAttemptsShort")}</span>
+            <Input
+              type="number"
+              min="1"
+              max="60"
+              title={t("playlist.maxMinutesHint")}
+              aria-label={t("playlist.maxMinutes")}
+              value={item.maxMinutes ?? DEFAULT_STEP_MAX_MINUTES}
+              onChange={(e) => {
+                const val = Math.min(60, Math.max(1, parseInt(e.target.value) || 1));
+                onUpdate(index, { maxMinutes: val });
+              }}
+              className="w-14 font-mono text-xs text-center tabular-nums py-0.5 px-1.5"
+            />
+            <span title={t("playlist.maxMinutesHint")}>{t("playlist.maxMinutesShort")}</span>
+          </div>
+        )}
 
         <button
           type="button"

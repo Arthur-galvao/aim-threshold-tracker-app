@@ -137,6 +137,8 @@ export function CategoryCards({
     return playlists.map((pl) => computePlaylistSensStats(pl, tasks, "equilibrado", mouseDpi));
   }, [playlists, tasks, mouseDpi]);
 
+  const hasActions = Boolean(onViewInChart || onApplySens);
+
   const getConfidenceBadge = (confidence: "high" | "medium" | "low" | "insufficient") => {
     const map: Record<string, { variant: BadgeVariant; textKey: Key }> = {
       high: { variant: "emerald", textKey: "randomizer.confidenceHigh" },
@@ -201,11 +203,11 @@ export function CategoryCards({
               <thead className="sticky top-0 z-10 bg-base/90 backdrop-blur-md">
                 <tr className="border-b border-edge text-[11px] font-semibold text-text-faint uppercase tracking-wider">
                   <th className="py-2.5 px-3">{t("modal.category")}</th>
-                  <th className="py-2.5 px-3">Cenários</th>
-                  <th className="py-2.5 px-3">Runs</th>
-                  <th className="py-2.5 px-3">Sens Recomendada</th>
-                  <th className="py-2.5 px-3">Confiança</th>
-                  <th className="py-2.5 px-3 text-right">Ações</th>
+                  <th className="py-2.5 px-3">{t("categorySens.colScenarios")}</th>
+                  <th className="py-2.5 px-3">{t("categorySens.colRuns")}</th>
+                  <th className="py-2.5 px-3">{t("categorySens.colRecommended")}</th>
+                  <th className="py-2.5 px-3">{t("categorySens.colConfidence")}</th>
+                  {hasActions && <th className="py-2.5 px-3 text-right">{t("playlistSens.colActions")}</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-edge">
@@ -234,28 +236,36 @@ export function CategoryCards({
                     <td className="py-3 px-3">
                       {getConfidenceBadge(g.confidence)}
                     </td>
+                    {hasActions && (
                     <td className="py-3 px-3 text-right">
-                      <div className="flex items-center justify-end gap-1.5">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => onViewInChart?.({ mode: "category", id: g.key })}
-                          icon={<ChartLineUp size={13} />}
-                          className="rounded-full"
-                        >
-                          Gráfico
-                        </Button>
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          onClick={() => void onApplySens?.(g.displaySens.value, g.taskNames)}
-                          icon={<Check size={13} />}
-                          className="rounded-full"
-                        >
-                          {t("randomizer.applySens")}
-                        </Button>
-                      </div>
+                      {(onViewInChart || onApplySens) && (
+                        <div className="flex items-center justify-end gap-1.5">
+                          {onViewInChart && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => onViewInChart({ mode: "category", id: g.key })}
+                              icon={<ChartLineUp size={13} />}
+                              className="rounded-full"
+                            >
+                              {t("categorySens.viewInChart")}
+                            </Button>
+                          )}
+                          {onApplySens && (
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => void onApplySens(g.displaySens.value, g.taskNames)}
+                              icon={<Check size={13} />}
+                              className="rounded-full"
+                            >
+                              {t("randomizer.applySens")}
+                            </Button>
+                          )}
+                        </div>
+                      )}
                     </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -277,12 +287,12 @@ export function CategoryCards({
             <table className="w-full text-left text-xs border-collapse">
               <thead className="sticky top-0 z-10 bg-base/90 backdrop-blur-md">
                 <tr className="border-b border-edge text-[11px] font-semibold text-text-faint uppercase tracking-wider">
-                  <th className="py-2.5 px-3">Playlist</th>
-                  <th className="py-2.5 px-3">Cenários</th>
-                  <th className="py-2.5 px-3">Runs</th>
-                  <th className="py-2.5 px-3">Sens Recomendada</th>
-                  <th className="py-2.5 px-3">Confiança</th>
-                  <th className="py-2.5 px-3 text-right">Ações</th>
+                  <th className="py-2.5 px-3">{t("playlistSens.colPlaylist")}</th>
+                  <th className="py-2.5 px-3">{t("categorySens.colScenarios")}</th>
+                  <th className="py-2.5 px-3">{t("categorySens.colRuns")}</th>
+                  <th className="py-2.5 px-3">{t("categorySens.colRecommended")}</th>
+                  <th className="py-2.5 px-3">{t("categorySens.colConfidence")}</th>
+                  {hasActions && <th className="py-2.5 px-3 text-right">{t("playlistSens.colActions")}</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-edge">
@@ -310,30 +320,36 @@ export function CategoryCards({
                     <td className="py-3 px-3">
                       {getConfidenceBadge(pl.overallConfidence)}
                     </td>
+                    {hasActions && (
                     <td className="py-3 px-3 text-right">
-                      <div className="flex items-center justify-end gap-1.5">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => onViewInChart?.({ mode: "playlist", id: pl.playlistId })}
-                          icon={<ChartLineUp size={13} />}
-                          className="rounded-full"
-                        >
-                          Gráfico
-                        </Button>
-                        {pl.displaySens && (
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={() => void onApplySens?.(pl.displaySens!.value)}
-                            icon={<Check size={13} />}
-                            className="rounded-full"
-                          >
-                            {t("randomizer.applySens")}
-                          </Button>
-                        )}
-                      </div>
+                      {(onViewInChart || onApplySens) && (
+                        <div className="flex items-center justify-end gap-1.5">
+                          {onViewInChart && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => onViewInChart({ mode: "playlist", id: pl.playlistId })}
+                              icon={<ChartLineUp size={13} />}
+                              className="rounded-full"
+                            >
+                              {t("categorySens.viewInChart")}
+                            </Button>
+                          )}
+                          {pl.displaySens && onApplySens && (
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => void onApplySens(pl.displaySens!.value)}
+                              icon={<Check size={13} />}
+                              className="rounded-full"
+                            >
+                              {t("randomizer.applySens")}
+                            </Button>
+                          )}
+                        </div>
+                      )}
                     </td>
+                    )}
                   </tr>
                 ))}
               </tbody>

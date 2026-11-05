@@ -1,6 +1,22 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import type { Playlist, PlaylistItem, Task } from "@/lib/types";
-import { getTargetThresholdForTask, resolveAutoAdvanceOnThreshold } from "@/lib/threshold";
+import { DEFAULT_TRAINING_SETTINGS } from "@/lib/types";
+import { resolveAutoAdvanceOnThreshold } from "@/lib/threshold";
+import { useSettings } from "@/hooks/useSettings";
+import { computeSkill } from "@/lib/skill";
+import { buildAllRuns, skillConfigFromTraining } from "@/lib/skill/config";
+import type { SensAdjustModel } from "@/lib/skill/sens-adjust";
+import { setMeasuring } from "@/lib/tauri-bridge";
+import {
+  countStepAttempts,
+  evaluateThresholdStep,
+  isMeasureStep,
+  stepMaxAttempts,
+  stepMaxMinutes,
+  targetAtSensCtx,
+  type StepSensContext,
+  type ThresholdStepOutcome,
+} from "@/lib/playlist-step";
 
 interface UsePlaylistRunnerProps {
   tasks: Task[];
@@ -15,14 +31,26 @@ export interface PlaylistRunnerState {
   currentItem: PlaylistItem | null;
   currentTask: Task | null;
   sessionCountAtStart: number;
+  /** Meta do passo (score) na sens ativa; null sem histórico. */
   stepTargetThreshold: number | null;
+  /** Melhor score entre as runs VÁLIDAS do passo. */
   stepBestScore: number | null;
+  /** Tentativas válidas no passo (threshold). */
+  stepAttempts: number;
+  stepMaxAttempts: number;
+  stepMaxMinutes: number;
+  /** Resultado do passo threshold: pendente, bateu ou "não bateu" (teto atingido). */
+  stepOutcome: ThresholdStepOutcome;
+  /** Passo de medição (sens base, randomizer pausado). */
+  isMeasureStep: boolean;
   startedAt: number | null;
   elapsedSeconds: number;
   playlistElapsedSeconds: number;
   isFinished: boolean;
   isRunning: boolean;
   completedStepIndices: Set<number>;
+  /** Subconjunto de completedStepIndices que terminou sem bater a meta. */
+  missedStepIndices: Set<number>;
   start: (playlist: Playlist) => void;
   next: () => void;
   previous: () => void;
@@ -32,6 +60,8 @@ export interface PlaylistRunnerState {
   jumpToStep: (index: number) => void;
   syncWithDetectedScenario: (scenarioName: string, playlistName?: string) => void;
   predictNextScenarioName: () => string | null;
+  /** Sens e centro do randomizer agora (null = sens fixa, meta sem ajuste). */
+  reportSensContext: (ctx: StepSensContext | null) => void;
 }
 
 export function usePlaylistRunner({
@@ -43,23 +73,83 @@ export function usePlaylistRunner({
   const onStepAdvanceRef = useRef(onStepAdvance);
   onStepAdvanceRef.current = onStepAdvance;
 
+  const { settings } = useSettings();
+  const training = settings?.training ?? DEFAULT_TRAINING_SETTINGS;
+  const skillCfg = useMemo(() => skillConfigFromTraining(training), [training]);
+  const allRuns = useMemo(() => buildAllRuns(tasks), [tasks]);
+
   const [activePlaylist, setActivePlaylist] = useState<Playlist | null>(null);
   const [currentStepIndex, setCurrentStepIndex] = useState<number>(0);
   const [sessionCountAtStart, setSessionCountAtStart] = useState<number>(0);
   const [sessionIdsAtStart, setSessionIdsAtStart] = useState<Set<string>>(new Set());
-  const [stepTargetThreshold, setStepTargetThreshold] = useState<number | null>(null);
+  /** Meta (score) e modelo de sens congelados no início do passo. */
+  const [stepBase, setStepBase] = useState<{ target: number | null; model: SensAdjustModel | null }>({
+    target: null,
+    model: null,
+  });
+  const [sensCtx, setSensCtx] = useState<StepSensContext | null>(null);
   const [startedAt, setStartedAt] = useState<number | null>(null);
   const [playlistStartedAt, setPlaylistStartedAt] = useState<number | null>(null);
   const [now, setNow] = useState<number>(Date.now());
   const [isFinished, setIsFinished] = useState<boolean>(false);
   const [isRunning, setIsRunning] = useState<boolean>(false);
   const [completedStepIndices, setCompletedStepIndices] = useState<Set<number>>(new Set());
+  const [missedStepIndices, setMissedStepIndices] = useState<Set<number>>(new Set());
 
   const shouldAutoAdvance = useMemo(() => {
     return resolveAutoAdvanceOnThreshold(activePlaylist, globalAutoAdvance);
   }, [activePlaylist, globalAutoAdvance]);
 
-  // Ref to hold current state for interval checks without stale closures
+  const taskMap = useMemo(() => new Map(tasks.map((t) => [t.id, t])), [tasks]);
+
+  const currentItem = useMemo(() => {
+    if (!activePlaylist || !activePlaylist.items[currentStepIndex]) return null;
+    return activePlaylist.items[currentStepIndex];
+  }, [activePlaylist, currentStepIndex]);
+
+  const currentTask = useMemo(() => {
+    if (!currentItem) return null;
+    return taskMap.get(currentItem.taskId) ?? null;
+  }, [currentItem, taskMap]);
+
+  // Tentativas válidas do passo (runs do cenário criadas depois do início do passo).
+  const currentSkill = useMemo(
+    () => (currentTask ? computeSkill(currentTask, allRuns, skillCfg, Date.now()) : null),
+    [currentTask, allRuns, skillCfg],
+  );
+
+  const stepCounts = useMemo(() => {
+    if (!currentSkill) return { validAttempts: 0, bestValid: null as number | null };
+    return countStepAttempts(
+      currentSkill.runs.map((r) => ({ sessionId: r.sessionId, score: r.score, valid: r.validity.valid })),
+      sessionIdsAtStart,
+    );
+  }, [currentSkill, sessionIdsAtStart]);
+
+  const stepTargetThreshold = useMemo(
+    () => targetAtSensCtx(stepBase.target, stepBase.model, sensCtx),
+    [stepBase, sensCtx],
+  );
+
+  const stepBestScore = stepCounts.bestValid;
+  const stepIsMeasure = isMeasureStep(currentItem, activePlaylist);
+  const maxAttempts = currentItem ? stepMaxAttempts(currentItem) : 0;
+  const maxMinutes = currentItem ? stepMaxMinutes(currentItem) : 0;
+
+  const stepOutcome: ThresholdStepOutcome = useMemo(() => {
+    if (!currentItem || currentItem.targetMode !== "threshold" || startedAt === null) return "pending";
+    return evaluateThresholdStep({
+      validAttempts: stepCounts.validAttempts,
+      bestValid: stepCounts.bestValid,
+      target: stepTargetThreshold,
+      minReps: Math.max(1, currentItem.targetValue),
+      elapsedSeconds: Math.max(0, (now - startedAt) / 1000),
+      maxAttempts: stepMaxAttempts(currentItem),
+      maxMinutes: stepMaxMinutes(currentItem),
+    });
+  }, [currentItem, stepCounts, stepTargetThreshold, startedAt, now]);
+
+  // Ref para os callbacks lerem o estado atual sem closures obsoletas
   const stateRef = useRef({
     activePlaylist,
     currentStepIndex,
@@ -72,6 +162,8 @@ export function usePlaylistRunner({
     isRunning,
     completedStepIndices,
     shouldAutoAdvance,
+    stepMissed: false,
+    stepOutcome,
   });
 
   useEffect(() => {
@@ -87,27 +179,27 @@ export function usePlaylistRunner({
       isRunning,
       completedStepIndices,
       shouldAutoAdvance,
+      stepMissed: currentItem?.targetMode === "threshold" && stepOutcome === "missed",
+      stepOutcome,
     };
   });
 
-  const taskMap = useMemo(() => new Map(tasks.map((t) => [t.id, t])), [tasks]);
-
-  const currentItem = useMemo(() => {
-    if (!activePlaylist || !activePlaylist.items[currentStepIndex]) return null;
-    return activePlaylist.items[currentStepIndex];
-  }, [activePlaylist, currentStepIndex]);
-
-  const currentTask = useMemo(() => {
-    if (!currentItem) return null;
-    return taskMap.get(currentItem.taskId) ?? null;
-  }, [currentItem, taskMap]);
-
-  const stepBestScore = useMemo(() => {
-    if (!currentTask || !currentTask.sessions.length) return null;
-    const newSessions = currentTask.sessions.filter((s) => !sessionIdsAtStart.has(s.id));
-    if (newSessions.length === 0) return null;
-    return Math.max(...newSessions.map((s) => Number(s.pb) || 0));
-  }, [currentTask, sessionIdsAtStart]);
+  // Modo medição (T7.5): randomizer pausado enquanto o passo de medição roda.
+  const measuringNow = isRunning && !isFinished && stepIsMeasure;
+  const lastMeasuringRef = useRef(false);
+  useEffect(() => {
+    if (lastMeasuringRef.current === measuringNow) return;
+    lastMeasuringRef.current = measuringNow;
+    setMeasuring(measuringNow).catch((err) => console.error("Erro ao alterar modo de medição:", err));
+  }, [measuringNow]);
+  useEffect(() => {
+    return () => {
+      if (lastMeasuringRef.current) {
+        lastMeasuringRef.current = false;
+        setMeasuring(false).catch(() => undefined);
+      }
+    };
+  }, []);
 
   // Advance to step index
   const goToStep = useCallback(
@@ -118,16 +210,16 @@ export function usePlaylistRunner({
       const task = taskMap.get(item.taskId) ?? null;
       const count = task ? task.sessions.length : 0;
       const ids = new Set(task ? task.sessions.map((s) => s.id) : []);
-      const targetThresh = getTargetThresholdForTask(task);
+      const skill = task ? computeSkill(task, allRuns, skillCfg, Date.now()) : null;
 
       setCurrentStepIndex(index);
       setSessionCountAtStart(count);
       setSessionIdsAtStart(ids);
-      setStepTargetThreshold(targetThresh);
+      setStepBase({ target: skill?.nextTarget ?? null, model: skill?.model ?? null });
       setStartedAt(Date.now());
       setActiveTaskId(item.taskId);
     },
-    [taskMap, setActiveTaskId]
+    [taskMap, setActiveTaskId, allRuns, skillCfg]
   );
 
   const start = useCallback(
@@ -140,6 +232,7 @@ export function usePlaylistRunner({
       setPlaylistStartedAt(startTs);
       setNow(startTs);
       setCompletedStepIndices(new Set());
+      setMissedStepIndices(new Set());
       goToStep(0, playlist);
     },
     [goToStep]
@@ -153,7 +246,7 @@ export function usePlaylistRunner({
   }, []);
 
   const next = useCallback(() => {
-    const { activePlaylist: pl, currentStepIndex: idx } = stateRef.current;
+    const { activePlaylist: pl, currentStepIndex: idx, stepMissed } = stateRef.current;
     if (!pl) return;
 
     setCompletedStepIndices((prev) => {
@@ -161,6 +254,13 @@ export function usePlaylistRunner({
       nextSet.add(idx);
       return nextSet;
     });
+    if (stepMissed) {
+      setMissedStepIndices((prev) => {
+        const nextSet = new Set(prev);
+        nextSet.add(idx);
+        return nextSet;
+      });
+    }
 
     if (idx + 1 < pl.items.length) {
       const nextItem = pl.items[idx + 1];
@@ -201,6 +301,14 @@ export function usePlaylistRunner({
     },
     [goToStep]
   );
+
+  const reportSensContext = useCallback((ctx: StepSensContext | null) => {
+    setSensCtx((prev) => {
+      if (prev === ctx) return prev;
+      if (prev && ctx && prev.sensCm === ctx.sensCm && prev.centerCm === ctx.centerCm) return prev;
+      return ctx;
+    });
+  }, []);
 
   const syncWithDetectedScenario = useCallback(
     (scenarioName: string, playlistName?: string) => {
@@ -252,18 +360,9 @@ export function usePlaylistRunner({
 
         if (item.targetMode === "reps" && completedReps >= item.targetValue) {
           next();
-        } else if (item.targetMode === "threshold" && completedReps >= Math.max(1, item.targetValue)) {
-          const startIds = stateRef.current.sessionIdsAtStart;
-          const newScores = task
-            ? task.sessions.filter((s) => !startIds.has(s.id)).map((s) => Number(s.pb) || 0)
-            : [];
-          const bestInStep = newScores.length > 0 ? Math.max(...newScores) : null;
-          const targetThresh = stateRef.current.stepTargetThreshold;
-          if (targetThresh === null || (bestInStep !== null && bestInStep >= targetThresh)) {
-            if (shouldAutoAdvance) {
-              next();
-            }
-          }
+        } else if (item.targetMode === "threshold" && shouldAutoAdvance) {
+          // Bateu ou atingiu o teto: o efeito de auto-avanço já trata; isto cobre o caso de tasks atrasadas.
+          if (stateRef.current.stepOutcome !== "pending") next();
         }
       } else if (targetStepIndex > curIdx) {
         setCompletedStepIndices((prev) => {
@@ -305,16 +404,9 @@ export function usePlaylistRunner({
         next();
       }
     } else if (currentItem.targetMode === "threshold") {
-      const currentSessionsCount = currentTask ? currentTask.sessions.length : 0;
-      const completedReps = currentSessionsCount - sessionCountAtStart;
-      const minReps = Math.max(1, currentItem.targetValue);
-      const thresholdMet =
-        stepTargetThreshold === null ||
-        (stepBestScore !== null && stepBestScore >= stepTargetThreshold);
-      if (completedReps >= minReps && thresholdMet) {
-        if (shouldAutoAdvance) {
-          next();
-        }
+      // Bateu (runs válidas >= meta) ou teto (tentativas/minutos) => avança.
+      if (shouldAutoAdvance && stepOutcome !== "pending") {
+        next();
       }
     } else if (currentItem.targetMode === "time" && startedAt !== null) {
       const elapsed = Math.floor((now - startedAt) / 1000);
@@ -329,8 +421,7 @@ export function usePlaylistRunner({
     currentItem,
     currentTask,
     sessionCountAtStart,
-    stepTargetThreshold,
-    stepBestScore,
+    stepOutcome,
     startedAt,
     now,
     next,
@@ -386,12 +477,18 @@ export function usePlaylistRunner({
     sessionCountAtStart,
     stepTargetThreshold,
     stepBestScore,
+    stepAttempts: stepCounts.validAttempts,
+    stepMaxAttempts: maxAttempts,
+    stepMaxMinutes: maxMinutes,
+    stepOutcome,
+    isMeasureStep: stepIsMeasure,
     startedAt,
     elapsedSeconds,
     playlistElapsedSeconds,
     isFinished,
     isRunning,
     completedStepIndices,
+    missedStepIndices,
     start,
     next,
     previous,
@@ -401,5 +498,6 @@ export function usePlaylistRunner({
     jumpToStep,
     syncWithDetectedScenario,
     predictNextScenarioName,
+    reportSensContext,
   };
 }

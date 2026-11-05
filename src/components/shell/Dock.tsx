@@ -2,6 +2,7 @@ import React, { useEffect } from "react";
 import { motion } from "motion/react";
 import {
   ChartLineUp,
+  Flask,
   Gear,
   Playlist as PlaylistIcon,
   Shuffle,
@@ -11,7 +12,7 @@ import { useApp } from "@/hooks/useAppData";
 import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
-export type NavTab = "dashboard" | "randomizer" | "playlist";
+export type NavTab = "dashboard" | "randomizer" | "playlist" | "lab";
 
 export interface DockProps {
   activeTab: NavTab;
@@ -58,6 +59,9 @@ export function Dock({
       } else if (e.key === "3") {
         e.preventDefault();
         onTabChange("playlist");
+      } else if (e.key === "4") {
+        e.preventDefault();
+        onTabChange("lab");
       }
     };
 
@@ -74,7 +78,7 @@ export function Dock({
   }> = [
     {
       id: "dashboard",
-      label: t("header.guide") || "Dashboard",
+      label: t("header.guide"),
       shortcut: "1",
       icon: (active) => (
         <ChartLineUp size={16} weight={active ? "fill" : "regular"} />
@@ -95,6 +99,14 @@ export function Dock({
       badge: isPlaylistRunning,
       icon: (active) => (
         <PlaylistIcon size={16} weight={active ? "fill" : "regular"} />
+      ),
+    },
+    {
+      id: "lab",
+      label: t("lab.tabLabel"),
+      shortcut: "4",
+      icon: (active) => (
+        <Flask size={16} weight={active ? "fill" : "regular"} />
       ),
     },
   ];
@@ -224,7 +236,7 @@ export function Dock({
                 {item.badge && (
                   <span
                     className="h-1.5 w-1.5 rounded-full bg-emerald"
-                    title="Playlist ativa"
+                    title={t("dock.activePlaylist")}
                   />
                 )}
               </button>

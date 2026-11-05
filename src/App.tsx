@@ -1,35 +1,73 @@
-import { useCallback, useEffect, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { AppProvider, useApp } from "@/hooks/useAppData";
 import { SettingsProvider, useSettings } from "@/hooks/useSettings";
 import { WatcherProvider, useWatcher } from "@/hooks/useKovaakWatcher";
 import { RandomizerProvider, useSensRandomizer } from "@/hooks/useSensRandomizer";
-import { useScenarioCentersSync } from "@/hooks/useScenarioCentersSync";
+import { LiveSessionProvider, useLiveSession } from "@/hooks/useLiveSession";
+import { useScenarioMetaSync } from "@/hooks/useScenarioMetaSync";
 import { useWindowActivityGuard } from "@/hooks/useWindowActivityGuard";
 import { useTrayLabels } from "@/hooks/useTrayLabels";
 import { TrackerWorkspaceProvider } from "@/context/TrackerWorkspaceContext";
 import { I18nProvider, useI18n } from "@/lib/i18n";
-import { ToastProvider, useToast, MigrationProgress } from "@/components/ui";
+import { ToastProvider, useToast, MigrationProgress, FocusPromptHost } from "@/components/ui";
 import { AppShell, type NavTab } from "@/components/shell";
 import { DashboardView } from "@/components/views/dashboard";
-import { RandomizerView } from "@/components/views/randomizer";
-import { PlaylistView } from "@/components/views/playlist";
-import {
-  SessionSheet,
-  SettingsDialog,
-  NewScenarioDialog,
-  PlaylistManagerDialog,
-  AimLabSyncDialog,
-  RecoveryNotice,
-} from "@/components/dialogs";
+import { RecoveryNotice } from "@/components/dialogs/RecoveryNotice";
 import type { AppSettings, Playlist } from "@/lib/types";
 import { applyTheme, getStoredTheme, type AppTheme } from "@/lib/theme";
+
+// T8.9: views fora do caminho inicial (dashboard segue eager).
+const RandomizerView = lazy(() => import("@/components/views/randomizer"));
+const PlaylistView = lazy(() => import("@/components/views/playlist"));
+const LabView = lazy(() => import("@/components/views/lab"));
+
+// T8.9: diálogos pesados só são baixados/montados na primeira abertura.
+const SessionSheet = lazy(() =>
+  import("@/components/dialogs/SessionSheet").then((m) => ({ default: m.SessionSheet }))
+);
+const SettingsDialog = lazy(() =>
+  import("@/components/dialogs/SettingsDialog").then((m) => ({ default: m.SettingsDialog }))
+);
+const NewScenarioDialog = lazy(() =>
+  import("@/components/dialogs/NewScenarioDialog").then((m) => ({ default: m.NewScenarioDialog }))
+);
+const PlaylistManagerDialog = lazy(() =>
+  import("@/components/dialogs/PlaylistManagerDialog").then((m) => ({
+    default: m.PlaylistManagerDialog,
+  }))
+);
+const AimLabSyncDialog = lazy(() =>
+  import("@/components/dialogs/AimLabSyncDialog").then((m) => ({ default: m.AimLabSyncDialog }))
+);
+const SessionSummaryDialog = lazy(() =>
+  import("@/components/dialogs/SessionSummaryDialog").then((m) => ({
+    default: m.SessionSummaryDialog,
+  }))
+);
+
+/** Verdadeiro desde a primeira vez que `open` foi true (mantém montado para a animação de saída). */
+function useEverOpened(open: boolean): boolean {
+  const [ever, setEver] = useState(open);
+  if (open && !ever) setEver(true);
+  return ever;
+}
+
+function ViewSkeleton() {
+  return (
+    <div
+      aria-busy="true"
+      className="flex-1 min-h-[320px] rounded-tile liquid-surface opacity-60 animate-pulse"
+    />
+  );
+}
 
 function AppContent() {
   useWindowActivityGuard();
   useTrayLabels();
   const { t } = useI18n();
   const { showToast } = useToast();
+  const live = useLiveSession();
 
   const {
     appData,
@@ -91,28 +129,33 @@ function AppContent() {
     applyTheme(theme);
   }, [theme]);
 
-  // Sincroniza o mapa de centros de cenários com o backend Rust
-  useScenarioCentersSync({
+  // Sincroniza a meta (centro, categoria, subcategoria) dos cenários com o backend Rust
+  useScenarioMetaSync({
     tasks: appData.tasks,
-    mouseDpi: randomizerSettings.mouseDpi,
-    enabled: randomizerSettings.autoScenarioSens,
+    baseSensCm: randomizerSettings.baseSensCm,
+    centerSource: randomizerSettings.centerSource,
+    centerOverrides: randomizerSettings.centerOverrides,
   });
 
-  // Notifica o backend sobre o próximo cenário esperado na playlist
+  // Notifica o backend sobre o próximo cenário esperado na playlist (só envia quando muda)
+  const upcomingName = useMemo(
+    () => (playlistRunner.isRunning ? playlistRunner.predictNextScenarioName() : null),
+    [
+      playlistRunner.isRunning,
+      playlistRunner.currentStepIndex,
+      playlistRunner.sessionCountAtStart,
+      playlistRunner.activePlaylist?.id,
+      playlistRunner.predictNextScenarioName,
+    ]
+  );
+  const reroll = Boolean(playlistRunner.isRunning);
+  const lastUpcomingKeyRef = useRef<string | null>(null);
   useEffect(() => {
-    const upcomingName = playlistRunner.isRunning
-      ? playlistRunner.predictNextScenarioName()
-      : null;
-    void invoke("set_upcoming_scenario", {
-      name: upcomingName,
-      reroll: Boolean(playlistRunner.isRunning),
-    }).catch(() => {});
-  }, [
-    playlistRunner.isRunning,
-    playlistRunner.currentStepIndex,
-    playlistRunner.sessionCountAtStart,
-    playlistRunner.predictNextScenarioName,
-  ]);
+    const key = JSON.stringify({ name: upcomingName, reroll });
+    if (key === lastUpcomingKeyRef.current) return;
+    lastUpcomingKeyRef.current = key;
+    void invoke("set_upcoming_scenario", { name: upcomingName, reroll }).catch(() => {});
+  }, [upcomingName, reroll]);
 
   const handleDetectPath = useCallback(async () => {
     const detected = await detectKovaakPath();
@@ -143,6 +186,13 @@ function AppContent() {
     [updateSettings]
   );
 
+  const summaryEver = useEverOpened(live.dialogOpen);
+  const sheetEver = useEverOpened(sessionSheetOpen);
+  const settingsEver = useEverOpened(settingsOpen);
+  const newScenarioEver = useEverOpened(newScenarioOpen);
+  const managerEver = useEverOpened(playlistManagerOpen);
+  const aimlabEver = useEverOpened(aimlabOpen);
+
   return (
     <AppShell
       activeTab={activeTab}
@@ -158,88 +208,114 @@ function AppContent() {
       currentTheme={theme}
       onThemeChange={setTheme}
     >
-      {activeTab === "dashboard" && <DashboardView />}
-      {activeTab === "randomizer" && <RandomizerView />}
-      {activeTab === "playlist" && (
-        <PlaylistView onOpenManager={() => setPlaylistManagerOpen(true)} />
-      )}
+      <Suspense fallback={<ViewSkeleton />}>
+        {activeTab === "dashboard" && <DashboardView />}
+        {activeTab === "randomizer" && <RandomizerView />}
+        {activeTab === "lab" && <LabView />}
+        {activeTab === "playlist" && (
+          <PlaylistView onOpenManager={() => setPlaylistManagerOpen(true)} />
+        )}
+      </Suspense>
 
       {/* Dialogs / Sheets */}
-      <SessionSheet
-        open={sessionSheetOpen}
-        onClose={() => setSessionSheetOpen(false)}
-        onSubmit={addManualSessions}
-        activeTask={activeTask}
-      />
+      <Suspense fallback={null}>
+      {summaryEver && (
+        <SessionSummaryDialog
+          open={live.dialogOpen}
+          onClose={live.closeSummary}
+          summary={live.summary}
+          live={live.live}
+          onEnd={live.endSession}
+        />
+      )}
+      {sheetEver && (
+        <SessionSheet
+          open={sessionSheetOpen}
+          onClose={() => setSessionSheetOpen(false)}
+          onSubmit={addManualSessions}
+          activeTask={activeTask}
+        />
+      )}
 
-      <SettingsDialog
-        open={settingsOpen}
-        onClose={() => setSettingsOpen(false)}
-        watcherStatus={watcherStatus}
-        settingsPath={settingsPath}
-        onDetectPath={handleDetectPath}
-        onUpdatePath={handleUpdatePath}
-        onToggleWatcher={toggleWatcher}
-        onReimport={handleReimport}
-        rawaccelPath={randomizerSettings.rawaccelDir}
-        rawaccelAvailable={rawaccelAvailable}
-        onDetectRawaccel={detectRawaccelPath}
-        onUpdateRawaccelPath={async (path: string) => {
-          await saveRandomizerSettings({ ...randomizerSettings, rawaccelDir: path });
-        }}
-        onTestRawaccel={testRawaccelWriter}
-        onExport={exportData}
-        onImport={importData}
-        onLoadDemo={loadDemoData}
-        onClear={clearAllData}
-        onUpdateAppSettings={handleUpdateAppSettings}
-        onOpenAimLab={() => setAimlabOpen(true)}
-        currentTheme={theme}
-        onThemeChange={setTheme}
-      />
+      {settingsEver && (
+        <SettingsDialog
+          open={settingsOpen}
+          onClose={() => setSettingsOpen(false)}
+          watcherStatus={watcherStatus}
+          settingsPath={settingsPath}
+          onDetectPath={handleDetectPath}
+          onUpdatePath={handleUpdatePath}
+          onToggleWatcher={toggleWatcher}
+          onReimport={handleReimport}
+          rawaccelPath={randomizerSettings.rawaccelDir}
+          rawaccelAvailable={rawaccelAvailable}
+          onDetectRawaccel={detectRawaccelPath}
+          onUpdateRawaccelPath={async (path: string) => {
+            await saveRandomizerSettings({ ...randomizerSettings, rawaccelDir: path });
+          }}
+          onTestRawaccel={testRawaccelWriter}
+          onExport={exportData}
+          onImport={importData}
+          onLoadDemo={loadDemoData}
+          onClear={clearAllData}
+          onUpdateAppSettings={handleUpdateAppSettings}
+          onOpenAimLab={() => setAimlabOpen(true)}
+          currentTheme={theme}
+          onThemeChange={setTheme}
+        />
+      )}
 
-      <NewScenarioDialog
-        open={newScenarioOpen}
-        onOpenChange={setNewScenarioOpen}
-        onCreate={createTask}
-      />
+      {newScenarioEver && (
+        <NewScenarioDialog
+          open={newScenarioOpen}
+          onOpenChange={setNewScenarioOpen}
+          onCreate={createTask}
+        />
+      )}
 
-      <PlaylistManagerDialog
-        open={playlistManagerOpen}
-        onClose={() => setPlaylistManagerOpen(false)}
-        playlists={appData.playlists ?? []}
-        tasks={appData.tasks}
-        onCreatePlaylist={async (pl: Playlist) => {
-          await createPlaylist(pl.name, pl.items);
-        }}
-        onUpdatePlaylist={updatePlaylist}
-        onDeletePlaylist={deletePlaylist}
-        onStartPlaylist={(pl) => {
-          playlistRunner.start(pl);
-          setActiveTab("playlist");
-        }}
-        onSyncGames={async () => {
-          await syncGamePlaylists(true);
-        }}
-      />
+      {managerEver && (
+        <PlaylistManagerDialog
+          open={playlistManagerOpen}
+          onClose={() => setPlaylistManagerOpen(false)}
+          playlists={appData.playlists ?? []}
+          tasks={appData.tasks}
+          onCreatePlaylist={async (pl: Playlist) => {
+            await createPlaylist(pl.name, pl.items);
+          }}
+          onUpdatePlaylist={updatePlaylist}
+          onDeletePlaylist={deletePlaylist}
+          onStartPlaylist={(pl) => {
+            playlistRunner.start(pl);
+            setActiveTab("playlist");
+          }}
+          onSyncGames={async () => {
+            await syncGamePlaylists(true);
+          }}
+        />
+      )}
 
-      <AimLabSyncDialog
-        open={aimlabOpen}
-        onClose={() => setAimlabOpen(false)}
-        onImportComplete={(stats) => {
-          showToast(
-            t("aimlab.success", {
-              total: stats.total,
-              new: stats.new,
-              skipped: stats.skipped,
-            }),
-            "success"
-          );
-        }}
-      />
+      {aimlabEver && (
+        <AimLabSyncDialog
+          open={aimlabOpen}
+          onClose={() => setAimlabOpen(false)}
+          onImportComplete={(stats) => {
+            showToast(
+              t("aimlab.success", {
+                total: stats.total,
+                new: stats.new,
+                skipped: stats.skipped,
+              }),
+              "success"
+            );
+          }}
+        />
+      )}
+
+      </Suspense>
 
       <RecoveryNotice />
       <MigrationProgress />
+      <FocusPromptHost />
     </AppShell>
   );
 }
@@ -253,7 +329,9 @@ export default function App() {
             <WatcherProvider>
               <TrackerWorkspaceProvider>
                 <RandomizerProvider>
-                  <AppContent />
+                  <LiveSessionProvider>
+                    <AppContent />
+                  </LiveSessionProvider>
                 </RandomizerProvider>
               </TrackerWorkspaceProvider>
             </WatcherProvider>

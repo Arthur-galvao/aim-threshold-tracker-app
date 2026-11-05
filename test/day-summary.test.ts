@@ -1,113 +1,102 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { summarizeDays, type DaySummary } from "../src/lib/day-summary.ts";
-import type { Task, Session } from "../src/lib/types.ts";
+import {
+  summarizeTrainingSessions,
+  buildChartSeries,
+  filterChartSeries,
+} from "../src/lib/day-summary.ts";
+import { computeSkill } from "../src/lib/skill/index.ts";
+import { buildAllRuns, skillConfigFromTraining } from "../src/lib/skill/config.ts";
+import { DEFAULT_TRAINING_SETTINGS } from "../src/lib/types.ts";
+import type { Task } from "../src/lib/types.ts";
+import { makeTask } from "./_helpers_skill.ts";
 
-function createMockTask(sessions: Partial<Session>[] = []): Task {
-  return {
-    id: "task-1",
-    name: "1w2ts Pasu",
-    category: "Click Timing",
-    subcategory: "Dynamic",
-    sessions: sessions.map((s, idx) => ({
-      id: s.id ?? `sess-${idx}`,
-      date: s.date ?? "2026-10-01",
-      sens: s.sens ?? 45,
-      pb: s.pb ?? 100,
-      threshold: s.threshold ?? 0,
-      sourceFile: s.sourceFile,
-    })),
-  };
+const NOW = new Date("2026-10-10T12:00:00").getTime();
+
+function skillOf(task: Task) {
+  return computeSkill(task, buildAllRuns([task]), skillConfigFromTraining(DEFAULT_TRAINING_SETTINGS), NOW);
 }
 
-describe("day-summary analytics", () => {
-  it("returns empty array when task is null or has no sessions", () => {
-    assert.deepEqual(summarizeDays(null), []);
-    assert.deepEqual(summarizeDays(createMockTask([])), []);
+// 1ª run (10:00) e 2ª (10:03) caem no aquecimento padrão (1 run + 5 min).
+const task = makeTask([
+  { date: "2026-10-01", scores: [800, 900, 920, 910, 930, 905] },
+  { date: "2026-10-03", scores: [850, 940, 950, 960, 930, 945] },
+  { date: "2026-10-05", scores: [860, 950, 990, 970, 940, 955] },
+  { date: "2026-10-07", scores: [700, 800, 810, 820, 790, 805] },
+]);
+
+describe("day-summary: sessões de treino (Threshold v2)", () => {
+  it("returns empty for null task / no skill", () => {
+    assert.deepEqual(summarizeTrainingSessions(null, null), []);
+    assert.deepEqual(summarizeTrainingSessions(task, null), []);
+    assert.deepEqual(buildChartSeries(null, null).runs, []);
   });
 
-  it("summarizes single day with multiple runs correctly", () => {
-    const task = createMockTask([
-      { date: "2026-10-01", pb: 900, sens: 45, threshold: 880 },
-      { date: "2026-10-01", pb: 850, sens: 45, threshold: 880 },
-      { date: "2026-10-01", pb: 880, sens: 50, threshold: 880 },
-    ]);
-
-    const summaries = summarizeDays(task);
-    assert.equal(summaries.length, 1);
-
-    const d1 = summaries[0];
-    assert.equal(d1.date, "2026-10-01");
-    assert.equal(d1.runs, 3);
-    assert.equal(d1.best, 900);
-    assert.equal(d1.second, 880);
-    assert.equal(d1.min, 850);
-    assert.equal(d1.avg, 877); // (900 + 850 + 880) / 3 = 876.666 -> 877
-    assert.equal(d1.threshold, 880);
-    assert.equal(d1.targetBefore, null); // 1st day has no targetBefore
-    assert.equal(d1.hit, null); // 1st day hit is null
-    assert.deepEqual(d1.sens.sort(), [45, 50]);
-    assert.equal(d1.isPbDay, true); // initial established PB
+  it("groups by training session with valid counts, target and hit", () => {
+    const list = summarizeTrainingSessions(task, skillOf(task));
+    assert.equal(list.length, 4);
+    for (const s of list) {
+      assert.equal(s.runs, 6);
+      assert.equal(s.validRuns, 4, "aquecimento (2 runs) não conta");
+    }
+    // melhor bruto inclui runs de aquecimento; melhor ajustado só as válidas
+    assert.equal(list[1].best, 960);
+    assert.ok(Math.abs((list[1].bestAdjusted ?? 0) - 960) < 1e-6);
+    assert.ok((list[0].bestAdjusted ?? 0) <= list[0].best);
   });
 
-  it("summarizes multi-day progression with targetBefore, hit/miss, and isPbDay", () => {
-    // D1: best 900, threshold 880 (targetBefore: null, hit: null, isPbDay: true)
-    // D2: best 950, threshold 940 (targetBefore: 880, hit: true because 950 >= 880, isPbDay: true)
-    // D3: best 800, threshold 940 (targetBefore: 940, hit: false because 800 < 940, isPbDay: false)
-    // D4: best 920, threshold 940 (targetBefore: 940, hit: false because 920 < 940, isPbDay: false)
-    // D5: best 980, threshold 960 (targetBefore: 940, hit: true because 980 >= 940, isPbDay: true)
-    const task = createMockTask([
-      { date: "2026-10-01", pb: 900, threshold: 880 },
-      { date: "2026-10-02", pb: 950, threshold: 940 },
-      { date: "2026-10-03", pb: 800, threshold: 940 },
-      { date: "2026-10-04", pb: 920, threshold: 940 },
-      { date: "2026-10-05", pb: 980, threshold: 960 },
-    ]);
-
-    const summaries = summarizeDays(task);
-    assert.equal(summaries.length, 5);
-
-    // D1
-    assert.equal(summaries[0].date, "2026-10-01");
-    assert.equal(summaries[0].targetBefore, null);
-    assert.equal(summaries[0].hit, null);
-    assert.equal(summaries[0].isPbDay, true);
-
-    // D2
-    assert.equal(summaries[1].date, "2026-10-02");
-    assert.equal(summaries[1].targetBefore, 880);
-    assert.equal(summaries[1].hit, true);
-    assert.equal(summaries[1].isPbDay, true);
-
-    // D3
-    assert.equal(summaries[2].date, "2026-10-03");
-    assert.equal(summaries[2].targetBefore, 940);
-    assert.equal(summaries[2].hit, false);
-    assert.equal(summaries[2].isPbDay, false);
-
-    // D4
-    assert.equal(summaries[3].date, "2026-10-04");
-    assert.equal(summaries[3].targetBefore, 940);
-    assert.equal(summaries[3].hit, false);
-    assert.equal(summaries[3].isPbDay, false);
-
-    // D5
-    assert.equal(summaries[4].date, "2026-10-05");
-    assert.equal(summaries[4].targetBefore, 940);
-    assert.equal(summaries[4].hit, true);
-    assert.equal(summaries[4].isPbDay, true);
+  it("first session has no target/hit; later sessions have a target and hit flag", () => {
+    const list = summarizeTrainingSessions(task, skillOf(task));
+    assert.equal(list[0].target, null);
+    assert.equal(list[0].hit, null);
+    assert.ok(list[1].target !== null && list[1].target > 0);
+    assert.equal(typeof list[1].hit, "boolean");
+    // o dia ruim (700-820) fica abaixo da meta e é um MISS
+    assert.equal(list[3].hit, false);
+    assert.equal(list[3].isPb, false);
+    assert.deepEqual(list.slice(0, 3).map((s) => s.isPb), [true, true, true]);
   });
 
-  it("handles out of order session input by sorting dates ascending", () => {
-    const task = createMockTask([
-      { date: "2026-10-03", pb: 950, threshold: 920 },
-      { date: "2026-10-01", pb: 900, threshold: 880 },
-      { date: "2026-10-02", pb: 920, threshold: 900 },
-    ]);
+  it("splits one calendar day into two sessions when the gap is > 45 min", () => {
+    const morning = makeTask([{ date: "2026-10-01", scores: [900, 910, 920] }]);
+    const evening = makeTask([{ date: "2026-10-01", scores: [905, 915, 925] }]);
+    evening.sessions.forEach((s, i) => {
+      s.id = `late_${i}`;
+      s.datetime = `2026-10-01T18:${String(i * 3).padStart(2, "0")}:00`;
+    });
+    const both: Task = { ...morning, sessions: [...morning.sessions, ...evening.sessions] };
+    const list = summarizeTrainingSessions(both, skillOf(both));
+    assert.equal(list.length, 2);
+    assert.equal(list[0].date, "2026-10-01");
+    assert.equal(list[1].date, "2026-10-01");
+    assert.ok(list[1].startedAt > list[0].endedAt);
+  });
 
-    const summaries = summarizeDays(task);
-    assert.equal(summaries[0].date, "2026-10-01");
-    assert.equal(summaries[1].date, "2026-10-02");
-    assert.equal(summaries[2].date, "2026-10-03");
+  it("buildChartSeries exposes runs (valid/invalid + reason), session steps and running PB", () => {
+    const series = buildChartSeries(task, skillOf(task));
+    assert.equal(series.runs.length, 24);
+    assert.equal(series.sessions.length, 4);
+    assert.equal(series.runs[0].valid, false);
+    assert.equal(series.runs[0].reason, "warmup");
+    assert.equal(series.runs[2].valid, true);
+    assert.equal(series.sessions[0].target, null);
+    assert.ok(series.sessions[1].target !== null);
+    assert.ok(series.sessions[1].lo < series.sessions[1].mu && series.sessions[1].mu < series.sessions[1].hi);
+    assert.equal(series.sessions[0].startIdx, 0);
+    assert.equal(series.sessions[0].endIdx, 5);
+    assert.equal(series.pbRunning[series.pbRunning.length - 1], 990);
+    for (let i = 1; i < series.pbRunning.length; i++) assert.ok(series.pbRunning[i] >= series.pbRunning[i - 1]);
+  });
+
+  it("filterChartSeries reindexes runs and drops empty sessions", () => {
+    const series = buildChartSeries(task, skillOf(task));
+    const last = filterChartSeries(series, (r) => r.sessionIdx >= 2);
+    assert.equal(last.runs.length, 12);
+    assert.equal(last.sessions.length, 2);
+    assert.equal(last.runs[0].index, 0);
+    assert.equal(last.sessions[0].startIdx, 0);
+    assert.equal(last.sessions[1].startIdx, 6);
+    assert.equal(last.runs[0].sessionIdx, 0);
+    assert.equal(last.pbRunning.length, 12);
   });
 });

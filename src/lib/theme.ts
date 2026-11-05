@@ -1,3 +1,4 @@
+import type { Key } from "./i18n.tsx";
 export type AppTheme = "cyber-lab" | "tactical-emerald" | "amethyst-purple" | "obsidian-amber";
 
 export interface ThemeConfig {
@@ -5,7 +6,7 @@ export interface ThemeConfig {
   name: string;
   color: string;
   /** Chave i18n da descrição (traduzida onde é exibida). */
-  descKey: string;
+  descKey: Key;
 }
 
 export const APP_THEMES: ThemeConfig[] = [

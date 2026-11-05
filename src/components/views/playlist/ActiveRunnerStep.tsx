@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   CaretLeft,
   CaretRight,
@@ -9,6 +9,8 @@ import {
   Sliders,
   ShieldCheck,
   Eye,
+  PencilSimple,
+  WarningCircle,
 } from "@phosphor-icons/react";
 import { Button, Badge } from "@/components/ui";
 import type { Task } from "@/lib/types";
@@ -19,7 +21,12 @@ import {
   getScenarioIdealSens,
   type PlaylistSensStats,
 } from "@/lib/sens-analytics";
+import { formatClock, resolveIntentCue } from "@/lib/playlist-step";
+import { IntentCueEditor } from "@/components/dialogs/IntentCueEditor";
 import { useI18n } from "@/lib/i18n";
+
+/** Destaque do cue de intenção após a troca de passo (T7.7). */
+const CUE_FLASH_MS = 4000;
 
 export interface ActiveRunnerStepProps {
   runner: PlaylistRunnerState;
@@ -43,6 +50,7 @@ export function ActiveRunnerStep({
   onApplySens,
 }: ActiveRunnerStepProps) {
   const { t } = useI18n();
+  // Chaves novas vivem em docs/plans/i18n-pending/T7-playlist.json até a integração (o tipo Key ainda não as conhece).
   const {
     activePlaylist,
     currentStepIndex,
@@ -52,8 +60,18 @@ export function ActiveRunnerStep({
     stepBestScore,
   } = runner;
 
+  const [editingCue, setEditingCue] = useState(false);
+  const [cueFlash, setCueFlash] = useState(false);
+
   const totalSteps = activePlaylist?.items.length ?? 0;
   const isLastStep = currentStepIndex >= totalSteps - 1;
+
+  // Destaque do cue por 4 s a cada troca de passo
+  useEffect(() => {
+    setCueFlash(true);
+    const id = setTimeout(() => setCueFlash(false), CUE_FLASH_MS);
+    return () => clearTimeout(id);
+  }, [currentStepIndex, currentTask?.id]);
 
   const idealSens = useMemo(() => {
     if (!currentTask) return null;
@@ -71,6 +89,10 @@ export function ActiveRunnerStep({
     return getSubcategoryCoachingCue(currentTask.category, currentTask.subcategory);
   }, [currentTask]);
 
+  // Cue de intenção: salvo pelo usuário, senão o mechanicKey traduzido (T7.7)
+  const defaultIntentCue = coachingCue ? t(coachingCue.mechanicKey) : "";
+  const intentCue = currentTask ? resolveIntentCue(currentTask, defaultIntentCue) : defaultIntentCue;
+
   // Calculate step progress
   let progressPct = 0;
   let progressLabel = "";
@@ -86,19 +108,18 @@ export function ActiveRunnerStep({
         target: targetReps,
       });
     } else if (currentItem.targetMode === "threshold") {
-      const currentSessions = currentTask ? currentTask.sessions.length : 0;
-      const completedReps = Math.max(0, currentSessions - runner.sessionCountAtStart);
       const targetReps = Math.max(1, currentItem.targetValue);
       const threshVal = stepTargetThreshold ?? 0;
       const bestVal = stepBestScore ?? 0;
-      const scoreRatio = threshVal > 0 ? Math.min(1, bestVal / threshVal) : completedReps >= targetReps ? 1 : 0;
-      const repRatio = Math.min(1, completedReps / targetReps);
+      const attempts = runner.stepAttempts;
+      const scoreRatio = threshVal > 0 ? Math.min(1, bestVal / threshVal) : attempts >= targetReps ? 1 : 0;
+      const repRatio = Math.min(1, attempts / targetReps);
       progressPct = Math.min(100, ((scoreRatio + repRatio) / 2) * 100);
-      progressLabel = t("runner.goalThreshold", {
-        best: bestVal,
-        threshold: threshVal > 0 ? threshVal : "—",
-        current: completedReps,
-        target: targetReps,
+      progressLabel = t("runner.attemptsLabel", {
+        current: attempts,
+        max: runner.stepMaxAttempts,
+        elapsed: formatClock(runner.elapsedSeconds),
+        limit: formatClock(runner.stepMaxMinutes * 60),
       });
     } else {
       const elapsed = runner.elapsedSeconds;
@@ -156,6 +177,17 @@ export function ActiveRunnerStep({
             <Badge variant="neutral">
               {currentTask.subcategory}
             </Badge>
+            {runner.isMeasureStep && (
+              <Badge variant="amber">{t("runner.measureBadge")}</Badge>
+            )}
+          </div>
+        )}
+
+        {/* Cue de intenção em destaque após a troca de passo (T7.7) */}
+        {currentTask && cueFlash && (
+          <div className="mt-3 p-3 rounded-control bg-score-soft border border-edge flex items-start gap-2">
+            <Eye size={15} weight="bold" className="text-score shrink-0 mt-0.5" />
+            <p className="text-sm font-semibold text-text-main leading-snug">{intentCue}</p>
           </div>
         )}
       </div>
@@ -256,18 +288,39 @@ export function ActiveRunnerStep({
       {/* Biomechanical & Quiet Eye Directive */}
       {coachingCue && (
         <div className="liquid-well p-3.5 rounded-control border border-edge space-y-1.5">
-          <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-score">
-            <Eye size={13} weight="bold" />
-            <span>{t("coach.title")}</span>
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-score">
+              <Eye size={13} weight="bold" />
+              <span>{t("intent.label")}</span>
+            </div>
+            {currentTask && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setEditingCue(true)}
+                icon={<PencilSimple size={12} weight="bold" />}
+                aria-label={t("intent.editAria")}
+              >
+                {t("intent.edit")}
+              </Button>
+            )}
           </div>
-          <p className="text-xs text-text-main leading-relaxed">
-            {t(coachingCue.mechanicKey)}
-          </p>
+          <p className="text-xs text-text-main leading-relaxed">{intentCue}</p>
           <p className="text-[11px] text-text-secondary leading-relaxed">
             <span className="font-semibold text-text-main">{t("coach.quietEye")}:</span>{" "}
             {t(coachingCue.quietEyeKey)}
           </p>
         </div>
+      )}
+
+      {currentTask && (
+        <IntentCueEditor
+          open={editingCue}
+          onClose={() => setEditingCue(false)}
+          task={currentTask}
+          defaultCue={defaultIntentCue}
+        />
       )}
 
       {/* Target Progress Bar & Controls */}
@@ -289,6 +342,13 @@ export function ActiveRunnerStep({
               style={{ width: `${progressPct}%` }}
             />
           </div>
+
+          {runner.stepOutcome === "missed" && (
+            <div className="p-3 rounded-control bg-amber/10 border border-amber/30 flex items-start gap-2">
+              <WarningCircle size={15} weight="bold" className="text-amber shrink-0 mt-0.5" />
+              <p className="text-xs text-text-main leading-relaxed">{t("runner.stepMissedNote")}</p>
+            </div>
+          )}
 
           <p className="text-[11px] text-text-faint">
             {t("runner.autoAdvanceNote")}

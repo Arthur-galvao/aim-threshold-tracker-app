@@ -7,11 +7,13 @@ use tauri::{AppHandle, Manager};
 
 use crate::errors::err_d;
 use crate::model::{AppData, AppSettings};
+use crate::sampler::SamplerSnapshot;
 
 pub const APP_DATA_FILE: &str = "app_data.json";
 pub const APP_DATA_BACKUPS: usize = 5;
 pub const SETTINGS_FILE: &str = "settings.json";
 pub const SENS_LEDGER_FILE: &str = "sens_ledger.json";
+pub const SAMPLER_STATE_FILE: &str = "sampler_state.json";
 pub const SETTINGS_BACKUPS: usize = 3;
 
 /// Resultado do carregamento de um arquivo de dados.
@@ -104,6 +106,22 @@ pub fn save_settings(app: &AppHandle, settings: &AppSettings) -> Result<(), Stri
 
 pub fn sens_ledger_path(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(data_dir(app)?.join(SENS_LEDGER_FILE))
+}
+
+/// Estado do sorteio (sacos + sessao). Arquivo ausente ou JSON invalido -> default (descartavel).
+pub fn load_sampler_state(app: &AppHandle) -> SamplerSnapshot {
+    data_dir(app)
+        .map(|d| load_sampler_state_from(&d.join(SAMPLER_STATE_FILE)))
+        .unwrap_or_default()
+}
+
+pub fn load_sampler_state_from(path: &Path) -> SamplerSnapshot {
+    read_json(path.to_path_buf()).unwrap_or_default()
+}
+
+pub fn save_sampler_state(app: &AppHandle, snapshot: &SamplerSnapshot) -> Result<(), String> {
+    let dir = data_dir(app)?;
+    write_json(&dir.join(SAMPLER_STATE_FILE), snapshot)
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
@@ -335,6 +353,25 @@ fn write_json<T: serde::Serialize>(path: &Path, value: &T) -> Result<(), String>
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn sampler_state_roundtrip_and_invalid_is_default() {
+        let dir = std::env::temp_dir().join(format!("att_sampler_{}_{}", std::process::id(), std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join(SAMPLER_STATE_FILE);
+        assert_eq!(load_sampler_state_from(&path), SamplerSnapshot::default());
+
+        let mut snap = SamplerSnapshot::default();
+        snap.sampler.bags.insert("1:8:center:0".into(), vec![3, 5]);
+        snap.sampler.last_k = Some(4);
+        snap.roll_session.runs_in_session = 7;
+        write_json(&path, &snap).unwrap();
+        assert_eq!(load_sampler_state_from(&path), snap);
+
+        fs::write(&path, "{ not json").unwrap();
+        assert_eq!(load_sampler_state_from(&path), SamplerSnapshot::default());
+        let _ = fs::remove_dir_all(&dir);
+    }
     use crate::model::{Session, Task};
 
     fn temp_case_dir(tag: &str) -> PathBuf {
@@ -355,6 +392,7 @@ mod tests {
                 name: "Task".into(),
                 category: "Clicking".into(),
                 subcategory: "Precision".into(),
+                intent_cue: None,
                 sessions: vec![],
             }],
             playlists: vec![],
@@ -372,6 +410,7 @@ mod tests {
                     name: "Task A".into(),
                     category: "Clicking".into(),
                     subcategory: "Precision".into(),
+                    intent_cue: None,
                     sessions: vec![
                         Session {
                             id: "sess_dupe".into(),
@@ -389,6 +428,7 @@ mod tests {
                     name: "Task B".into(),
                     category: "Clicking".into(),
                     subcategory: "Precision".into(),
+                    intent_cue: None,
                     sessions: vec![
                         Session {
                             id: "sess_dupe".into(),

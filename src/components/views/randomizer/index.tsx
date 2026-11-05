@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { ChartScatter, Rows, SquaresFour } from "@phosphor-icons/react";
+import { ChartScatter, Rows } from "@phosphor-icons/react";
 import { useApp } from "@/hooks/useAppData";
 import { useSensRandomizer } from "@/hooks/useSensRandomizer";
 import { useI18n } from "@/lib/i18n";
@@ -22,14 +22,13 @@ import {
   type CategoryOption,
 } from "./sweet-spot-chart";
 import { Analytics } from "./analytics";
-import { CategoryCards } from "./category-cards";
 import { cn } from "@/lib/utils";
 
 export interface RandomizerViewProps {
   className?: string;
 }
 
-type RandomizerTab = "chart" | "buckets" | "categories";
+type RandomizerTab = "chart" | "buckets";
 
 export function RandomizerView({ className }: RandomizerViewProps) {
   const { t } = useI18n();
@@ -177,9 +176,10 @@ export function RandomizerView({ className }: RandomizerViewProps) {
   }, [activeTask, allTasks, settings.mouseDpi]);
 
   const resolvedActiveRange = useMemo(() => {
+    const autoCenter = settings.centerSource !== "base";
     return resolveRangeCm(
-      settings,
-      settings.autoScenarioSens && idealSens ? idealSens.value : null
+      { ...settings, autoScenarioSens: autoCenter },
+      autoCenter && idealSens ? idealSens.value : null
     );
   }, [settings, idealSens]);
 
@@ -224,18 +224,6 @@ export function RandomizerView({ className }: RandomizerViewProps) {
       });
     },
     [activeTask?.name, saveSettings, settings]
-  );
-
-  const handleViewInChart = useCallback(
-    (filter: { mode: "category" | "playlist"; id: string }) => {
-      if (filter.mode === "playlist") {
-        setScopeFilter({ mode: "playlist", playlistId: filter.id });
-      } else {
-        setScopeFilter({ mode: "category", categoryKey: filter.id });
-      }
-      setActiveSubTab("chart");
-    },
-    []
   );
 
   return (
@@ -290,11 +278,6 @@ export function RandomizerView({ className }: RandomizerViewProps) {
                 label: t("randomizer.predictorTitle"),
                 icon: <Rows size={14} weight="bold" />,
               },
-              {
-                value: "categories",
-                label: t("categorySens.title"),
-                icon: <SquaresFour size={14} weight="bold" />,
-              },
             ]}
           />
         </div>
@@ -328,16 +311,6 @@ export function RandomizerView({ className }: RandomizerViewProps) {
                 groupRuns={groupRuns}
                 scopeAllTasks={scopeFilter.mode !== "current"}
                 onApplySens={handleApplySens}
-              />
-            )}
-
-            {activeSubTab === "categories" && (
-              <CategoryCards
-                tasks={allTasks}
-                playlists={playlists}
-                mouseDpi={settings.mouseDpi}
-                onApplySens={handleApplySens}
-                onViewInChart={handleViewInChart}
               />
             )}
           </motion.div>

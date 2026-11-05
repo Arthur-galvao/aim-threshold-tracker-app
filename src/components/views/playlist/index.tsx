@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   Plus,
   ArrowsClockwise,
@@ -10,9 +10,12 @@ import { cn } from "@/lib/utils";
 import { Button, EmptyState } from "@/components/ui";
 import { useApp } from "@/hooks/useAppData";
 import { useSensRandomizer } from "@/hooks/useSensRandomizer";
+import { useSettings } from "@/hooks/useSettings";
 import { useI18n } from "@/lib/i18n";
-import type { Playlist } from "@/lib/types";
+import { DEFAULT_TRAINING_SETTINGS, type Playlist } from "@/lib/types";
 import { computePlaylistSensStats } from "@/lib/sens-analytics";
+import { getSubcategoryCoachingCue } from "@/lib/viscose";
+import { playlistMeasureDue, resolveIntentCue, type StepSensContext } from "@/lib/playlist-step";
 import { ActiveRunnerStep } from "./ActiveRunnerStep";
 import { StepSequenceList } from "./StepSequenceList";
 import { StepSensCard } from "./StepSensCard";
@@ -32,6 +35,7 @@ function formatDuration(totalSeconds: number): string {
 
 export function PlaylistView({ className, onOpenManager }: PlaylistViewProps) {
   const { t } = useI18n();
+  // Chaves novas vivem em docs/plans/i18n-pending/T7-playlist.json até a integração (o tipo Key ainda não as conhece).
   const {
     appData,
     playlistRunner,
@@ -43,8 +47,13 @@ export function PlaylistView({ className, onOpenManager }: PlaylistViewProps) {
 
   const {
     settings: randomizerSettings,
+    randomizerState,
     syncScenarioSens,
   } = useSensRandomizer();
+
+  const { settings: appSettings } = useSettings();
+  const weeklyMeasureReminder =
+    appSettings?.training?.weeklyMeasureReminder ?? DEFAULT_TRAINING_SETTINGS.weeklyMeasureReminder;
 
   const [managerOpen, setManagerOpen] = useState(false);
   const [syncing, setSyncing] = useState(false);
@@ -52,6 +61,32 @@ export function PlaylistView({ className, onOpenManager }: PlaylistViewProps) {
   const playlists = appData.playlists ?? [];
   const tasks = appData.tasks;
   const dpi = randomizerSettings.mouseDpi;
+
+  // Sens do randomizer para a meta do passo (T4.8h): só com randomizer ativo e centro conhecido.
+  const { reportSensContext } = playlistRunner;
+  const randomizerSensCm = randomizerState.activeSensCm;
+  const randomizerCenterCm = randomizerState.activeCenterCm ?? null;
+  const randomizerRole = randomizerState.activeRole ?? null;
+  const randomizerOn =
+    randomizerSettings.enabled && randomizerCenterCm !== null && randomizerRole !== null && randomizerRole !== "off";
+  useEffect(() => {
+    const ctx: StepSensContext | null =
+      randomizerOn && randomizerCenterCm !== null
+        ? { sensCm: randomizerSensCm, centerCm: randomizerCenterCm }
+        : null;
+    reportSensContext(ctx);
+  }, [reportSensContext, randomizerOn, randomizerSensCm, randomizerCenterCm]);
+
+  // Lembrete semanal de medição (T7.5)
+  const measureDueIds = useMemo(() => {
+    const out = new Set<string>();
+    if (!weeklyMeasureReminder) return out;
+    const nowMs = Date.now();
+    for (const pl of appData.playlists ?? []) {
+      if (playlistMeasureDue(pl, appData.tasks, nowMs)) out.add(pl.id);
+    }
+    return out;
+  }, [appData.playlists, appData.tasks, weeklyMeasureReminder]);
 
   const activeStats = useMemo(() => {
     if (!playlistRunner.activePlaylist) return null;
@@ -89,6 +124,15 @@ export function PlaylistView({ className, onOpenManager }: PlaylistViewProps) {
     handleOpenManager();
   };
 
+  // Cue de intenção do passo ativo (salvo ou o padrão da Viscose)
+  const activeTask = playlistRunner.currentTask;
+  const activeIntentCue = activeTask
+    ? resolveIntentCue(
+        activeTask,
+        t(getSubcategoryCoachingCue(activeTask.category, activeTask.subcategory).mechanicKey)
+      )
+    : null;
+
   // Case 1: Runner is actively running or has an active playlist
   if (playlistRunner.isRunning && playlistRunner.activePlaylist && !playlistRunner.isFinished) {
     return (
@@ -118,6 +162,19 @@ export function PlaylistView({ className, onOpenManager }: PlaylistViewProps) {
           tasks={tasks}
           mouseDpi={dpi}
           onApplySens={handleApplySens}
+          activeIndex={playlistRunner.currentStepIndex}
+          randomizer={
+            randomizerOn || randomizerRole === "off"
+              ? {
+                  sensCm: randomizerSensCm,
+                  centerCm: randomizerCenterCm,
+                  role: randomizerRole,
+                  muscleCue: randomizerState.muscleCue ?? null,
+                }
+              : null
+          }
+          activeTarget={playlistRunner.stepTargetThreshold}
+          activeIntentCue={activeIntentCue}
         />
       </div>
     );
@@ -249,6 +306,7 @@ export function PlaylistView({ className, onOpenManager }: PlaylistViewProps) {
               onStart={(pl) => playlistRunner.start(pl)}
               onEdit={handleEditPlaylist}
               onDelete={deletePlaylist}
+              measureDue={measureDueIds.has(playlist.id)}
             />
           </div>
         ))

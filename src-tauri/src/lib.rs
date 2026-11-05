@@ -6,6 +6,7 @@ mod migrations;
 mod model;
 mod parser;
 mod randomizer;
+mod roll_plan;
 mod storage;
 mod watcher;
 mod sens_ledger;
@@ -20,7 +21,7 @@ use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent}
 use tauri::{AppHandle, Emitter, Manager, State, WindowEvent};
 
 use crate::errors::{err, err_d};
-use model::{AppSettings, ImportStats, RandomizerSettings, RandomizerState, WatcherStatus};
+use model::{AppSettings, ImportStats, RandomizerSettings, RandomizerState, ScenarioMeta, WatcherStatus};
 
 /// Acima disso o re-parse dos CSVs da migração v2 roda em background.
 const MAX_SYNC_REPARSE: usize = 500;
@@ -34,8 +35,15 @@ pub struct AppState {
     pub emitted: Mutex<HashSet<String>>,
     pub randomizer_state: Mutex<RandomizerState>,
     pub sampler: Mutex<sampler::SamplerState>,
+    /// Contadores da sessao de treino do randomizer v2 (Plano 05), persistidos com o sampler.
+    pub roll_session: Mutex<roll_plan::RollSessionState>,
+    /// Cache do RawAccel (REV-10): (pasta, driver ok). O hot path nunca re-checa tasklist/disco.
+    pub rawaccel_cache: Mutex<Option<(std::path::PathBuf, bool)>>,
     pub roll_lock: Mutex<()>,
-    pub scenario_centers: Mutex<HashMap<String, f64>>,
+    /// Metadados por cenário (centro + categoria/subcategoria), chave = nome normalizado (Plano 05).
+    pub scenario_meta: Mutex<HashMap<String, ScenarioMeta>>,
+    /// true enquanto o runner executa um passo de medição: o randomizer fica pausado (Plano 05/07).
+    pub measuring: Mutex<bool>,
     pub upcoming_scenario: Mutex<Option<String>>,
     pub load_report: Mutex<Option<storage::LoadReport>>,
 }
@@ -103,7 +111,7 @@ fn save_settings(
     let _ = app.emit("settings_updated", &settings);
 
     if settings.randomizer.enabled {
-        let (avail, found_dir, _, _) = randomizer::check_rawaccel_availability(settings.randomizer.rawaccel_dir.as_deref());
+        let (avail, found_dir, _, _) = randomizer::refresh_rawaccel_cache(&state, settings.randomizer.rawaccel_dir.as_deref());
         if avail {
             if let Some(ref dir) = found_dir {
                 let current_mult = state.randomizer_state.lock().unwrap().active_mult;
@@ -209,7 +217,7 @@ fn check_rawaccel_available(state: State<'_, AppState>) -> Result<RandomizerStat
         let s = state.settings.lock().unwrap();
         (s.randomizer.rawaccel_dir.clone(), s.randomizer.base_sens_cm)
     };
-    let (avail, _, err_msg, gui_running) = randomizer::check_rawaccel_availability(configured_dir.as_deref());
+    let (avail, _, err_msg, gui_running) = randomizer::refresh_rawaccel_cache(&state, configured_dir.as_deref());
     let mut r_state = state.randomizer_state.lock().unwrap();
     r_state.available = avail;
     r_state.rawaccel_gui_running = gui_running;
@@ -256,7 +264,7 @@ fn save_randomizer_settings(
     storage::save_settings(&app, &app_settings)?;
     let _ = app.emit("randomizer_settings_updated", &settings);
 
-    let (avail, found_dir, err_msg, gui_running) = randomizer::check_rawaccel_availability(settings.rawaccel_dir.as_deref());
+    let (avail, found_dir, err_msg, gui_running) = randomizer::refresh_rawaccel_cache(&state, settings.rawaccel_dir.as_deref());
     {
         let mut r_state = state.randomizer_state.lock().unwrap();
         r_state.available = avail;
@@ -317,15 +325,35 @@ fn preview_sens_range(settings: RandomizerSettings, center_cm: Option<f64>) -> R
 }
 
 #[tauri::command]
-fn set_scenario_centers(
+fn set_scenario_meta(
     state: State<'_, AppState>,
-    centers: HashMap<String, f64>,
+    meta: HashMap<String, ScenarioMeta>,
 ) -> Result<(), String> {
-    let mut normalized = HashMap::with_capacity(centers.len());
-    for (k, v) in centers {
+    let mut normalized = HashMap::with_capacity(meta.len());
+    for (k, v) in meta {
         normalized.insert(k.trim().to_lowercase(), v);
     }
-    *state.scenario_centers.lock().unwrap() = normalized;
+    *state.scenario_meta.lock().unwrap() = normalized;
+    Ok(())
+}
+
+/// Chamado pelo runner da playlist: passo de medicao ativo = randomizer pausado.
+/// Ao mudar o valor com o randomizer ligado, refaz o plano da proxima run (sem consumir a sessao).
+#[tauri::command]
+fn set_measuring(app: AppHandle, state: State<'_, AppState>, measuring: bool) -> Result<(), String> {
+    let changed = {
+        let mut m = state.measuring.lock().unwrap();
+        let changed = *m != measuring;
+        *m = measuring;
+        changed
+    };
+    let enabled = state.settings.lock().unwrap().randomizer.enabled;
+    if changed && enabled {
+        let _ = randomizer::apply_next_sens(
+            &app,
+            randomizer::RollContext { finished_scenario: None, reason: "measuring".into() },
+        );
+    }
     Ok(())
 }
 
@@ -351,7 +379,7 @@ fn set_upcoming_scenario(
             )
         };
 
-        let (avail, _, _, _) = randomizer::check_rawaccel_availability(rawaccel_dir.as_deref());
+        let (avail, _, _) = randomizer::cached_availability(&state, rawaccel_dir.as_deref());
         let last_center = state.sampler.lock().unwrap().last_roll_center_cm;
 
         if enabled && avail {
@@ -359,7 +387,7 @@ fn set_upcoming_scenario(
                 let new_center = norm_name.as_ref().and_then(|scen| {
                     let norm = scen.to_lowercase();
                     center_overrides.get(&norm).copied()
-                        .or_else(|| state.scenario_centers.lock().unwrap().get(&norm).copied())
+                        .or_else(|| state.scenario_meta.lock().unwrap().get(&norm).map(|m| m.center_cm))
                 }).or(scenario_ideal).unwrap_or(if base_cm > 0.0 { base_cm } else { 40.0 });
 
                 if new_center > 0.0 && last > 0.0 {
@@ -419,6 +447,8 @@ fn test_rawaccel_writer(app: AppHandle, state: State<'_, AppState>, path: Option
     let current_mult = state.randomizer_state.lock().unwrap().active_mult;
     let mouse_dpi = state.settings.lock().unwrap().randomizer.mouse_dpi;
     randomizer::update_and_apply_scale(&app, &target_dir, current_mult, mouse_dpi)?;
+    let configured = state.settings.lock().unwrap().randomizer.rawaccel_dir.clone();
+    let _ = randomizer::refresh_rawaccel_cache(&state, configured.as_deref());
     Ok("Comunicação com o driver RawAccel testada com sucesso!".to_string())
 }
 
@@ -497,6 +527,8 @@ pub fn run() {
             }
 
             let (avail, found_dir, err_msg, gui_running) = randomizer::check_rawaccel_availability(settings.randomizer.rawaccel_dir.as_deref());
+            let initial_rawaccel_cache = found_dir.clone().map(|dir| (dir, avail));
+            let sampler_snapshot = storage::load_sampler_state(app.handle());
 
             if settings.randomizer.rawaccel_dir.is_none() {
                 if let Some(ref dir) = found_dir {
@@ -515,6 +547,7 @@ pub fn run() {
                 last_updated: None,
                 error_message: err_msg,
                 last_roll_reason: None,
+                ..RandomizerState::default()
             };
 
             let is_randomizer_enabled = settings.randomizer.enabled;
@@ -534,9 +567,12 @@ pub fn run() {
                 watcher: Mutex::new(None),
                 emitted: Mutex::new(HashSet::new()),
                 randomizer_state: Mutex::new(initial_r_state),
-                sampler: Mutex::new(sampler::SamplerState::default()),
+                sampler: Mutex::new(sampler_snapshot.sampler),
+                roll_session: Mutex::new(sampler_snapshot.roll_session),
+                rawaccel_cache: Mutex::new(initial_rawaccel_cache),
                 roll_lock: Mutex::new(()),
-                scenario_centers: Mutex::new(HashMap::new()),
+                scenario_meta: Mutex::new(HashMap::new()),
+                measuring: Mutex::new(false),
                 upcoming_scenario: Mutex::new(None),
                 load_report: Mutex::new(Some(data_report)),
             });
@@ -691,7 +727,9 @@ pub fn run() {
             save_randomizer_settings,
             get_randomizer_state,
             preview_sens_range,
-            set_scenario_centers,
+            set_scenario_meta,
+            set_measuring,
+            data_commands::set_session_focus,
             set_upcoming_scenario,
             trigger_randomize_now,
             detect_rawaccel_path,

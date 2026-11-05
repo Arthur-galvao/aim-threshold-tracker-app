@@ -139,3 +139,28 @@ describe("web-backend (mesmo contrato do Rust)", () => {
     assert.equal(n, 1);
   });
 });
+
+describe("web-backend: foco da sessão e intentCue (Plano 07)", () => {
+  it("setSessionFocus sets, clears and validates", () => {
+    const { backend } = fresh();
+    const { taskId } = backend.createTask("A", "c", "s");
+    backend.addManualSessions(taskId, "2026-10-12", 45, [100]);
+    const sid = backend.getAppData().data.tasks[0].sessions[0].id;
+    backend.setSessionFocus(taskId, sid, "on");
+    assert.equal(backend.getAppData().data.tasks[0].sessions[0].focus, "on");
+    backend.setSessionFocus(taskId, sid, null);
+    assert.equal(backend.getAppData().data.tasks[0].sessions[0].focus, undefined);
+    assert.equal(code(() => backend.setSessionFocus(taskId, "nope", "on")), "session_not_found");
+    assert.equal(code(() => backend.setSessionFocus("nope", sid, "on")), "task_not_found");
+    assert.equal(code(() => backend.setSessionFocus(taskId, sid, "x" as never)), "invalid_payload");
+  });
+
+  it("updateTaskMeta truncates intentCue to 80 chars and empty clears it", () => {
+    const { backend } = fresh();
+    const { taskId } = backend.createTask("A", "c", "s");
+    backend.updateTaskMeta(taskId, { intentCue: "y".repeat(200) });
+    assert.equal(backend.getAppData().data.tasks[0].intentCue?.length, 80);
+    backend.updateTaskMeta(taskId, { intentCue: "  " });
+    assert.equal(backend.getAppData().data.tasks[0].intentCue, undefined);
+  });
+});

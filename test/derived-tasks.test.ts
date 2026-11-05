@@ -1,7 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { createTaskDeriver, deriveTask, taskSignature } from "../src/lib/derived-tasks.ts";
-import { recalculateAllTaskThresholds } from "../src/lib/threshold.ts";
 import type { Task } from "../src/lib/types.ts";
 
 function task(id: string, scores: Array<[string, number]>, extra: Partial<Task> = {}): Task {
@@ -15,30 +14,44 @@ function task(id: string, scores: Array<[string, number]>, extra: Partial<Task> 
   };
 }
 
-describe("deriveTask", () => {
-  it("recomputes legacy thresholds on a COPY and leaves the snapshot task untouched", () => {
+// Recalc de teste (o ratchet saiu): só marca threshold = 1 para provar a cópia/memo.
+const markFirst = (t: Task) => {
+  for (const s of t.sessions) s.threshold = 1;
+};
+
+describe("deriveTask (Threshold v2: passagem direta por padrão)", () => {
+  it("does not recompute Session.threshold: returns the same task", () => {
     const raw = task("a", [["2026-10-01", 1000]]);
     const derived = deriveTask(raw);
-    assert.equal(derived.sessions[0].threshold, 920);
-    assert.equal(raw.sessions[0].threshold, 0, "snapshot não é mutado");
+    assert.equal(derived, raw);
+    assert.equal(derived.sessions[0].threshold, 0, "threshold não é mais escrito");
+  });
+
+  it("with an explicit recalc, works on a COPY and leaves the snapshot untouched", () => {
+    const raw = task("a", [["2026-10-01", 1000]]);
+    const derived = deriveTask(raw, markFirst);
+    assert.equal(derived.sessions[0].threshold, 1);
+    assert.equal(raw.sessions[0].threshold, 0);
     assert.notEqual(derived, raw);
     assert.notEqual(derived.sessions[0], raw.sessions[0]);
   });
-
-  it("matches recalculateAllTaskThresholds exactly", () => {
-    const raw = task("a", [["2026-10-02", 900], ["2026-10-01", 850], ["2026-10-01", 880], ["2026-10-02", 950]]);
-    const expected = structuredClone(raw);
-    recalculateAllTaskThresholds(expected);
-    assert.deepEqual(deriveTask(raw), expected);
-  });
 });
 
-describe("createTaskDeriver (memo por task)", () => {
-  it("only the changed task is recomputed", () => {
+describe("createTaskDeriver", () => {
+  it("default deriver is a pass-through that preserves array and task references", () => {
+    const derive = createTaskDeriver();
+    const tasks = [task("a", [["2026-10-01", 1000]]), task("b", [["2026-10-01", 500]])];
+    const out = derive(tasks);
+    assert.equal(out, tasks);
+    assert.equal(out[0], tasks[0]);
+    assert.equal(derive.computeCount(), 0);
+  });
+
+  it("with recalc: only the changed task is recomputed", () => {
     const calls: string[] = [];
     const derive = createTaskDeriver((t) => {
       calls.push(t.id);
-      recalculateAllTaskThresholds(t);
+      markFirst(t);
     });
 
     const a = task("a", [["2026-10-01", 1000]]);
@@ -46,9 +59,7 @@ describe("createTaskDeriver (memo por task)", () => {
     const c = task("c", [["2026-10-01", 700]]);
     const first = derive([a, b, c]);
     assert.deepEqual(calls, ["a", "b", "c"]);
-    assert.equal(first[1].sessions[0].threshold, 460);
 
-    // novo snapshot: objetos novos (como vindos do Rust), só `b` ganhou uma sessão
     calls.length = 0;
     const b2 = task("b", [["2026-10-01", 500], ["2026-10-02", 600]]);
     const second = derive([structuredClone(a), b2, structuredClone(c)]);
@@ -59,8 +70,8 @@ describe("createTaskDeriver (memo por task)", () => {
     assert.equal(second[1].sessions.length, 2);
   });
 
-  it("returns the same array when nothing changed (e.g. only activeTaskId moved)", () => {
-    const derive = createTaskDeriver();
+  it("with recalc: returns the same array when nothing changed", () => {
+    const derive = createTaskDeriver(markFirst);
     const tasks = [task("a", [["2026-10-01", 1000]]), task("b", [["2026-10-01", 500]])];
     const first = derive(tasks);
     const again = derive(structuredClone(tasks));
@@ -68,32 +79,18 @@ describe("createTaskDeriver (memo por task)", () => {
     assert.equal(derive.computeCount(), 2);
   });
 
-  it("recomputes when name/category change or a session is deleted/added", () => {
-    const derive = createTaskDeriver();
+  it("with recalc: recomputes when metadata changes or a session is added/removed; prunes removed tasks", () => {
+    const derive = createTaskDeriver(markFirst);
     const base = task("a", [["2026-10-01", 1000], ["2026-10-02", 900]]);
     derive([base]);
-    assert.equal(derive.computeCount(), 1);
-
     derive([{ ...base, name: "Renamed" }]);
     assert.equal(derive.computeCount(), 2);
-    derive([{ ...base, name: "Renamed", category: "Other" }]);
-    assert.equal(derive.computeCount(), 3);
-
-    const withoutFirst = { ...base, sessions: base.sessions.slice(1) };
-    derive([withoutFirst]);
-    assert.equal(derive.computeCount(), 4);
     const extra = task("a", [["2026-10-01", 1000], ["2026-10-02", 900], ["2026-10-03", 800]]);
     assert.notEqual(taskSignature(extra), taskSignature(base));
     derive([extra]);
-    assert.equal(derive.computeCount(), 5);
-  });
-
-  it("drops cache entries for removed tasks and handles empty input", () => {
-    const derive = createTaskDeriver();
-    const a = task("a", [["2026-10-01", 1000]]);
-    derive([a]);
+    assert.equal(derive.computeCount(), 3);
     assert.deepEqual(derive([]), []);
-    derive([a]);
-    assert.equal(derive.computeCount(), 2, "a voltou: recomputada (cache podado)");
+    derive([extra]);
+    assert.equal(derive.computeCount(), 4, "a voltou: recomputada (cache podado)");
   });
 });

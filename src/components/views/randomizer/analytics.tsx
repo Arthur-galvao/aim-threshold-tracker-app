@@ -78,7 +78,7 @@ export function Analytics({
 
   const profileOptions = VALID_PROFILES.map((p) => ({
     value: p,
-    label: t(PREDICTOR_PROFILES[p].labelKey as Key),
+    label: t(PREDICTOR_PROFILES[p].labelKey),
   }));
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -325,7 +325,7 @@ export function Analytics({
                 </div>
                 <ul className="list-disc list-inside space-y-0.5 text-[11px] pl-1">
                   {prediction.reasons.map((rKey, idx) => (
-                    <li key={idx}>{t(rKey as Key)}</li>
+                    <li key={idx}>{t(rKey)}</li>
                   ))}
                 </ul>
               </div>

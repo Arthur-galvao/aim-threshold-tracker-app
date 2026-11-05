@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import {
   ClockCounterClockwise,
@@ -9,11 +9,23 @@ import { useTrackerWorkspace } from "@/context/TrackerWorkspaceContext";
 import { useI18n } from "@/lib/i18n";
 import { EmptyState, Segmented } from "@/components/ui";
 import { KPIStrip } from "./KPIStrip";
-import { ProgressChart } from "./ProgressChart";
 import { SessionHistory } from "./SessionHistory";
 import { ScenarioBreakdown } from "./ScenarioBreakdown";
 import { MiniPlaylistRunner } from "./MiniPlaylistRunner";
+import { TargetAnalytics } from "./TargetAnalytics";
 import { cn } from "@/lib/utils";
+
+// T8.9: chart.js só carrega quando o dashboard monta os gráficos (fora do chunk inicial).
+const ProgressChart = lazy(() =>
+  import("./ProgressChart").then((m) => ({ default: m.ProgressChart }))
+);
+const IntraSessionChart = lazy(() =>
+  import("./IntraSessionChart").then((m) => ({ default: m.IntraSessionChart }))
+);
+
+function ChartFallback({ className }: { className?: string }) {
+  return <div className={cn("liquid-surface min-h-[240px] animate-pulse", className)} aria-hidden="true" />;
+}
 
 export interface DashboardViewProps {
   className?: string;
@@ -56,14 +68,16 @@ export function DashboardView({ className }: DashboardViewProps) {
         <MiniPlaylistRunner />
       </div>
 
-      {/* 2. Unified Ratchet Command Stage (Focal Lead + Today's Target + PB/Hit Rate) */}
+      {/* 2. Target command stage (next target + skill mu/CV + PB/hit rate) */}
       <div className="col-span-12">
         <KPIStrip />
       </div>
 
       {/* 3. Single-Viewport Analytical Split: Chart (7/8 cols) + Context Inspector (5/4 cols) */}
       <div className="col-span-12 lg:col-span-7 xl:col-span-8 flex flex-col">
-        <ProgressChart activeTask={activeTask} className="h-full" />
+        <Suspense fallback={<ChartFallback className="h-full" />}>
+          <ProgressChart activeTask={activeTask} className="h-full" />
+        </Suspense>
       </div>
 
       <div className="col-span-12 lg:col-span-5 xl:col-span-4 flex flex-col">
@@ -109,6 +123,18 @@ export function DashboardView({ className }: DashboardViewProps) {
             </AnimatePresence>
           </div>
         </section>
+      </div>
+
+      {/* 4. Target analytics (trend, difficulty hint, invalid runs) */}
+      <div className="col-span-12">
+        <TargetAnalytics />
+      </div>
+
+      {/* 5. Intra-session curve + warm-up calibration (Plano 07, T7.3) */}
+      <div className="col-span-12">
+        <Suspense fallback={<ChartFallback />}>
+          <IntraSessionChart />
+        </Suspense>
       </div>
     </div>
   );

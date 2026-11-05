@@ -486,7 +486,7 @@ describe("playlist-sync and detection", () => {
   describe("UI styling and CSS variable validity", () => {
     it("ensures CategorySensCard does not use invalid divide-edge opacity modifier", () => {
       const cardContent = fs.readFileSync(
-        path.resolve("src/components/views/randomizer/category-cards.tsx"),
+        path.resolve("src/components/views/lab/category-cards.tsx"),
         "utf-8"
       );
 

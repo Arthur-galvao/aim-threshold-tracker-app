@@ -148,12 +148,11 @@ fn process_new_aimlab_replay(app: &AppHandle, path: &Path) -> Result<bool, Strin
     }
 
     // 2. Snapshot sensitivity used during the finished run
-    let (is_randomizer_enabled, active_sens, mouse_dpi) = {
+    let (is_randomizer_enabled, mouse_dpi) = {
         let s = state.settings.lock().unwrap();
-        let r = state.randomizer_state.lock().unwrap();
-        (s.randomizer.enabled, r.active_sens_cm, s.mouse_dpi)
+        (s.randomizer.enabled, s.mouse_dpi)
     };
-    let roll_center = state.sampler.lock().unwrap().last_roll_center_cm;
+    let finished_snapshot = snapshot_active_roll(&state);
 
     // 3. Wait for replay JSON flush and parse
     let mut name_map = crate::aimlab::cached_scenario_map(false);
@@ -179,7 +178,7 @@ fn process_new_aimlab_replay(app: &AppHandle, path: &Path) -> Result<bool, Strin
     };
 
     // 4. Ledger ANTES do sorteio da próxima sens
-    record_run_end_sens(app, &file_name, is_randomizer_enabled, active_sens, roll_center);
+    record_run_end_sens(app, &file_name, is_randomizer_enabled, &finished_snapshot);
 
     // 5. Roll next sensitivity via RawAccel serialized by roll_lock
     if is_randomizer_enabled {
@@ -216,22 +215,20 @@ fn process_new_csv(app: &AppHandle, path: &Path) -> Result<bool, String> {
     }
 
     // 2. snapshot da sens usada na run que acabou e do cenario que acabou
-    let (is_randomizer_enabled, active_sens, stats_path, auto_detect_playlist, mouse_dpi) = {
+    let (is_randomizer_enabled, stats_path, auto_detect_playlist, mouse_dpi) = {
         let s = state.settings.lock().unwrap();
-        let r = state.randomizer_state.lock().unwrap();
         (
             s.randomizer.enabled,
-            r.active_sens_cm,
             s.kovaak_stats_path.clone(),
             s.auto_detect_playlist,
             s.mouse_dpi,
         )
     };
-    let roll_center = state.sampler.lock().unwrap().last_roll_center_cm;
+    let finished_snapshot = snapshot_active_roll(&state);
     let finished = crate::parser::scenario_from_file_name(&file_name);
 
     // 3. ledger da run que acabou (antes do sorteio), depois rolar a proxima sens
-    record_run_end_sens(app, &file_name, is_randomizer_enabled, active_sens, roll_center);
+    record_run_end_sens(app, &file_name, is_randomizer_enabled, &finished_snapshot);
     if is_randomizer_enabled {
         let _ = crate::randomizer::apply_next_sens(
             app,
@@ -280,16 +277,36 @@ fn file_name_of(path: &Path) -> String {
         .unwrap_or_default()
 }
 
-/// Grava no ledger a sens usada na run que acabou. Erro vira log: não bloqueia a run.
+/// Snapshot do sorteio ATIVO durante a run que acabou (tirado antes do novo sorteio).
+struct ActiveRollSnapshot {
+    cm: f64,
+    role: String,
+    center_cm: Option<f64>,
+    measuring: bool,
+}
+
+fn snapshot_active_roll(state: &State<AppState>) -> ActiveRollSnapshot {
+    let measuring = *state.measuring.lock().unwrap();
+    let r = state.randomizer_state.lock().unwrap();
+    ActiveRollSnapshot {
+        cm: r.active_sens_cm,
+        role: r.active_role.clone().unwrap_or_else(|| sens_ledger::ROLE_OFF.to_string()),
+        center_cm: r.active_center_cm,
+        measuring,
+    }
+}
+
+/// Grava no ledger a sens usada na run que acabou. Erro vira log: nao bloqueia a run.
 fn record_run_end_sens(
     app: &AppHandle,
     file_name: &str,
     randomizer_enabled: bool,
-    active_sens: f64,
-    roll_center: Option<f64>,
+    snap: &ActiveRollSnapshot,
 ) {
     let now = sens_ledger::now_ms();
-    let entry = sens_ledger::entry_for_run(randomizer_enabled, active_sens, roll_center, now);
+    // Randomizer desligado: a sens do CSV e a verdade (role "off"); o modo da run segue valendo.
+    let role = if randomizer_enabled { snap.role.as_str() } else { sens_ledger::ROLE_OFF };
+    let entry = sens_ledger::entry_for_snapshot(role, snap.cm, snap.center_cm, snap.measuring, now);
     let result = storage::sens_ledger_path(app)
         .and_then(|p| sens_ledger::record_and_save(&p, file_name, entry, now));
     if let Err(e) = result {

@@ -15,9 +15,15 @@ const isTauri = () =>
   typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
 export function useRangePreview(
-  settings: RandomizerSettings,
+  rawSettings: RandomizerSettings,
   centerCm?: number | null
 ): RangePreview {
+  // `centerSource` é a fonte de verdade; `autoScenarioSens` é só o espelho legado que o backend lê.
+  const autoCenter = rawSettings.centerSource !== "base";
+  const settings = useMemo(
+    () => ({ ...rawSettings, autoScenarioSens: autoCenter }),
+    [rawSettings, autoCenter]
+  );
   const localFallback = useMemo(
     () => computeRangePreview(settings, centerCm),
     [
@@ -28,7 +34,7 @@ export function useRangePreview(
       settings.minMult,
       settings.maxMult,
       settings.spreadPercent,
-      settings.autoScenarioSens,
+      settings.centerSource,
       settings.scenarioIdealCm,
       centerCm,
     ]
@@ -68,7 +74,7 @@ export function useRangePreview(
     settings.minMult,
     settings.maxMult,
     settings.spreadPercent,
-    settings.autoScenarioSens,
+    settings.centerSource,
     settings.scenarioIdealCm,
     centerCm,
   ]);

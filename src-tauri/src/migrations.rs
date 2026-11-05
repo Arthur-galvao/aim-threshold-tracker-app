@@ -344,7 +344,7 @@ mod tests {
     }
 
     fn task(id: &str, name: &str, sessions: Vec<Session>) -> Task {
-        Task { id: id.into(), name: name.into(), category: "c".into(), subcategory: "s".into(), sessions }
+        Task { id: id.into(), name: name.into(), category: "c".into(), subcategory: "s".into(), sessions, intent_cue: None }
     }
 
     fn v1(tasks: Vec<Task>) -> AppData {
@@ -410,7 +410,7 @@ mod tests {
         let dir = tmp("full");
         let stats = stats_dir_with_fixture();
         let ledger = |sf: &str| {
-            (sf == "ledger.csv").then(|| LedgerEntry { cm: 55.0, role: "random".into(), center_cm: Some(50.0), k: Some(3), ts: 1 })
+            (sf == "ledger.csv").then(|| LedgerEntry { cm: 55.0, role: "random".into(), center_cm: Some(50.0), k: Some(3), ts: 1, run_mode: None })
         };
         let mut data = v1(vec![
             task("t1", "VT Pasu Intermediate S5", vec![

@@ -15,11 +15,14 @@ import type {
   ReplaceAllReason,
   RevisionResult,
   RunRecordedEvent,
+  ScenarioMeta,
+  SessionFocus,
   SyncGamePlaylistsResult,
   TaskMetaPatch,
   UpsertPlaylistResult,
   WatcherStatus,
 } from "./types";
+import { DEFAULT_LAB_SETTINGS, DEFAULT_TRAINING_SETTINGS } from "./types";
 import { toBackendError } from "./backend-error";
 import { getWebBackend } from "./web-backend";
 
@@ -98,6 +101,28 @@ export async function addManualSessions(
 ): Promise<RevisionResult> {
   if (!isTauri()) return web(() => getWebBackend().addManualSessions(taskId, date, sensCm, scores));
   return cmd<RevisionResult>("add_manual_sessions", { taskId, date, sensCm, scores });
+}
+
+/** Plano 07: "on" | "auto" | null (limpa o foco da sessão). */
+export async function setSessionFocus(
+  taskId: string,
+  sessionId: string,
+  focus: SessionFocus
+): Promise<RevisionResult> {
+  if (!isTauri()) return web(() => getWebBackend().setSessionFocus(taskId, sessionId, focus));
+  return cmd<RevisionResult>("set_session_focus", { taskId, sessionId, focus });
+}
+
+/** Plano 05: substitui `set_scenario_centers`. Chave = nome normalizado do cenário. */
+export async function setScenarioMeta(meta: Record<string, ScenarioMeta>): Promise<void> {
+  if (!isTauri()) return;
+  await cmd<null>("set_scenario_meta", { meta });
+}
+
+/** Plano 05/07: passo de medição ativo => randomizer pausado. Sem Tauri é no-op. */
+export async function setMeasuring(measuring: boolean): Promise<void> {
+  if (!isTauri()) return;
+  await cmd<null>("set_measuring", { measuring });
 }
 
 export async function deleteSession(taskId: string, sessionId: string): Promise<RevisionResult> {
@@ -232,6 +257,7 @@ export async function getSettings(): Promise<AppSettings> {
       const stored = localStorage.getItem("AIM_SETTINGS");
       if (stored) {
         try {
+          const parsed = JSON.parse(stored);
           return {
             kovaak_stats_path: null,
             watcher_active: false,
@@ -240,7 +266,9 @@ export async function getSettings(): Promise<AppSettings> {
             auto_detect_playlist: true,
             notify_step_advance: true,
             auto_advance_on_threshold: true,
-            ...JSON.parse(stored),
+            ...parsed,
+            training: { ...DEFAULT_TRAINING_SETTINGS, ...(parsed.training ?? {}) },
+            lab: { ...DEFAULT_LAB_SETTINGS, ...(parsed.lab ?? {}) },
           };
         } catch {}
       }
@@ -253,6 +281,8 @@ export async function getSettings(): Promise<AppSettings> {
       auto_detect_playlist: true,
       notify_step_advance: true,
       auto_advance_on_threshold: true,
+      training: DEFAULT_TRAINING_SETTINGS,
+      lab: DEFAULT_LAB_SETTINGS,
     };
   }
   return invoke<AppSettings>("get_settings");

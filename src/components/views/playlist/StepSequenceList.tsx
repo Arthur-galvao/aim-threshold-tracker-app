@@ -13,7 +13,7 @@ export function StepSequenceList({ runner, tasks }: StepSequenceListProps) {
   const { t } = useI18n();
   const taskMap = useMemo(() => new Map(tasks.map((t) => [t.id, t])), [tasks]);
 
-  const { activePlaylist, currentStepIndex, completedStepIndices } = runner;
+  const { activePlaylist, currentStepIndex, completedStepIndices, missedStepIndices } = runner;
   if (!activePlaylist) return null;
 
   return (
@@ -77,9 +77,16 @@ export function StepSequenceList({ runner, tasks }: StepSequenceListProps) {
                 </div>
               </div>
 
-              <span className="text-[10px] font-mono font-semibold text-text-faint px-1.5 py-0.5 rounded bg-surface-subtle shrink-0 tabular-nums">
-                {item.targetValue}
-                {item.targetMode === "reps" ? "r" : item.targetMode === "threshold" ? "r+T" : "s"}
+              <span className="flex items-center gap-1.5 shrink-0">
+                {missedStepIndices.has(index) && (
+                  <span className="text-[10px] font-semibold text-amber px-1.5 py-0.5 rounded bg-amber-soft">
+                    {t("runner.missed")}
+                  </span>
+                )}
+                <span className="text-[10px] font-mono font-semibold text-text-faint px-1.5 py-0.5 rounded bg-surface-subtle tabular-nums">
+                  {item.targetValue}
+                  {item.targetMode === "reps" ? "r" : item.targetMode === "threshold" ? "r+T" : "s"}
+                </span>
               </span>
             </button>
           );

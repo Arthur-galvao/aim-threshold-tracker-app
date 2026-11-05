@@ -206,6 +206,7 @@ pub fn update_task_meta(
     name: Option<String>,
     category: Option<String>,
     subcategory: Option<String>,
+    intent_cue: Option<String>,
 ) -> Result<RevisionResult, String> {
     let ((), revision) = mutate(&app, |d| {
         data_store::update_task_meta(
@@ -214,6 +215,7 @@ pub fn update_task_meta(
             name.as_deref(),
             category.as_deref(),
             subcategory.as_deref(),
+            intent_cue.as_deref(),
         )
     })?;
     Ok(RevisionResult { revision })
@@ -242,6 +244,20 @@ pub fn add_manual_sessions(
 ) -> Result<RevisionResult, String> {
     let (_ids, revision) = mutate(&app, |d| {
         data_store::add_manual_sessions(d, &task_id, &date, sens_cm, &scores)
+    })?;
+    Ok(RevisionResult { revision })
+}
+
+/// `focus`: "on" | "auto" | null (limpa). Plano 07, T7.1.
+#[tauri::command]
+pub fn set_session_focus(
+    app: AppHandle,
+    task_id: String,
+    session_id: String,
+    focus: Option<String>,
+) -> Result<RevisionResult, String> {
+    let ((), revision) = mutate(&app, |d| {
+        data_store::set_session_focus(d, &task_id, &session_id, focus.as_deref())
     })?;
     Ok(RevisionResult { revision })
 }
