@@ -1,6 +1,7 @@
 import { useI18n } from "@/lib/i18n";
 import type { ChartRunPoint, ChartSessionStep } from "@/lib/day-summary";
-import { roundScore } from "@/lib/metric-deltas";
+import { useAdvancedStats } from "@/hooks/useAdvancedStats";
+import { formatScore } from "@/lib/chart-format";
 
 export interface ChartTooltipProps {
   run: ChartRunPoint;
@@ -11,6 +12,7 @@ export interface ChartTooltipProps {
 
 export function ChartTooltip({ run, step, xPos, totalWidth }: ChartTooltipProps) {
   const { t, lang } = useI18n();
+  const advanced = useAdvancedStats();
 
   const ratio = totalWidth > 0 ? xPos / totalWidth : 0;
   const pointPercent = ratio * 100;
@@ -20,6 +22,10 @@ export function ChartTooltip({ run, step, xPos, totalWidth }: ChartTooltipProps)
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
+  });
+  const shortDate = new Date(run.t).toLocaleDateString(lang === "pt" ? "pt-BR" : "en-US", {
+    day: "2-digit",
+    month: "2-digit",
   });
 
   return (
@@ -34,8 +40,8 @@ export function ChartTooltip({ run, step, xPos, totalWidth }: ChartTooltipProps)
       }}
     >
       <div className="flex items-center justify-between gap-3 pb-1 border-b border-edge text-[11px] text-text-faint whitespace-nowrap">
-        <span>{when}</span>
-        <span className="tabular">{run.sens} cm</span>
+        <span title={when}>{t("simple.tip.run", { date: shortDate })}</span>
+        <span className="tabular">{run.sens} cm/360</span>
       </div>
       <div className="flex items-center justify-between gap-3 text-text-main whitespace-nowrap">
         <span className="flex items-center gap-1.5 text-score">
@@ -46,18 +52,18 @@ export function ChartTooltip({ run, step, xPos, totalWidth }: ChartTooltipProps)
           />
           {t("chart.score")}
         </span>
-        <span className="font-bold tabular">{run.score} pts</span>
+        <span className="font-bold tabular">{formatScore(run.score, lang)} pts</span>
       </div>
       {run.valid ? (
-        <div className="text-[10px] text-emerald whitespace-nowrap">{t("skill.run.valid")}</div>
+        <div className="text-[10px] text-emerald whitespace-nowrap">{t("simple.tip.counted")}</div>
       ) : (
         <div className="text-[10px] text-amber whitespace-normal leading-snug">
           <span className="font-semibold block">
-            {t("skill.run.invalid")}
-            {run.reason ? `: ${t(`skill.reason.${run.reason}`)}` : ""}
+            {t("simple.tip.notCounted")}
+            {run.reason ? `: ${t(`simple.reason.${run.reason}`).toLowerCase()}` : ""}
           </span>
           {run.reason && (
-            <span className="text-text-faint font-sans">{t(`skill.reasonDesc.${run.reason}`)}</span>
+            <span className="text-text-faint font-sans">{t(`simple.reasonDesc.${run.reason}`)}</span>
           )}
         </div>
       )}
@@ -65,20 +71,24 @@ export function ChartTooltip({ run, step, xPos, totalWidth }: ChartTooltipProps)
         <div className="flex items-center justify-between gap-3 text-emerald whitespace-nowrap">
           <span className="flex items-center gap-1.5">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald inline-block shadow-[0_0_6px_var(--emerald)]" />
-            {t("skill.chart.sessionTarget")}
+            {t("simple.tip.sessionTarget")}
           </span>
-          <span className="font-bold tabular">{roundScore(step.target)} pts</span>
+          <span className="font-bold tabular">{formatScore(step.target, lang)} pts</span>
         </div>
       )}
-      <div className="flex items-center justify-between gap-3 text-text-secondary whitespace-nowrap">
-        <span>{t("skill.series.mu")}</span>
-        <span className="tabular">{Number.isFinite(step.mu) ? roundScore(step.mu) : "—"} pts</span>
-      </div>
+      {advanced && (
+        <div className="flex items-center justify-between gap-3 text-text-secondary whitespace-nowrap">
+          <span>{t("skill.series.mu")}</span>
+          <span className="tabular">
+            {Number.isFinite(step.mu) ? formatScore(step.mu, lang) : "—"} pts
+          </span>
+        </div>
+      )}
       {step.hit !== null && (
         <div
           className={`text-[10px] whitespace-nowrap ${step.hit ? "text-emerald" : "text-amber"}`}
         >
-          {step.hit ? t("chart.tooltipHit") : t("chart.tooltipMiss")}
+          {step.hit ? t("simple.tip.hit") : t("simple.tip.miss")}
         </div>
       )}
     </div>

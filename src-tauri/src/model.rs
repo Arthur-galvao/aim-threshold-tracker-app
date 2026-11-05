@@ -415,6 +415,8 @@ pub struct TrainingSettings {
     pub focus_prompt: bool,
     pub fatigue_alerts: bool,
     pub weekly_measure_reminder: bool,
+    /// Mostra μ, CV, z e demais estatísticas no dashboard (modo simples por padrão).
+    pub show_advanced_stats: bool,
 }
 
 impl Default for TrainingSettings {
@@ -429,6 +431,7 @@ impl Default for TrainingSettings {
             focus_prompt: true,
             fatigue_alerts: true,
             weekly_measure_reminder: true,
+            show_advanced_stats: false,
         }
     }
 }
@@ -617,6 +620,7 @@ mod serde_default_tests {
         assert_eq!(parsed.training.session_gap_minutes, 45);
         assert_eq!(parsed.training.difficulty, "normal");
         assert!(parsed.training.focus_prompt);
+        assert!(!parsed.training.show_advanced_stats);
         assert_eq!(parsed.lab.game_id, "valorant");
         assert_eq!(parsed.lab.in_game_sens, None);
         let r = parsed.randomizer;

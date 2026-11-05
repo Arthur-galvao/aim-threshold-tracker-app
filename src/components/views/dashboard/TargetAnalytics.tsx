@@ -4,6 +4,7 @@ import { useTrackerWorkspace } from "@/context/TrackerWorkspaceContext";
 import type { InvalidReason } from "@/lib/skill";
 import { roundScore } from "@/lib/metric-deltas";
 import { useI18n } from "@/lib/i18n";
+import { useAdvancedStats } from "@/hooks/useAdvancedStats";
 import { Badge, NumberTicker } from "@/components/ui";
 import { InfoTip } from "./InfoTip";
 import { cn } from "@/lib/utils";
@@ -22,6 +23,7 @@ const REASONS: InvalidReason[] = [
 
 export function TargetAnalytics({ className }: TargetAnalyticsProps) {
   const { t } = useI18n();
+  const advanced = useAdvancedStats();
   const { state } = useTrackerWorkspace();
   const { activeTask, computedMetrics } = state;
   const { skill, nextTarget, nextStretch, trend, trendSlopePct } = computedMetrics;
@@ -39,6 +41,74 @@ export function TargetAnalytics({ className }: TargetAnalyticsProps) {
   const trendVariant =
     trend === "up" ? "emerald" : trend === "down" ? "red" : trend === "flat" ? "amber" : "neutral";
   const TrendIcon = trend === "up" ? TrendUp : trend === "down" ? TrendDown : trend === "flat" ? Minus : Question;
+
+  if (!advanced) {
+    return (
+      <div className={cn("glass p-5 flex flex-col gap-4", className)}>
+        <div className="flex items-center justify-between gap-2 select-none">
+          <div className="flex items-center gap-2">
+            <span className="text-emerald" aria-hidden="true">
+              <Target size={20} weight="regular" />
+            </span>
+            <div>
+              <h2 className="text-[13px] font-semibold text-text-secondary">
+                {t("simple.analytics.title")}
+              </h2>
+              <p className="text-xs text-text-faint">{t("simple.analytics.subtitle")}</p>
+            </div>
+          </div>
+          <Badge variant={trendVariant}>
+            <span className="inline-flex items-center gap-1">
+              <TrendIcon size={12} weight="bold" />
+              {t("simple.kpi.progress", { word: t(`simple.trend.${trend}`) })}
+            </span>
+          </Badge>
+        </div>
+
+        <p className="text-xs text-text-secondary leading-snug">
+          {hasData
+            ? t(
+                trend === "up"
+                  ? "simple.analytics.trendUp"
+                  : trend === "down"
+                    ? "simple.analytics.trendDown"
+                    : trend === "flat"
+                      ? "simple.analytics.trendFlat"
+                      : "simple.analytics.trendInsufficient"
+              )
+            : t("simple.analytics.trendInsufficient")}
+        </p>
+
+        {skill?.difficultyHint && (
+          <div className="p-3 rounded-control bg-amber-soft border border-amber-edge text-xs text-amber leading-snug">
+            {t(`simple.difficultyHint.${skill.difficultyHint}`)}
+          </div>
+        )}
+
+        <div className="pt-3 border-t border-edge space-y-2">
+          <div className="text-xs font-semibold text-text-secondary select-none">
+            {invalidTotal === 0
+              ? t("simple.analytics.noneUncounted")
+              : `${t("simple.analytics.uncounted", { n: invalidTotal })} (${invalidRows
+                  .map((r) => `${t(`simple.reason.${r.reason}`).toLowerCase()} ${r.n}`)
+                  .join(", ")})`}
+          </div>
+          {invalidRows.length > 0 && (
+            <ul className="space-y-1">
+              {invalidRows.map((row) => (
+                <li key={row.reason} className="text-[11px] text-text-faint leading-snug">
+                  <span className="text-text-secondary font-semibold">
+                    {t(`simple.reason.${row.reason}`)}:
+                  </span>{" "}
+                  {t(`simple.reasonDesc.${row.reason}`)}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={cn("glass p-5 flex flex-col gap-4", className)}>

@@ -3,6 +3,7 @@ import { ChartLineUp } from "@phosphor-icons/react";
 import type { Task } from "@/lib/types";
 import { buildChartSeries, filterChartSeries, type ChartSeries } from "@/lib/day-summary";
 import { useSkill } from "@/hooks/useSkill";
+import { useAdvancedStats } from "@/hooks/useAdvancedStats";
 import { useI18n } from "@/lib/i18n";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ChartToolbar, type ChartPeriod } from "./ChartToolbar";
@@ -35,7 +36,9 @@ export function ProgressChart({ activeTask, className }: ProgressChartProps) {
   const [period, setPeriod] = useState<ChartPeriod>("all");
   const [showTarget, setShowTarget] = useState(true);
   const [showPB, setShowPB] = useState(true);
-  const [showMu, setShowMu] = useState(true);
+  // "Seu nível" (μ) começa desligado: o padrão é pontos + meta + recorde.
+  const [showMu, setShowMu] = useState(false);
+  const advanced = useAdvancedStats();
 
   const allSeries = useMemo(() => buildChartSeries(activeTask, skill), [activeTask, skill]);
   const series = useMemo(
@@ -69,6 +72,7 @@ export function ProgressChart({ activeTask, className }: ProgressChartProps) {
           showTarget={showTarget}
           showPB={showPB}
           showMu={showMu}
+          showBand={advanced && showMu}
         />
       )}
     </div>

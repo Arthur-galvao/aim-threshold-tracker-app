@@ -4,6 +4,7 @@ import { useTrackerWorkspace } from "@/context/TrackerWorkspaceContext";
 import { useToast } from "@/components/ui/Toast";
 import { summarizeTrainingSessions } from "@/lib/day-summary";
 import { useSkill } from "@/hooks/useSkill";
+import { useAdvancedStats } from "@/hooks/useAdvancedStats";
 import { buildEscalateFormat } from "@/lib/threshold";
 import { useI18n } from "@/lib/i18n";
 import { Button, EmptyState } from "@/components/ui";
@@ -17,6 +18,7 @@ export interface SessionHistoryProps {
 
 export function SessionHistory({ className, embedded = false }: SessionHistoryProps) {
   const { t } = useI18n();
+  const advanced = useAdvancedStats();
   const { showToast } = useToast();
   const { state, actions } = useTrackerWorkspace();
   const { activeTask } = state;
@@ -82,7 +84,7 @@ export function SessionHistory({ className, embedded = false }: SessionHistoryPr
           {t("skill.hist.totalSessionsRuns", { sessions: dayGroups.length, runs: totalRuns })}
         </span>
 
-        {!embedded && activeTask && activeTask.sessions.length > 0 && (
+        {advanced && !embedded && activeTask && activeTask.sessions.length > 0 && (
           <Button
             size="sm"
             variant="secondary"

@@ -2,15 +2,18 @@ import { useMemo, useState, useCallback, useRef } from "react";
 import type { ChartSeries } from "@/lib/day-summary";
 import { ChartTooltip } from "./ChartTooltip";
 import { useI18n } from "@/lib/i18n";
+import { pickXLabels } from "@/lib/chart-format";
 
 export interface ChartCanvasProps {
   series: ChartSeries;
   showTarget: boolean;
   showPB: boolean;
   showMu: boolean;
+  /** Faixa μ ± σ (só no modo avançado). */
+  showBand?: boolean;
 }
 
-export function ChartCanvas({ series, showTarget, showPB, showMu }: ChartCanvasProps) {
+export function ChartCanvas({ series, showTarget, showPB, showMu, showBand = false }: ChartCanvasProps) {
   const { t } = useI18n();
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -34,7 +37,8 @@ export function ChartCanvas({ series, showTarget, showPB, showMu }: ChartCanvasP
     for (const r of runs) values.push(r.score);
     for (const s of sessions) {
       if (showTarget && s.target !== null) values.push(s.target);
-      if (showMu && Number.isFinite(s.lo) && Number.isFinite(s.hi)) values.push(s.lo, s.hi);
+      if (showBand && Number.isFinite(s.lo) && Number.isFinite(s.hi)) values.push(s.lo, s.hi);
+      else if (showMu && Number.isFinite(s.mu)) values.push(s.mu);
     }
     if (showPB) values.push(pbRunning[pbRunning.length - 1]);
 
@@ -48,7 +52,7 @@ export function ChartCanvas({ series, showTarget, showPB, showMu }: ChartCanvasP
     const step = (max - min) / 4;
     const ticks = [min, min + step, min + step * 2, min + step * 3, max].map((v) => Math.round(v));
     return { minVal: min, maxVal: max, yTicks: ticks };
-  }, [runs, sessions, pbRunning, n, showTarget, showMu, showPB]);
+  }, [runs, sessions, pbRunning, n, showTarget, showMu, showBand, showPB]);
 
   const getY = useCallback(
     (val: number) => {
@@ -113,7 +117,19 @@ export function ChartCanvas({ series, showTarget, showPB, showMu }: ChartCanvasP
   const hoveredRun = hoveredIdx !== null ? runs[hoveredIdx] ?? null : null;
   const hoveredStep = hoveredRun ? sessions[hoveredRun.sessionIdx] : null;
 
-  const labelEvery = Math.max(1, Math.ceil(sessions.length / 7));
+  // Rótulos do eixo X: no máximo ~8, sem datas repetidas nem sobrepostas.
+  const xLabels = useMemo(() => {
+    const candidates = sessions.map((s, i) => {
+      const d = new Date(s.startedAt);
+      return {
+        key: s.key,
+        sessionIdx: i,
+        x: slotX((s.startIdx + s.endIdx + 1) / 2),
+        label: `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`,
+      };
+    });
+    return pickXLabels(candidates, chartW / 8);
+  }, [sessions, slotX, chartW]);
 
   return (
     <div ref={containerRef} className="relative w-full overflow-hidden select-none liquid-well p-2">
@@ -150,7 +166,7 @@ export function ChartCanvas({ series, showTarget, showPB, showMu }: ChartCanvasP
         })}
 
         {/* Faixa mu +/- sigma (um retângulo por sessão) */}
-        {showMu &&
+        {showBand &&
           sessions.map((s) =>
             Number.isFinite(s.lo) && Number.isFinite(s.hi) ? (
               <rect
@@ -222,22 +238,19 @@ export function ChartCanvas({ series, showTarget, showPB, showMu }: ChartCanvasP
           );
         })}
 
-        {sessions.map((s, i) => {
-          if (i % labelEvery !== 0 && i !== sessions.length - 1) return null;
-          const d = new Date(s.startedAt);
-          const label = `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
-          const isHovered = hoveredRun?.sessionIdx === i;
+        {xLabels.map((l) => {
+          const isHovered = hoveredRun?.sessionIdx === l.sessionIdx;
           return (
             <text
-              key={s.key}
-              x={slotX((s.startIdx + s.endIdx + 1) / 2)}
+              key={l.key}
+              x={l.x}
               y={height - 10}
               textAnchor="middle"
               className={`font-mono tabular text-[10px] transition-colors ${
                 isHovered ? "fill-text-main font-semibold" : "fill-text-faint"
               }`}
             >
-              {label}
+              {l.label}
             </text>
           );
         })}
@@ -254,6 +267,42 @@ export function ChartCanvas({ series, showTarget, showPB, showMu }: ChartCanvasP
           />
         )}
       </svg>
+
+      {/* Legenda sempre visível */}
+      <ul className="flex flex-wrap items-center gap-x-4 gap-y-1 px-2 pt-1 pb-0.5 text-[11px] text-text-secondary">
+        <li className="inline-flex items-center gap-1.5">
+          <svg width="10" height="10" aria-hidden="true">
+            <circle cx="5" cy="5" r="3.6" fill="var(--score)" />
+          </svg>
+          {t("simple.legend.counted")}
+        </li>
+        <li className="inline-flex items-center gap-1.5">
+          <svg width="10" height="10" aria-hidden="true">
+            <circle cx="5" cy="5" r="3.4" fill="none" stroke="var(--score)" strokeWidth="1.4" />
+          </svg>
+          {t("simple.legend.notCounted")}
+        </li>
+        <li className="inline-flex items-center gap-1.5">
+          <svg width="18" height="8" aria-hidden="true">
+            <line x1="1" y1="4" x2="17" y2="4" stroke="var(--emerald)" strokeWidth="2" strokeLinecap="round" />
+          </svg>
+          {t("simple.legend.target")}
+        </li>
+        <li className="inline-flex items-center gap-1.5">
+          <svg width="18" height="8" aria-hidden="true">
+            <line x1="1" y1="4" x2="17" y2="4" stroke="var(--amber)" strokeWidth="1.5" strokeDasharray="2 4" strokeLinecap="round" />
+          </svg>
+          {t("simple.legend.best")}
+        </li>
+        {showMu && (
+          <li className="inline-flex items-center gap-1.5">
+            <svg width="18" height="8" aria-hidden="true">
+              <line x1="1" y1="4" x2="17" y2="4" stroke="var(--score)" strokeWidth="1.8" strokeLinecap="round" />
+            </svg>
+            {t("simple.legend.level")}
+          </li>
+        )}
+      </ul>
 
       {hoveredRun && hoveredStep && (
         <ChartTooltip

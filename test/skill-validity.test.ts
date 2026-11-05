@@ -40,7 +40,7 @@ describe("classifyRun", () => {
     assert.equal(classifyRun(ok[1], ctxFor(ok)).valid, true);
   });
 
-  it("3: primeira run do cenário na sessão -> warmup", () => {
+  it("3: primeira run da sessão -> warmup", () => {
     const runs = threeRuns();
     assert.equal(classifyRun(runs[0], ctxFor(runs)).reason, "warmup");
     assert.equal(classifyRun(runs[1], ctxFor(runs)).valid, true);
@@ -60,6 +60,25 @@ describe("classifyRun", () => {
     assert.equal(classifyRun(a, ctx).reason, "warmup");
     assert.equal(classifyRun(b, ctx).reason, "warmup");
     assert.equal(classifyRun(late, ctx).valid, true);
+  });
+
+  it("3: run isolada na sessão sempre conta (não vira 'só aquecimento')", () => {
+    const solo = makeRun("t", T0, 1000, 30);
+    assert.equal(classifyRun(solo, ctxFor([solo])).valid, true);
+  });
+
+  it("3: se todas as runs cairiam no aquecimento, nenhuma é descartada", () => {
+    const a = makeRun("t", T0, 1000, 30);
+    const b = makeRun("t", T0 + 2 * MIN, 1000, 30);
+    assert.equal(classifyRun(a, ctxFor([a, b])).valid, true);
+    assert.equal(classifyRun(b, ctxFor([a, b])).valid, true);
+  });
+
+  it("3: aquecimento é da sessão, não de cada cenário (1 run por cenário numa playlist)", () => {
+    const runs = ["a", "b", "c", "d"].map((id, i) => makeRun(id, T0 + i * 6 * MIN, 1000, 30));
+    const ctx = (r: R) => ({ sessionGroup: runs, scenarioRunsInSession: [r], model: reliable, cfg });
+    assert.equal(classifyRun(runs[0], ctx(runs[0])).reason, "warmup");
+    for (const r of runs.slice(1)) assert.equal(classifyRun(r, ctx(r)).valid, true);
   });
 
   it("legado sem datetime: so o indice conta", () => {

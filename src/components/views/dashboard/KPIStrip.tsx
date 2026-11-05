@@ -3,7 +3,9 @@ import {
   Check,
   Copy,
   Lightning,
+  Minus,
   Target,
+  TrendDown,
   TrendUp,
   Trophy,
   Waveform,
@@ -12,6 +14,7 @@ import {
 import { useTrackerWorkspace } from "@/context/TrackerWorkspaceContext";
 import { useSensRandomizer } from "@/hooks/useSensRandomizer";
 import { useAllRuns } from "@/hooks/useSkill";
+import { useAdvancedStats } from "@/hooks/useAdvancedStats";
 import { useSettings } from "@/hooks/useSettings";
 import { buildEscalateFormat, simulateDraftRuns } from "@/lib/threshold";
 import { summarizeTrainingSessions } from "@/lib/day-summary";
@@ -19,6 +22,8 @@ import { computeMetricDeltas, roundScore } from "@/lib/metric-deltas";
 import { targetAtSens } from "@/lib/skill";
 import { skillConfigFromTraining } from "@/lib/skill/config";
 import { DEFAULT_TRAINING_SETTINGS } from "@/lib/types";
+import { formatScore } from "@/lib/chart-format";
+import { recentHitCounts, stabilityLevel } from "@/lib/simple-summary";
 import { useI18n } from "@/lib/i18n";
 import { Badge, Button, NumberTicker, useToast } from "@/components/ui";
 import { InfoTip } from "./InfoTip";
@@ -33,7 +38,8 @@ function decimals(v: number): number {
 }
 
 export function KPIStrip({ className }: KPIStripProps) {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
+  const advanced = useAdvancedStats();
   const { showToast } = useToast();
   const { state } = useTrackerWorkspace();
   const { activeTask, computedMetrics } = state;
@@ -126,6 +132,199 @@ export function KPIStrip({ className }: KPIStripProps) {
       <span className={cn(className, "text-text-faint font-mono")}>—</span>
     );
 
+  const simulator = (
+  <div
+    className={cn(
+      "liquid-well px-3 py-2 flex items-center justify-between gap-2.5 transition-all duration-200 focus-within:border-score/50 focus-within:shadow-[0_0_16px_rgb(var(--score-rgb)/0.16)]",
+      liveSim &&
+        (liveSim.willHit
+          ? "border-emerald-edge shadow-[0_0_18px_rgb(var(--emerald-rgb)/0.18)]"
+          : "border-amber-edge")
+    )}
+  >
+    <div className="flex items-center gap-2 shrink-0">
+      <Lightning
+        size={13}
+        weight="fill"
+        className={cn(
+          "text-amber shrink-0 transition-transform duration-200",
+          liveSim && "scale-125"
+        )}
+      />
+      <input
+        type="number"
+        value={simScoreInput}
+        onChange={(e) => setSimScoreInput(e.target.value)}
+        placeholder={t("dashboard.testScorePh")}
+        aria-label={t("dashboard.simulatedOutcome")}
+        className="w-24 bg-transparent text-xs font-mono text-text-main placeholder:text-text-faint focus:outline-none tabular"
+      />
+    </div>
+
+    <div className="flex items-center gap-1.5 text-[11px] font-mono min-w-0">
+      {liveSim ? (
+        <div className="flex items-center gap-1.5 animate-pop-in">
+          <Badge variant={liveSim.willHit ? "emerald" : "amber"}>
+            {liveSim.willHit ? t("skill.sim.hit") : t("skill.sim.miss")}
+          </Badge>
+          {liveSim.projectedTarget !== null && (
+            <span className="text-text-secondary tabular">
+              {t("skill.sim.newTarget")}{" "}
+              <strong className="text-emerald">{roundScore(liveSim.projectedTarget)}</strong>
+            </span>
+          )}
+          {liveSim.validCount === 0 && (
+            <span className="text-text-faint truncate">{t("skill.sim.notCounted")}</span>
+          )}
+          {liveSim.willBreakPB && (
+                <Badge variant="amber">{advanced ? "PB" : t("simple.sim.newBest")}</Badge>
+              )}
+        </div>
+      ) : (
+        <span className="text-text-faint leading-snug">{t("skill.sim.hint")}</span>
+      )}
+    </div>
+  </div>
+  );
+
+  if (!advanced) {
+    const fmt = (v: number) => formatScore(v, lang);
+    const plannedRuns = (settings?.training ?? DEFAULT_TRAINING_SETTINGS).plannedRuns;
+    const hits = recentHitCounts(skill);
+    const level = stabilityLevel(cv);
+    const levelWord = t(`simple.trend.${trend}`);
+    const LevelIcon = trend === "up" ? TrendUp : trend === "down" ? TrendDown : Minus;
+    const levelTone =
+      trend === "up" ? "text-emerald" : trend === "down" ? "text-red" : "text-text-secondary";
+
+    return (
+      <section
+        className={cn(
+          "liquid-surface liquid-interactive overflow-hidden grid grid-cols-1 lg:grid-cols-12 divide-y lg:divide-y-0 lg:divide-x divide-edge",
+          className
+        )}
+      >
+        {/* Cartão do treinador: a meta e o que fazer */}
+        <div className="group/z1 lg:col-span-7 p-5 flex flex-col justify-between gap-4">
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <span className="text-emerald inline-flex" aria-hidden="true">
+                <Target size={18} weight="fill" />
+              </span>
+              <span className="text-xs font-semibold text-text-secondary">
+                {t("simple.kpi.title")}
+              </span>
+              <InfoTip text={t("simple.kpi.explainTarget")} />
+            </div>
+
+            <div className="flex items-baseline gap-2 pt-1">
+              {bigNumber(nextTarget, "text-5xl font-bold tracking-tight text-text-main tabular")}
+              <span className="text-xs font-mono text-text-faint tabular">{t("metric.pts")}</span>
+            </div>
+
+            <div className="text-xs text-text-secondary leading-relaxed space-y-1">
+              {nextTarget !== null && (
+                <p>
+                  {t("simple.kpi.plan", { n: plannedRuns, target: fmt(nextTarget) })}
+                </p>
+              )}
+              {hasData && nextTarget === null && (
+                <p className="text-text-faint">{t("simple.kpi.noTarget")}</p>
+              )}
+              {nextStretch !== null && (
+                <p className="text-text-faint">
+                  {t("simple.kpi.stretch", { val: fmt(nextStretch) })}
+                </p>
+              )}
+              {targetHere && (
+                <p className="text-emerald">
+                  {t("simple.kpi.atSens", {
+                    sens: targetHere.sens.toFixed(1),
+                    val: fmt(targetHere.value),
+                  })}
+                </p>
+              )}
+              {hasData && nextTarget !== null && trend === "insufficient" && (
+                <p className="text-amber">{t("simple.kpi.calibrating")}</p>
+              )}
+            </div>
+          </div>
+
+          {simulator}
+        </div>
+
+        {/* Três números com rótulo */}
+        <div className="lg:col-span-5 p-5 flex flex-col justify-between gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="liquid-well p-3 flex flex-col gap-1 min-w-0">
+              <div className="flex items-center gap-1.5 text-[11px] font-semibold text-text-secondary">
+                <Barbell size={14} weight="regular" className="text-score shrink-0" />
+                <span className="truncate">{t("simple.kpi.level")}</span>
+                <InfoTip text={t("simple.kpi.levelTip")} size={12} />
+              </div>
+              {bigNumber(mu, "text-2xl font-bold tracking-tight text-score tabular")}
+              <span className={cn("inline-flex items-center gap-1 text-[11px] font-semibold", levelTone)}>
+                <LevelIcon size={12} weight="bold" />
+                {levelWord}
+              </span>
+            </div>
+
+            <div className="liquid-well p-3 flex flex-col gap-1 min-w-0">
+              <div className="flex items-center gap-1.5 text-[11px] font-semibold text-text-secondary">
+                <Trophy size={14} weight="regular" className="text-amber shrink-0" />
+                <span className="truncate">{t("simple.kpi.best")}</span>
+              </div>
+              {bigNumber(personalBest, "text-2xl font-bold tracking-tight text-text-main tabular")}
+              <span className="text-[11px] text-text-faint">
+                {deltas.scoreDelta !== null && deltas.scoreDelta !== 0
+                  ? `${deltas.scoreDelta > 0 ? "+" : ""}${deltas.scoreDelta} ${t("metric.pts")}`
+                  : t("metric.pts")}
+              </span>
+            </div>
+
+            <div className="liquid-well p-3 flex flex-col gap-1 min-w-0">
+              <div className="flex items-center gap-1.5 text-[11px] font-semibold text-text-secondary">
+                <TrendUp size={14} weight="regular" className="text-score shrink-0" />
+                <span className="truncate">{t("simple.kpi.hits")}</span>
+                <InfoTip
+                  text={`${t("simple.kpi.hitsTip")} ${
+                    streak > 0 ? t("skill.kpi.streak", { n: streak }) : t("skill.kpi.noStreak")
+                  }`}
+                  size={12}
+                />
+              </div>
+              {hasData && hits.total > 0 ? (
+                <span className="text-lg font-bold tracking-tight text-text-main tabular leading-8">
+                  {t("simple.kpi.hitsOf", { hit: hits.hit, total: hits.total })}
+                </span>
+              ) : (
+                <span className="text-[11px] text-text-faint leading-snug min-h-8 flex items-center">
+                  {t("simple.kpi.hitsNone")}
+                </span>
+              )}
+              <span className="text-[11px] text-text-faint">
+                {t("skill.kpi.sessionsCount", { n: sessions.length })}
+              </span>
+            </div>
+          </div>
+
+          {level && cv !== null && (
+            <div className="flex items-center gap-1.5 text-xs text-text-secondary">
+              <Waveform size={14} weight="regular" className="shrink-0" />
+              <span>
+                {t("simple.kpi.stability", {
+                  level: t(`simple.stab.${level}`),
+                  pct: Math.max(1, Math.round(cv * 100)),
+                })}
+              </span>
+              <InfoTip text={t("simple.kpi.stabilityTip")} />
+            </div>
+          )}
+        </div>
+      </section>
+    );
+  }
+
   return (
     <section
       className={cn(
@@ -203,57 +402,7 @@ export function KPIStrip({ className }: KPIStripProps) {
           </div>
         </div>
 
-        {/* Simulador de score */}
-        <div
-          className={cn(
-            "liquid-well px-3 py-2 flex items-center justify-between gap-2.5 transition-all duration-200 focus-within:border-score/50 focus-within:shadow-[0_0_16px_rgb(var(--score-rgb)/0.16)]",
-            liveSim &&
-              (liveSim.willHit
-                ? "border-emerald-edge shadow-[0_0_18px_rgb(var(--emerald-rgb)/0.18)]"
-                : "border-amber-edge")
-          )}
-        >
-          <div className="flex items-center gap-2 shrink-0">
-            <Lightning
-              size={13}
-              weight="fill"
-              className={cn(
-                "text-amber shrink-0 transition-transform duration-200",
-                liveSim && "scale-125"
-              )}
-            />
-            <input
-              type="number"
-              value={simScoreInput}
-              onChange={(e) => setSimScoreInput(e.target.value)}
-              placeholder={t("dashboard.testScorePh")}
-              aria-label={t("dashboard.simulatedOutcome")}
-              className="w-24 bg-transparent text-xs font-mono text-text-main placeholder:text-text-faint focus:outline-none tabular"
-            />
-          </div>
-
-          <div className="flex items-center gap-1.5 text-[11px] font-mono truncate">
-            {liveSim ? (
-              <div className="flex items-center gap-1.5 animate-pop-in">
-                <Badge variant={liveSim.willHit ? "emerald" : "amber"}>
-                  {liveSim.willHit ? t("skill.sim.hit") : t("skill.sim.miss")}
-                </Badge>
-                {liveSim.projectedTarget !== null && (
-                  <span className="text-text-secondary tabular">
-                    {t("skill.sim.newTarget")}{" "}
-                    <strong className="text-emerald">{roundScore(liveSim.projectedTarget)}</strong>
-                  </span>
-                )}
-                {liveSim.validCount === 0 && (
-                  <span className="text-text-faint truncate">{t("skill.sim.notCounted")}</span>
-                )}
-                {liveSim.willBreakPB && <Badge variant="amber">PB</Badge>}
-              </div>
-            ) : (
-              <span className="text-text-faint truncate">{t("skill.sim.hint")}</span>
-            )}
-          </div>
-        </div>
+        {simulator}
       </div>
 
       {/* Zona 2: habilidade (μ) e consistência (CV) */}
