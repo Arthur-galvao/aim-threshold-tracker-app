@@ -140,11 +140,11 @@ export function ScenarioBreakdown({ className, embedded = false }: ScenarioBreak
                   aria-label={t("dashboard.filterByPlaylist")}
                   className="bg-transparent text-[11px] font-medium py-0.5 pl-1.5 pr-6 appearance-none cursor-pointer focus:outline-none"
                 >
-                  <option value="All" className="bg-bg-canvas text-text-main">
+                  <option value="All">
                     {t("dashboard.allPlaylists")}
                   </option>
                   {playlists.map((pl) => (
-                    <option key={pl.id} value={pl.id} className="bg-bg-canvas text-text-main">
+                    <option key={pl.id} value={pl.id}>
                       {pl.name} ({pl.items.length})
                     </option>
                   ))}
