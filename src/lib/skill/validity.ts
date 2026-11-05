@@ -2,6 +2,7 @@ import type { RunRef } from "./sessions.ts";
 import { adjustLogScore, type SensAdjustModel } from "./sens-adjust.ts";
 
 export interface ValidityConfig {
+  /** Runs de aquecimento no início da SESSÃO (todos os cenários). Nome mantido por compatibilidade. */
   warmupRunsPerScenario: number; // 1
   sessionWarmupMinutes: number; // 5
   maxPauseSeconds: number; // 10
@@ -42,11 +43,28 @@ function rawY(run: RunRef): number {
   return run.session.pb > 0 ? Math.log(run.session.pb) : Number.NaN;
 }
 
-function indexInScenario(run: RunRef, list: RunRef[]): number {
-  const byRef = list.indexOf(run);
-  if (byRef >= 0) return byRef;
-  const byId = list.findIndex((r) => r.session.id === run.session.id && r.taskId === run.taskId);
-  return byId >= 0 ? byId : 0;
+function sameRun(a: RunRef, b: RunRef): boolean {
+  return a === b || (a.session.id === b.session.id && a.taskId === b.taskId);
+}
+
+/**
+ * Aquecimento é da SESSÃO de treino (todos os cenários), não de cada cenário:
+ * - as primeiras `warmupRunsPerScenario` runs da sessão (o nome do campo ficou por compatibilidade), ou
+ * - runs iniciadas nos primeiros `sessionWarmupMinutes` da sessão (quando há datetime).
+ * Se essas regras marcariam TODAS as runs da sessão como aquecimento (ex.: uma run isolada no dia),
+ * nenhuma é descartada — senão a sessão inteira some da meta e quem joga pouco nunca calibra.
+ */
+function isSessionWarmup(run: RunRef, group: RunRef[], cfg: ValidityConfig): boolean {
+  const ordered = group.length > 0 ? [...group].sort((a, b) => a.t - b.t) : [run];
+  const start = ordered[0].t;
+  const windowMs = cfg.sessionWarmupMinutes * 60_000;
+  const inWindow = (r: RunRef, idx: number) =>
+    idx < cfg.warmupRunsPerScenario || (!!r.session.datetime && r.t - start < windowMs);
+
+  const idx = ordered.findIndex((r) => sameRun(r, run));
+  if (idx < 0 || !inWindow(run, idx)) return false;
+  // Há pelo menos uma run fora do aquecimento? Só então esta é descartada.
+  return ordered.some((r, i) => !inWindow(r, i));
 }
 
 /**
@@ -61,15 +79,7 @@ export function classifyBasic(
   const y = rawY(run);
   if (!(session.pb > 0)) return invalid("no_score", y);
   if ((session.pauseDuration ?? 0) > ctx.cfg.maxPauseSeconds) return invalid("paused", y);
-
-  if (indexInScenario(run, ctx.scenarioRunsInSession) < ctx.cfg.warmupRunsPerScenario) {
-    return invalid("warmup", y);
-  }
-  if (session.datetime && ctx.sessionGroup.length > 0) {
-    let start = Infinity;
-    for (const r of ctx.sessionGroup) if (r.t < start) start = r.t;
-    if (run.t - start < ctx.cfg.sessionWarmupMinutes * 60_000) return invalid("warmup", y);
-  }
+  if (isSessionWarmup(run, ctx.sessionGroup, ctx.cfg)) return invalid("warmup", y);
   return null;
 }
 
