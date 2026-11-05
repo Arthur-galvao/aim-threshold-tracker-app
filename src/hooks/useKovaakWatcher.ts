@@ -1,46 +1,172 @@
-import { useEffect, useRef, useState } from "react";
+import {
+  createContext,
+  createElement,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import {
   isPermissionGranted,
   requestPermission,
   sendNotification,
 } from "@tauri-apps/plugin-notification";
-import type { ImportStats, KovaakRun, WatcherStatus } from "@/lib/types";
+import { DEFAULT_TRAINING_SETTINGS, type ImportStats, type RunRecordedEvent, type Task, type TrainingSettings, type WatcherStatus } from "@/lib/types";
 import {
   detectKovaakPath,
   getSettings,
   getWatcherStatus,
   importExistingCsvs,
   onImportComplete,
-  onNewRun,
+  onRunRecorded,
   onWatcherError,
-  saveSettings,
   setStatsPath,
   startWatcher,
   stopWatcher,
 } from "@/lib/tauri-bridge";
-import { addSessionsFromRun, cloneAppData } from "@/lib/sample-data";
-import { getTargetThresholdForTask } from "@/lib/threshold";
+import { dataStore } from "@/lib/data-store";
+import { computeSkill } from "@/lib/skill";
+import { buildAllRuns, skillConfigFromTraining } from "@/lib/skill/config";
 import { useI18n } from "@/lib/i18n";
+import { formatBackendError } from "@/lib/backend-error";
+import { requestFocusPrompt } from "@/components/ui/FocusPrompt";
 import { useApp } from "./useAppData";
+import { useSettings } from "./useSettings";
 
-export function useKovaakWatcher() {
-  const { appData, saveData, showToast, refreshData, playlistRunner } = useApp();
+/** Próxima meta do cenário pelo modelo de habilidade (mesmo cálculo do dashboard), arredondada. */
+function nextTargetFor(task: Task, tasks: Task[], training: TrainingSettings): number | null {
+  const summary = computeSkill(task, buildAllRuns(tasks), skillConfigFromTraining(training), Date.now());
+  return summary.nextTarget === null ? null : Math.round(summary.nextTarget);
+}
+
+export interface WatcherContextValue {
+  watcherStatus: WatcherStatus;
+  settingsPath: string | null;
+  toggleWatcher: () => Promise<void>;
+  reimportCsvs: () => Promise<ImportStats>;
+  updateStatsPath: (path: string) => Promise<void>;
+  detectKovaakPath: () => Promise<string | null>;
+}
+
+const WatcherContext = createContext<WatcherContextValue | null>(null);
+
+/**
+ * Um único watcher para o app inteiro (antes `useKovaakWatcher()` era chamado em
+ * `App.tsx` e em `TrackerWorkspaceContext.tsx`, processando toda run duas vezes).
+ * Deve ser montado UMA vez, dentro de `AppProvider`. Quem precisa dele usa `useWatcher()`.
+ *
+ * O Rust grava a run (`add_run`) e emite `app_data_changed` + `run_recorded`; aqui o
+ * `run_recorded` só dispara toast, notificação e o sync do runner.
+ */
+export function WatcherProvider({ children }: { children: ReactNode }) {
+  const { showToast, playlistRunner, fixupTaskCategories } = useApp();
   const { t } = useI18n();
+  const { settings, updateSettings } = useSettings();
   const [watcherStatus, setWatcherStatus] = useState<WatcherStatus>({
     active: false,
     path: null,
     error: null,
   });
   const [settingsPath, setSettingsPath] = useState<string | null>(null);
-  const appDataRef = useRef(appData);
-  appDataRef.current = appData;
+
+  // Handlers de listeners registrados uma vez: leem sempre o valor mais recente via ref.
+  const showToastRef = useRef(showToast);
+  showToastRef.current = showToast;
+  const tRef = useRef(t);
+  tRef.current = t;
   const playlistRunnerRef = useRef(playlistRunner);
   playlistRunnerRef.current = playlistRunner;
+  const fixupRef = useRef(fixupTaskCategories);
+  fixupRef.current = fixupTaskCategories;
+  const focusPromptRef = useRef(settings?.training.focusPrompt === true);
+  focusPromptRef.current = settings?.training.focusPrompt === true;
+  const trainingRef = useRef<TrainingSettings>(settings?.training ?? DEFAULT_TRAINING_SETTINGS);
+  trainingRef.current = settings?.training ?? DEFAULT_TRAINING_SETTINGS;
 
+  // Listeners (padrão anti-vazamento: cancelado antes do listen() resolver => desfaz).
   useEffect(() => {
-    let unlistenRun: (() => void) | undefined;
-    let unlistenError: (() => void) | undefined;
-    let unlistenImport: (() => void) | undefined;
+    let cancelled = false;
+    const unlistens: Array<() => void> = [];
+    const track = (pending: Promise<() => void>) => {
+      void pending.then((fn) => {
+        if (cancelled) fn();
+        else unlistens.push(fn);
+      });
+    };
+
+    track(
+      onRunRecorded(async (event: RunRecordedEvent) => {
+        // O snapshot com a run chega por `app_data_changed`; espera a revisão para ler o threshold.
+        await dataStore.waitForRevision(event.revision);
+        if (cancelled) return;
+
+        const snapshotTasks = dataStore.getSnapshot().data.tasks;
+        const rawTask = snapshotTasks.find((task) => task.id === event.taskId);
+        const threshold = rawTask ? nextTargetFor(rawTask, snapshotTasks, trainingRef.current) : null;
+
+        showToastRef.current(
+          tRef.current("toast.newRun", { score: event.score, threshold: threshold ?? "--" }),
+          "success"
+        );
+
+        if (focusPromptRef.current) {
+          requestFocusPrompt({ taskId: event.taskId, sessionId: event.sessionId, scenario: event.scenario });
+        }
+
+        playlistRunnerRef.current.syncWithDetectedScenario(event.scenario);
+        if (event.isNewTask) void fixupRef.current();
+
+        try {
+          let granted = await isPermissionGranted();
+          if (!granted) {
+            const perm = await requestPermission();
+            granted = perm === "granted";
+          }
+          if (granted) {
+            sendNotification({
+              title: tRef.current("notif.newRunTitle"),
+              body: tRef.current("notif.newRunBody", {
+                score: event.score,
+                scenario: event.scenario,
+              }),
+            });
+          }
+        } catch {}
+      })
+    );
+
+    track(
+      onWatcherError((error) => {
+        setWatcherStatus((prev) => ({ ...prev, error, active: false }));
+        showToastRef.current(tRef.current("toast.watcherError", { error: formatBackendError(error, tRef.current) }), "error");
+      })
+    );
+
+    track(
+      onImportComplete((stats: ImportStats) => {
+        void fixupRef.current();
+        showToastRef.current(
+          tRef.current("toast.importSummary", { n: stats.new, skipped: stats.skipped }),
+          "info"
+        );
+      })
+    );
+
+    return () => {
+      cancelled = true;
+      unlistens.forEach((un) => un());
+    };
+  }, []);
+
+  // Inicialização do watcher / import da primeira execução: UMA vez por abertura do app
+  // (a guarda em ref sobrevive ao remount do StrictMode).
+  const setupStarted = useRef(false);
+  useEffect(() => {
+    if (setupStarted.current) return;
+    setupStarted.current = true;
 
     const setup = async () => {
       const settings = await getSettings();
@@ -51,10 +177,7 @@ export function useKovaakWatcher() {
         if (detected) {
           await setStatsPath(detected);
           setSettingsPath(detected);
-          await saveSettings({
-            ...settings,
-            kovaak_stats_path: detected,
-          });
+          await updateSettings({ kovaak_stats_path: detected });
         }
       }
 
@@ -72,105 +195,60 @@ export function useKovaakWatcher() {
         try {
           const stats = await importExistingCsvs();
           if (stats.new > 0) {
-            await refreshData();
-            showToast(
-              t("toast.importedFirstRun", { n: stats.new, total: stats.total }),
+            showToastRef.current(
+              tRef.current("toast.importedFirstRun", { n: stats.new, total: stats.total }),
               "success"
             );
           }
-          await saveSettings({ ...settings, import_on_first_run: false });
+          await updateSettings({ import_on_first_run: false });
         } catch {}
       }
-
-      unlistenRun = await onNewRun(async (run: KovaakRun) => {
-        const date = run.datetime.slice(0, 10);
-        const next = cloneAppData(appDataRef.current);
-        const { task } = addSessionsFromRun(
-          next,
-          run.scenario,
-          date,
-          run.sens,
-          run.score,
-          run.source_file
-        );
-        await saveData(next);
-
-        playlistRunnerRef.current.syncWithDetectedScenario(run.scenario);
-
-        const threshold = getTargetThresholdForTask(task);
-
-        showToast(
-          t("toast.newRun", { score: run.score, threshold: threshold ?? "--" }),
-          "success"
-        );
-
-        try {
-          let granted = await isPermissionGranted();
-          if (!granted) {
-            const perm = await requestPermission();
-            granted = perm === "granted";
-          }
-          if (granted) {
-            sendNotification({
-              title: "Nova Run Registrada",
-              body: `Score: ${run.score} | ${run.scenario}`,
-            });
-          }
-        } catch {}
-      });
-
-      unlistenError = await onWatcherError((error) => {
-        setWatcherStatus((prev) => ({ ...prev, error, active: false }));
-        showToast(t("toast.watcherError", { error }), "error");
-      });
-
-      unlistenImport = await onImportComplete((stats: ImportStats) => {
-        void refreshData();
-        showToast(
-          t("toast.importSummary", { n: stats.new, skipped: stats.skipped }),
-          "info"
-        );
-      });
     };
 
-    void setup();
-
-    return () => {
-      unlistenRun?.();
-      unlistenError?.();
-      unlistenImport?.();
-    };
+    void setup().catch((err) => console.error("Erro ao iniciar o watcher:", err));
   }, []);
 
-  const toggleWatcher = async () => {
+  const toggleWatcher = useCallback(async () => {
     if (watcherStatus.active) {
       await stopWatcher();
     } else {
       await startWatcher();
     }
     setWatcherStatus(await getWatcherStatus());
-  };
+  }, [watcherStatus.active]);
 
-  const reimportCsvs = async () => {
-    const stats = await importExistingCsvs();
-    return stats;
-  };
+  const reimportCsvs = useCallback(async () => {
+    return importExistingCsvs();
+  }, []);
 
-  const updateStatsPath = async (path: string) => {
-    await setStatsPath(path);
-    const settings = await getSettings();
-    await saveSettings({ ...settings, kovaak_stats_path: path });
-    setSettingsPath(path);
-    await startWatcher();
-    setWatcherStatus(await getWatcherStatus());
-  };
+  const updateStatsPath = useCallback(
+    async (path: string) => {
+      await setStatsPath(path);
+      await updateSettings({ kovaak_stats_path: path });
+      setSettingsPath(path);
+      await startWatcher();
+      setWatcherStatus(await getWatcherStatus());
+    },
+    [updateSettings]
+  );
 
-  return {
-    watcherStatus,
-    settingsPath,
-    toggleWatcher,
-    reimportCsvs,
-    updateStatsPath,
-    detectKovaakPath,
-  };
+  const value = useMemo<WatcherContextValue>(
+    () => ({
+      watcherStatus,
+      settingsPath,
+      toggleWatcher,
+      reimportCsvs,
+      updateStatsPath,
+      detectKovaakPath,
+    }),
+    [watcherStatus, settingsPath, toggleWatcher, reimportCsvs, updateStatsPath]
+  );
+
+  return createElement(WatcherContext.Provider, { value }, children);
+}
+
+export function useWatcher(): WatcherContextValue {
+  const ctx = useContext(WatcherContext);
+  if (!ctx) throw new Error("useWatcher must be used within WatcherProvider");
+  return ctx;
 }

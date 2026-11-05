@@ -19,7 +19,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -39,6 +39,6 @@ jobs:
         with:
           tagName: ${{ github.ref_name }}
           releaseName: "Aim Threshold Tracker ${{ github.ref_name }}"
-          releaseBody: "Automated release build generated from tag ${{ github.ref_name }}."
+          releaseBody: "Build automático da tag ${{ github.ref_name }}. Veja o PR/plano em docs/plans/ para o que mudou. Tags com hífen (ex.: -beta.1) são pré-releases para teste."
           releaseDraft: false
-          prerelease: false
+          prerelease: ${{ contains(github.ref_name, '-') }}

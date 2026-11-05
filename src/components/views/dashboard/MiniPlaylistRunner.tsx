@@ -154,7 +154,7 @@ export function MiniPlaylistRunner({ className }: MiniPlaylistRunnerProps) {
                 </Badge>
               </div>
               <div className="text-[11px] text-text-secondary truncate mt-0.5">
-                <span>{currentTask ? currentTask.name : "Cenário"}</span>
+                <span>{currentTask ? currentTask.name : t("runner.scenarioFallback")}</span>
               </div>
             </div>
           </div>

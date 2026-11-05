@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, type FormEvent, type KeyboardEvent } from "react";
+import { useState, useEffect, useCallback, useMemo, type FormEvent, type KeyboardEvent } from "react";
 import {
   NotePencil,
   FloppyDisk,
@@ -19,7 +19,12 @@ import {
   Badge,
 } from "@/components/ui";
 import type { Task } from "@/lib/types";
-import { getTargetThresholdForTask, parseInputScores } from "@/lib/threshold";
+import { parseInputScores, simulateDraftRuns } from "@/lib/threshold";
+import { skillConfigFromTraining } from "@/lib/skill/config";
+import { DEFAULT_TRAINING_SETTINGS } from "@/lib/types";
+import { roundScore } from "@/lib/metric-deltas";
+import { useSkill, useAllRuns } from "@/hooks/useSkill";
+import { useSettings } from "@/hooks/useSettings";
 import { getRecommendedSens } from "@/lib/viscose";
 import { useTrackerWorkspace } from "@/context/TrackerWorkspaceContext";
 import { useI18n } from "@/lib/i18n";
@@ -41,15 +46,29 @@ export function SessionSheet({
   const { t } = useI18n();
   const { state, meta, actions } = useTrackerWorkspace();
   const activeTask = propActiveTask ?? state.activeTask;
-  const { draftRuns, setDraftRuns, simulatedOutcome } = meta;
-  const currentThreshold = state.computedMetrics.currentThreshold;
+  const { draftRuns, setDraftRuns } = meta;
+  const { settings } = useSettings();
+  const allRuns = useAllRuns();
+  const skill = useSkill(activeTask?.id ?? null);
 
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [sens, setSens] = useState("");
   const [singleInput, setSingleInput] = useState("");
   const [saving, setSaving] = useState(false);
 
-  const targetThreshold = activeTask ? getTargetThresholdForTask(activeTask) : null;
+  const targetThreshold = skill?.nextTarget ?? null;
+
+  // Simula o modelo (computeSkill) com as runs digitadas, na data/sens do formulário.
+  const simulatedOutcome = useMemo(() => {
+    const sensNum = parseFloat(sens);
+    return simulateDraftRuns(
+      activeTask,
+      allRuns,
+      { scores: draftRuns, sens: Number.isFinite(sensNum) ? sensNum : 0, date },
+      skillConfigFromTraining(settings?.training ?? DEFAULT_TRAINING_SETTINGS),
+      Date.now()
+    );
+  }, [activeTask, allRuns, draftRuns, sens, date, settings?.training]);
 
   // Initialize sensitivity & date on open
   useEffect(() => {
@@ -139,11 +158,11 @@ export function SessionSheet({
             {targetThreshold !== null && (
               <div className="flex items-center gap-2 pr-8">
                 <span className="text-[11px] text-text-faint font-semibold uppercase tracking-wider hidden sm:inline">
-                  {t("session.goal")}:
+                  {t("skill.kpi.nextTarget")}:
                 </span>
                 <Badge variant="amber" className="font-mono tabular-nums font-bold">
                   <Target size={12} weight="bold" className="mr-1" />
-                  {targetThreshold} pts
+                  {roundScore(targetThreshold)} pts
                 </Badge>
               </div>
             )}
@@ -176,7 +195,7 @@ export function SessionSheet({
                   max="200"
                   value={sens}
                   onChange={(e) => setSens(e.target.value)}
-                  placeholder="Ex: 42.0"
+                  placeholder={t("skill.sheet.sensPh")}
                   required
                   className="font-mono text-xs tabular-nums"
                 />
@@ -185,7 +204,7 @@ export function SessionSheet({
 
             {/* Run score input */}
             <Field
-              label={`${t("session.scores")} (${draftRuns.length} runs)`}
+              label={`${t("session.scores")} (${t("hist.runsCount", { n: draftRuns.length })})`}
               description={t("session.separator")}
             >
               <div className="flex gap-2">
@@ -194,7 +213,7 @@ export function SessionSheet({
                   value={singleInput}
                   onChange={(e) => setSingleInput(e.target.value)}
                   onKeyDown={handleKeyDownInput}
-                  placeholder="Ex: 1040 1080 990 1015"
+                  placeholder={t("skill.sheet.scoresPh")}
                   className="font-mono text-xs flex-1"
                 />
                 <Button
@@ -205,7 +224,7 @@ export function SessionSheet({
                   disabled={!singleInput.trim()}
                   icon={<Plus size={14} weight="bold" />}
                 >
-                  Adicionar
+                  {t("skill.sheet.add")}
                 </Button>
               </div>
             </Field>
@@ -223,7 +242,7 @@ export function SessionSheet({
                       type="button"
                       onClick={() => handleRemoveRun(idx)}
                       className="text-text-faint hover:text-red transition ml-0.5"
-                      aria-label="Remover score"
+                      aria-label={t("skill.sheet.removeScore")}
                     >
                       <X size={12} weight="bold" />
                     </button>
@@ -234,16 +253,15 @@ export function SessionSheet({
                   onClick={() => setDraftRuns([])}
                   className="text-[11px] text-text-faint hover:text-red px-2 py-0.5 rounded-control transition ml-auto"
                 >
-                  Limpar todos
+                  {t("skill.sheet.clearAll")}
                 </button>
               </div>
             )}
 
-            {/* Live Ratchet Projection Card */}
+            {/* Live target projection (computeSkill) */}
             <div className="pt-1">
               <SessionSheetLivePreview
                 draftRunsCount={draftRuns.length}
-                currentThreshold={currentThreshold}
                 simulatedOutcome={simulatedOutcome}
               />
             </div>

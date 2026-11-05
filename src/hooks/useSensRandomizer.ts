@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { useApp } from "@/hooks/useAppData";
 import { useI18n } from "@/lib/i18n";
+import { formatBackendError } from "@/lib/backend-error";
 
 export interface RandomizerSettings {
   enabled: boolean;
@@ -19,8 +20,26 @@ export interface RandomizerSettings {
   scenarioIdealCm?: number;
   mouseDpi: number;
   centerOverrides?: Record<string, number>;
+  /** LEGADO (Plano 05): só leitura de settings antigos; não usar em código novo. */
   predictorProfile?: string;
+  // --- Randomizer v2 (Plano 05, T5.1). O Rust aplica estes defaults se ausentes. ---
+  mode: RandomizerMode;
+  /** Migração: settings antigos sem este campo => "personal_relative" (equivale ao antigo autoScenarioSens=true). */
+  centerSource: RandomizerCenterSource;
+  /** Chave "Categoria/Subcategoria" -> direção. Ausente = tabela padrão da Viscose. */
+  directionOverrides: Record<string, RandomizerDirection>;
+  reactivationRuns: number;
+  anchorEvery: number;
+  alternatingBlock: number;
+  /** Categoria ausente = habilitada. */
+  categoryEnabled: Record<string, boolean>;
 }
+
+export type RandomizerMode = "center" | "directed" | "alternating" | "explore";
+export type RandomizerCenterSource = "personal_relative" | "viscose_absolute" | "base" | "lab";
+export type RandomizerDirection = "fast" | "slow" | "neutral";
+export type RandomizerActiveRole = "base" | "anchor" | "random" | "off";
+export type RandomizerMuscleCue = "fast" | "slow" | "base";
 
 export interface RandomizerState {
   available: boolean;
@@ -32,6 +51,9 @@ export interface RandomizerState {
   errorMessage: string | null;
   rawaccelGuiRunning?: boolean;
   lastRollReason?: string | null;
+  activeRole?: RandomizerActiveRole | null;
+  activeCenterCm?: number | null;
+  muscleCue?: RandomizerMuscleCue | null;
 }
 
 const DEFAULT_SETTINGS: RandomizerSettings = {
@@ -49,6 +71,13 @@ const DEFAULT_SETTINGS: RandomizerSettings = {
   scenarioIdealCm: undefined,
   mouseDpi: 800,
   predictorProfile: "equilibrado",
+  mode: "center",
+  centerSource: "personal_relative",
+  directionOverrides: {},
+  reactivationRuns: 2,
+  anchorEvery: 5,
+  alternatingBlock: 3,
+  categoryEnabled: {},
 };
 
 const DEFAULT_STATE: RandomizerState = {
@@ -61,6 +90,9 @@ const DEFAULT_STATE: RandomizerState = {
   errorMessage: null,
   rawaccelGuiRunning: false,
   lastRollReason: null,
+  activeRole: null,
+  activeCenterCm: null,
+  muscleCue: null,
 };
 
 export interface RandomizerContextValue {
@@ -117,13 +149,14 @@ export function RandomizerProvider({ children }: { children: React.ReactNode }) 
     let cancelled = false;
     const unlistens: Array<() => void> = [];
 
-    const sub = async <T,>(name: string, cb: (p: T) => void) => {
-      const un = await listen<T>(name, (e) => cb(e.payload));
-      if (cancelled) {
-        un();
-      } else {
-        unlistens.push(un);
-      }
+    // Padrão anti-vazamento: se o efeito foi desfeito antes do listen() resolver, desfaz já.
+    const sub = <T,>(name: string, cb: (p: T) => void) => {
+      listen<T>(name, (e) => cb(e.payload))
+        .then((un) => {
+          if (cancelled) un();
+          else unlistens.push(un);
+        })
+        .catch((err) => console.error(`Erro ao registrar listener ${name}:`, err));
     };
 
     void sub<RandomizerState>("sens_updated", (payload) => {
@@ -157,7 +190,7 @@ export function RandomizerProvider({ children }: { children: React.ReactNode }) 
         return;
       }
       lastErrorToastRef.current = { msg: payload.message, time: now };
-      showToastRef.current(tRef.current("toast.randomizerError", { error: payload.message }), "error");
+      showToastRef.current(tRef.current("toast.randomizerError", { error: formatBackendError(payload.message, tRef.current) }), "error");
     });
 
     void sub<RandomizerSettings>("randomizer_settings_updated", (payload) => {
@@ -262,7 +295,7 @@ export function RandomizerProvider({ children }: { children: React.ReactNode }) 
         setRandomizerState(updatedState);
         return res;
       } catch (err) {
-        showToastRef.current(tRef.current("toast.rawaccelFailed", { error: String(err) }), "error");
+        showToastRef.current(tRef.current("toast.rawaccelFailed", { error: formatBackendError(err, tRef.current) }), "error");
         throw err;
       } finally {
         setTesting(false);

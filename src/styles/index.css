@@ -562,3 +562,17 @@
   animation-play-state: paused !important;
   transition-duration: 0.001ms !important;
 }
+
+/* Popup nativo de <select>: sem isso o Chromium/WebView2 usa fundo branco e o texto claro
+   do tema fica ilegível. Vale para todos os selects do app. */
+select {
+  color-scheme: dark;
+}
+select option,
+select optgroup {
+  background-color: var(--base);
+  color: var(--text-main);
+}
+select option:checked {
+  background-color: var(--surface-hover);
+}

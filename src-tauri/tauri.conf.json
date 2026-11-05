@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Aim Threshold Tracker",
-  "version": "2.1.0",
+  "version": "3.0.0",
   "identifier": "com.aimthreshold.app",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -23,12 +23,15 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; connect-src ipc: http://ipc.localhost",
+      "devCsp": null
     }
   },
   "bundle": {
     "active": true,
-    "targets": ["nsis"],
+    "targets": [
+      "nsis"
+    ],
     "shortDescription": "Aim threshold tracker with automatic KovaaK's runs detection and sensitivity randomizer",
     "longDescription": "Desktop application that monitors KovaaK's stats folder in real time, extracts scores from CSVs, and automatically tracks thresholds, moving averages, and sweet spot analysis.",
     "icon": [
@@ -40,7 +43,10 @@
     "windows": {
       "nsis": {
         "installMode": "currentUser",
-        "languages": ["PortugueseBR", "English"]
+        "languages": [
+          "PortugueseBR",
+          "English"
+        ]
       }
     }
   }

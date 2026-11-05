@@ -1,15 +1,12 @@
-import { useState, useEffect, useCallback } from "react";
-
-export type Theme = "light" | "dark" | "system";
-export type ResolvedTheme = "light" | "dark";
-
+import type { Key } from "./i18n.tsx";
 export type AppTheme = "cyber-lab" | "tactical-emerald" | "amethyst-purple" | "obsidian-amber";
 
 export interface ThemeConfig {
   id: AppTheme;
   name: string;
   color: string;
-  desc: string;
+  /** Chave i18n da descrição (traduzida onde é exibida). */
+  descKey: Key;
 }
 
 export const APP_THEMES: ThemeConfig[] = [
@@ -17,68 +14,29 @@ export const APP_THEMES: ThemeConfig[] = [
     id: "cyber-lab",
     name: "Cyber Lab",
     color: "#38bdf8",
-    desc: "Ciano elétrico esportivo, estética de laboratório de alta precisão.",
+    descKey: "theme.desc.cyberLab",
   },
   {
     id: "tactical-emerald",
     name: "Tactical Emerald",
     color: "#10b981",
-    desc: "Verde esmeralda militar tático, foco cirúrgico de atirador.",
+    descKey: "theme.desc.tacticalEmerald",
   },
   {
     id: "amethyst-purple",
     name: "Amethyst Purple",
     color: "#a855f7",
-    desc: "Violeta elétrico vibrante, estética noturna de alto contraste.",
+    descKey: "theme.desc.amethystPurple",
   },
   {
     id: "obsidian-amber",
     name: "Obsidian Amber",
     color: "#f59e0b",
-    desc: "Âmbar aeroespacial mecânico, alto contraste industrial analógico.",
+    descKey: "theme.desc.obsidianAmber",
   },
 ];
 
 const THEME_STORAGE_KEY = "aim_app_theme";
-const STORAGE_KEY = "att-theme";
-
-const getSystemTheme = (): ResolvedTheme =>
-  typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: dark)").matches
-    ? "dark"
-    : "light";
-
-export function useTheme() {
-  const [theme, setTheme] = useState<Theme>(() => {
-    if (typeof window === "undefined") return "dark";
-    const stored = localStorage.getItem(STORAGE_KEY);
-    return stored === "light" || stored === "dark" || stored === "system" ? stored : "dark";
-  });
-
-  const [resolvedTheme, setResolvedTheme] = useState<ResolvedTheme>(() =>
-    theme === "system" ? getSystemTheme() : theme
-  );
-
-  useEffect(() => {
-    const mql = window.matchMedia("(prefers-color-scheme: dark)");
-    const update = () => {
-      const resolved = theme === "system" ? (mql.matches ? "dark" : "light") : theme;
-      setResolvedTheme(resolved);
-      document.documentElement.classList.toggle("dark", resolved === "dark");
-    };
-
-    localStorage.setItem(STORAGE_KEY, theme);
-    update();
-
-    mql.addEventListener("change", update);
-    return () => mql.removeEventListener("change", update);
-  }, [theme]);
-
-  const cycleTheme = useCallback(() => {
-    setTheme((prev) => (prev === "light" ? "dark" : prev === "dark" ? "system" : "light"));
-  }, []);
-
-  return { theme, resolvedTheme: (resolvedTheme === "light" ? "light" : "dark") as ResolvedTheme, setTheme, cycleTheme };
-}
 
 export function getStoredTheme(): AppTheme {
   try {

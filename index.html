@@ -4,18 +4,6 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Aim Threshold Tracker</title>
-    <script>
-      (function () {
-        try {
-          var t = localStorage.getItem("att-theme");
-          var dark =
-            t === "dark" ||
-            ((t === "system" || !t) &&
-              window.matchMedia("(prefers-color-scheme: dark)").matches);
-          document.documentElement.classList.toggle("dark", dark);
-        } catch (e) {}
-      })();
-    </script>
   </head>
   <body class="font-sans antialiased selection:bg-accent/20 selection:text-accent">
     <div id="root"></div>

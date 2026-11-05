@@ -2,11 +2,12 @@ import { useState, useMemo } from "react";
 import { ClockCounterClockwise, Copy } from "@phosphor-icons/react";
 import { useTrackerWorkspace } from "@/context/TrackerWorkspaceContext";
 import { useToast } from "@/components/ui/Toast";
-import { summarizeDays } from "@/lib/day-summary";
+import { summarizeTrainingSessions } from "@/lib/day-summary";
+import { useSkill } from "@/hooks/useSkill";
 import { buildEscalateFormat } from "@/lib/threshold";
 import { useI18n } from "@/lib/i18n";
 import { Button, EmptyState } from "@/components/ui";
-import { DayHistoryCard, type DayGroupItem } from "./DayHistoryCard";
+import { DayHistoryCard } from "./DayHistoryCard";
 import { cn } from "@/lib/utils";
 
 export interface SessionHistoryProps {
@@ -23,19 +24,12 @@ export function SessionHistory({ className, embedded = false }: SessionHistoryPr
   const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set());
   const [visibleDaysCount, setVisibleDaysCount] = useState<number>(14);
 
-  const dayGroups = useMemo<DayGroupItem[]>(() => {
-    if (!activeTask?.sessions || activeTask.sessions.length === 0) return [];
-    const summaries = summarizeDays(activeTask);
-    const reversed = [...summaries].reverse();
+  const skill = useSkill(activeTask?.id ?? null);
 
-    return reversed.map((summary) => {
-      const runs = activeTask.sessions.filter((s) => s.date === summary.date);
-      return {
-        ...summary,
-        individualSessions: runs,
-      };
-    });
-  }, [activeTask]);
+  const dayGroups = useMemo(
+    () => [...summarizeTrainingSessions(activeTask, skill)].reverse(),
+    [activeTask, skill]
+  );
 
   const totalRuns = activeTask?.sessions?.length ?? 0;
   const visibleGroups = dayGroups.slice(0, visibleDaysCount);
@@ -57,7 +51,7 @@ export function SessionHistory({ className, embedded = false }: SessionHistoryPr
       showToast(t("toast.noData"), "error");
       return;
     }
-    const text = buildEscalateFormat(activeTask);
+    const text = buildEscalateFormat(activeTask, skill);
     if (!text) {
       showToast(t("toast.noData"), "error");
       return;
@@ -71,7 +65,7 @@ export function SessionHistory({ className, embedded = false }: SessionHistoryPr
       await actions.deleteSession(sessionId);
       showToast(t("toast.sessionDeleted"), "success");
     } catch {
-      showToast("Erro ao excluir", "error");
+      showToast(t("skill.hist.deleteError"), "error");
     }
   };
 
@@ -85,7 +79,7 @@ export function SessionHistory({ className, embedded = false }: SessionHistoryPr
       {/* Header */}
       <div className="flex items-center justify-between gap-2 mb-3 select-none">
         <span className="text-xs font-mono text-text-faint tabular">
-          {t("hist.totalDaysRuns", { days: dayGroups.length, runs: totalRuns })}
+          {t("skill.hist.totalSessionsRuns", { sessions: dayGroups.length, runs: totalRuns })}
         </span>
 
         {!embedded && activeTask && activeTask.sessions.length > 0 && (
@@ -112,10 +106,10 @@ export function SessionHistory({ className, embedded = false }: SessionHistoryPr
         <div className="space-y-2 max-h-[380px] scroll-y pr-1">
           {visibleGroups.map((day) => (
             <DayHistoryCard
-              key={day.date}
+              key={day.key}
               day={day}
-              isExpanded={expandedDays.has(day.date)}
-              onToggle={() => toggleDay(day.date)}
+              isExpanded={expandedDays.has(day.key)}
+              onToggle={() => toggleDay(day.key)}
               onDeleteSession={handleDeleteSession}
             />
           ))}
@@ -128,7 +122,7 @@ export function SessionHistory({ className, embedded = false }: SessionHistoryPr
                 variant="secondary"
                 onClick={() => setVisibleDaysCount((v) => v + 14)}
               >
-                {t("hist.showMore")}
+                {t("skill.hist.showMore")}
               </Button>
             </div>
           )}

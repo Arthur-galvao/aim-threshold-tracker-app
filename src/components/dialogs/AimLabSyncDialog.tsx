@@ -10,6 +10,7 @@ import {
 } from "@/components/ui";
 import { syncAimlabSqlite, importAimlabCsv, pickAimlabCsvFile } from "@/lib/tauri-bridge";
 import { useI18n } from "@/lib/i18n";
+import { formatBackendError } from "@/lib/backend-error";
 
 export interface AimLabSyncDialogProps {
   open: boolean;
@@ -44,7 +45,7 @@ export function AimLabSyncDialog({
         onImportComplete(stats);
       }
     } catch (err: unknown) {
-      setError(String(err) || "Erro ao sincronizar banco do Aim Lab");
+      setError(formatBackendError(err, t) || t("aimlab.errSync"));
     } finally {
       setLoading(false);
     }
@@ -67,7 +68,7 @@ export function AimLabSyncDialog({
         onImportComplete(stats);
       }
     } catch (err: unknown) {
-      setError(String(err) || "Erro ao importar arquivo CSV do Aim Lab");
+      setError(formatBackendError(err, t) || t("aimlab.errImport"));
     } finally {
       setLoading(false);
     }
@@ -75,12 +76,12 @@ export function AimLabSyncDialog({
 
   const handlePickCsv = async () => {
     try {
-      const picked = await pickAimlabCsvFile();
+      const picked = await pickAimlabCsvFile(t("dialog.pickAimlabCsv"));
       if (picked) {
         await runCsvImport(picked);
       }
     } catch (err: unknown) {
-      setError(String(err) || "Erro ao abrir seletor de arquivo CSV");
+      setError(formatBackendError(err, t) || t("aimlab.errPick"));
     }
   };
 
@@ -91,7 +92,7 @@ export function AimLabSyncDialog({
     const filePath = (file as unknown as { path?: string }).path;
     e.target.value = "";
     if (!filePath) {
-      setError("Não foi possível obter o caminho absoluto do arquivo no sistema.");
+      setError(t("aimlab.errNoPath"));
       return;
     }
 

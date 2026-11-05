@@ -111,7 +111,7 @@ pub fn load_all_kovaak_playlists(stats_path: Option<&str>) -> Vec<crate::model::
             }
         }
     }
-    playlists.sort_by(|a, b| a.playlist_name.to_lowercase().cmp(&b.playlist_name.to_lowercase()));
+    playlists.sort_by_key(|p| p.playlist_name.to_lowercase());
     playlists
 }
 

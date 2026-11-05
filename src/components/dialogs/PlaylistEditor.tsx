@@ -21,6 +21,7 @@ export function PlaylistEditor({
   onCancel,
 }: PlaylistEditorProps) {
   const { t } = useI18n();
+  // Chaves novas vivem em docs/plans/i18n-pending/T7-playlist.json até a integração (o tipo Key ainda não as conhece).
   const taskMap = useMemo(() => new Map(tasks.map((t) => [t.id, t])), [tasks]);
 
   const [name, setName] = useState(initialPlaylist?.name ?? "");
@@ -41,6 +42,7 @@ export function PlaylistEditor({
     }
     return [];
   });
+  const [isMeasurement, setIsMeasurement] = useState<boolean>(initialPlaylist?.isMeasurement === true);
   const [selectedTaskToAdd, setSelectedTaskToAdd] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -75,7 +77,7 @@ export function PlaylistEditor({
 
   const handleUpdateItem = (
     index: number,
-    partial: Partial<Pick<PlaylistItem, "targetMode" | "targetValue">>
+    partial: Partial<Pick<PlaylistItem, "targetMode" | "targetValue" | "stepKind" | "maxAttempts" | "maxMinutes">>
   ) => {
     setItems((prev) =>
       prev.map((item, i) => (i === index ? { ...item, ...partial } : item))
@@ -112,6 +114,7 @@ export function PlaylistEditor({
         items,
         createdAt: initialPlaylist?.createdAt ?? new Date().toISOString(),
         autoAdvanceMode,
+        isMeasurement,
       };
       await onSave(playlist);
     } finally {
@@ -146,6 +149,25 @@ export function PlaylistEditor({
         >
           {t("playlist.orderSuggest")}
         </Button>
+      </div>
+
+      {/* Playlist kind: treino ou medição (T7.5) */}
+      <div className="space-y-1.5">
+        <label className="text-[11px] font-semibold uppercase tracking-wider text-text-faint px-0.5">
+          {t("playlist.kindTitle")}
+        </label>
+        <div>
+          <Segmented<"train" | "measure">
+            size="sm"
+            value={isMeasurement ? "measure" : "train"}
+            onChange={(v) => setIsMeasurement(v === "measure")}
+            options={[
+              { value: "train", label: t("playlist.kindTrain") },
+              { value: "measure", label: t("playlist.kindMeasure") },
+            ]}
+          />
+        </div>
+        <p className="text-[11px] text-text-faint px-0.5">{t("playlist.measureTip")}</p>
       </div>
 
       {/* Auto-Advance Mode */}

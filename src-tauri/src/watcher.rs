@@ -9,10 +9,10 @@ use std::time::Duration;
 use notify::{Event, EventKind, RecursiveMode, Watcher};
 use tauri::{AppHandle, Emitter, Manager, State};
 
-use crate::model::{
-    AppData, ImportStats, KovaakRun, Session, Task, DEFAULT_CATEGORY, DEFAULT_SUBCATEGORY,
-};
+use crate::errors::{err, err_d};
+use crate::model::{ImportStats, KovaakRun};
 use crate::parser;
+use crate::sens_ledger;
 use crate::storage;
 use crate::AppState;
 
@@ -48,7 +48,7 @@ pub fn spawn(app: AppHandle, path: PathBuf) -> Result<WatcherHandle, String> {
             ) {
                 Ok(w) => w,
                 Err(e) => {
-                    let _ = app.emit("watcher_error", format!("Falha ao criar watcher: {e}"));
+                    let _ = app.emit("watcher_error", err_d("watcher_create_failed", e));
                     return;
                 }
             };
@@ -58,7 +58,7 @@ pub fn spawn(app: AppHandle, path: PathBuf) -> Result<WatcherHandle, String> {
                 if let Err(e) = watcher.watch(&path, RecursiveMode::NonRecursive) {
                     let _ = app.emit(
                         "watcher_error",
-                        format!("Falha ao observar a pasta {}: {e}", path.display()),
+                        err_d("watch_dir_failed", format!("{}: {e}", path.display())),
                     );
                 } else {
                     watched_any = true;
@@ -66,13 +66,12 @@ pub fn spawn(app: AppHandle, path: PathBuf) -> Result<WatcherHandle, String> {
             }
 
             if let Some(aimlab_replay_dir) = crate::aimlab::find_active_aimlab_replay_dir() {
-                if aimlab_replay_dir != path && aimlab_replay_dir.exists() && aimlab_replay_dir.is_dir() {
-                    if watcher
-                        .watch(&aimlab_replay_dir, RecursiveMode::NonRecursive)
-                        .is_ok()
-                    {
-                        watched_any = true;
-                    }
+                if aimlab_replay_dir != path
+                    && aimlab_replay_dir.exists()
+                    && aimlab_replay_dir.is_dir()
+                    && watcher.watch(&aimlab_replay_dir, RecursiveMode::NonRecursive).is_ok()
+                {
+                    watched_any = true;
                 }
             }
 
@@ -88,7 +87,7 @@ pub fn spawn(app: AppHandle, path: PathBuf) -> Result<WatcherHandle, String> {
                 }
             }
         })
-        .map_err(|e| format!("Falha ao iniciar thread do watcher: {e}"))?;
+        .map_err(|e| err_d("watcher_start_failed", e))?;
 
     Ok(WatcherHandle {
         shutdown,
@@ -139,17 +138,9 @@ pub fn is_aimlab_replay_json(path: &Path) -> bool {
         .unwrap_or(false)
 }
 
-#[allow(dead_code)]
-pub fn plan_roll(enabled: bool, dedupe_hit: bool) -> bool {
-    enabled && !dedupe_hit
-}
-
 fn process_new_aimlab_replay(app: &AppHandle, path: &Path) -> Result<bool, String> {
     let state: State<AppState> = app.state();
-    let file_name = path
-        .file_name()
-        .map(|n| n.to_string_lossy().to_string())
-        .unwrap_or_default();
+    let file_name = file_name_of(path);
 
     // 1. Dedupe by replay filename before any side effect
     if !state.emitted.lock().unwrap().insert(format!("aimlab_replay_{file_name}")) {
@@ -157,18 +148,25 @@ fn process_new_aimlab_replay(app: &AppHandle, path: &Path) -> Result<bool, Strin
     }
 
     // 2. Snapshot sensitivity used during the finished run
-    let (is_randomizer_enabled, active_sens, mouse_dpi) = {
+    let (is_randomizer_enabled, mouse_dpi) = {
         let s = state.settings.lock().unwrap();
-        let r = state.randomizer_state.lock().unwrap();
-        (s.randomizer.enabled, r.active_sens_cm, s.mouse_dpi)
+        (s.randomizer.enabled, s.mouse_dpi)
     };
+    let finished_snapshot = snapshot_active_roll(&state);
 
     // 3. Wait for replay JSON flush and parse
-    let name_map = crate::aimlab::build_aimlab_scenario_map();
+    let mut name_map = crate::aimlab::cached_scenario_map(false);
     let mut parsed_run: Option<KovaakRun> = None;
     for _ in 0..8 {
         thread::sleep(Duration::from_millis(350));
-        if let Some(r) = crate::aimlab::parse_aimlab_replay_file(path, &name_map, mouse_dpi) {
+        if let Some(mut r) = crate::aimlab::parse_aimlab_replay_file(path, &name_map, mouse_dpi) {
+            // Nome fora do mapa cacheado: recarrega uma vez e refaz a resolução.
+            if crate::aimlab::replay_task_unmapped(path, &name_map) {
+                name_map = crate::aimlab::cached_scenario_map(true);
+                if let Some(fresh) = crate::aimlab::parse_aimlab_replay_file(path, &name_map, mouse_dpi) {
+                    r = fresh;
+                }
+            }
             parsed_run = Some(r);
             break;
         }
@@ -176,10 +174,13 @@ fn process_new_aimlab_replay(app: &AppHandle, path: &Path) -> Result<bool, Strin
 
     let mut run = match parsed_run {
         Some(r) => r,
-        None => return Err(format!("Não foi possível ler o Replay do Aim Lab: {}", path.display())),
+        None => return Err(err_d("aimlab_replay_unreadable", path.display())),
     };
 
-    // 4. Roll next sensitivity via RawAccel serialized by roll_lock
+    // 4. Ledger ANTES do sorteio da próxima sens
+    record_run_end_sens(app, &file_name, is_randomizer_enabled, &finished_snapshot);
+
+    // 5. Roll next sensitivity via RawAccel serialized by roll_lock
     if is_randomizer_enabled {
         let _ = crate::randomizer::apply_next_sens(
             app,
@@ -190,19 +191,12 @@ fn process_new_aimlab_replay(app: &AppHandle, path: &Path) -> Result<bool, Strin
         );
     }
 
-    let already_imported = {
-        let data = state.data.lock().unwrap();
-        has_source_file(&data.tasks, &run.source_file)
-    };
-    if already_imported {
+    apply_sens_ledger(app, &file_name, &mut run);
+
+    // Dedupe por source_file dentro do lock do store; `None` = run já registrada.
+    if crate::data_commands::record_run(app, &run)?.is_none() {
         return Ok(false);
     }
-
-    if is_randomizer_enabled && active_sens > 0.0 {
-        run.sens = active_sens;
-    }
-
-    app.emit("new_run", &run).map_err(|e| e.to_string())?;
 
     if is_randomizer_enabled {
         crate::randomizer::record_last_run(app, &run.scenario, run.score);
@@ -213,10 +207,7 @@ fn process_new_aimlab_replay(app: &AppHandle, path: &Path) -> Result<bool, Strin
 
 fn process_new_csv(app: &AppHandle, path: &Path) -> Result<bool, String> {
     let state: State<AppState> = app.state();
-    let file_name = path
-        .file_name()
-        .map(|n| n.to_string_lossy().to_string())
-        .unwrap_or_default();
+    let file_name = file_name_of(path);
 
     // 1. dedupe por nome de arquivo ANTES de qualquer efeito colateral (evita rolar duas vezes)
     if !state.emitted.lock().unwrap().insert(file_name.clone()) {
@@ -224,20 +215,20 @@ fn process_new_csv(app: &AppHandle, path: &Path) -> Result<bool, String> {
     }
 
     // 2. snapshot da sens usada na run que acabou e do cenario que acabou
-    let (is_randomizer_enabled, active_sens, stats_path, auto_detect_playlist, mouse_dpi) = {
+    let (is_randomizer_enabled, stats_path, auto_detect_playlist, mouse_dpi) = {
         let s = state.settings.lock().unwrap();
-        let r = state.randomizer_state.lock().unwrap();
         (
             s.randomizer.enabled,
-            r.active_sens_cm,
             s.kovaak_stats_path.clone(),
             s.auto_detect_playlist,
             s.mouse_dpi,
         )
     };
+    let finished_snapshot = snapshot_active_roll(&state);
     let finished = crate::parser::scenario_from_file_name(&file_name);
 
-    // 3. rolar a proxima sens agora, sincrono, serializado por roll_lock
+    // 3. ledger da run que acabou (antes do sorteio), depois rolar a proxima sens
+    record_run_end_sens(app, &file_name, is_randomizer_enabled, &finished_snapshot);
     if is_randomizer_enabled {
         let _ = crate::randomizer::apply_next_sens(
             app,
@@ -248,23 +239,7 @@ fn process_new_csv(app: &AppHandle, path: &Path) -> Result<bool, String> {
         );
     }
 
-    // 4. reescrever CSV com used_cm e parsear (com override de sens)
-    if is_randomizer_enabled && active_sens > 0.0 {
-        let mut updated = false;
-        for _ in 0..5 {
-            thread::sleep(Duration::from_millis(300));
-            if let Ok(()) = update_kovaak_csv_sensitivity(path, active_sens) {
-                updated = true;
-                break;
-            }
-        }
-        if !updated {
-            if let Err(e) = update_kovaak_csv_sensitivity(path, active_sens) {
-                eprintln!("[Watcher] Erro ao atualizar sensibilidade no CSV: {e}");
-            }
-        }
-    }
-
+    // 4. parsear (sem reescrever o CSV do jogo) e aplicar o ledger
     let mut run = match wait_for_parse(path, mouse_dpi) {
         Ok(r) => r,
         Err(e) => {
@@ -276,19 +251,12 @@ fn process_new_csv(app: &AppHandle, path: &Path) -> Result<bool, String> {
         }
     };
 
-    let already_imported = {
-        let data = state.data.lock().unwrap();
-        has_source_file(&data.tasks, &run.source_file)
-    };
-    if already_imported {
+    apply_sens_ledger(app, &file_name, &mut run);
+
+    // Dedupe por source_file dentro do lock do store; `None` = run já registrada.
+    if crate::data_commands::record_run(app, &run)?.is_none() {
         return Ok(false);
     }
-
-    if is_randomizer_enabled && active_sens > 0.0 {
-        run.sens = active_sens;
-    }
-
-    app.emit("new_run", &run).map_err(|e| e.to_string())?;
 
     if auto_detect_playlist {
         if let Some(playlist) = crate::kovaaak::detect_playlist_in_progress(stats_path.as_deref()) {
@@ -303,47 +271,140 @@ fn process_new_csv(app: &AppHandle, path: &Path) -> Result<bool, String> {
     Ok(true)
 }
 
-pub fn update_kovaak_csv_sensitivity(path: &Path, sens_cm: f64) -> Result<(), String> {
-    let content = fs::read_to_string(path)
-        .map_err(|e| format!("Falha ao ler arquivo CSV para atualização: {e}"))?;
-
-    let sens_str = format!("{:.2}", sens_cm);
-    let mut new_lines = Vec::new();
-
-    for line in content.lines() {
-        let trimmed = line.trim();
-        let lower = trimmed.to_lowercase();
-
-        if lower.starts_with("horiz sens:") || lower.starts_with("horizsens:") {
-            new_lines.push(format!("Horiz Sens:,{sens_str}"));
-        } else if lower.starts_with("vert sens:") || lower.starts_with("vertsens:") {
-            new_lines.push(format!("Vert Sens:,{sens_str}"));
-        } else if lower.starts_with("sens scale:") || lower.starts_with("sensscale:") {
-            new_lines.push("Sens Scale:,cm/360".to_string());
-        } else {
-            new_lines.push(line.to_string());
-        }
-    }
-
-    let updated = new_lines.join("\r\n");
-    fs::write(path, updated)
-        .map_err(|e| format!("Falha ao gravar arquivo CSV atualizado: {e}"))?;
-
-    Ok(())
+fn file_name_of(path: &Path) -> String {
+    path.file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_default()
 }
 
+/// Snapshot do sorteio ATIVO durante a run que acabou (tirado antes do novo sorteio).
+struct ActiveRollSnapshot {
+    cm: f64,
+    role: String,
+    center_cm: Option<f64>,
+    measuring: bool,
+}
+
+fn snapshot_active_roll(state: &State<AppState>) -> ActiveRollSnapshot {
+    let measuring = *state.measuring.lock().unwrap();
+    let r = state.randomizer_state.lock().unwrap();
+    ActiveRollSnapshot {
+        cm: r.active_sens_cm,
+        role: r.active_role.clone().unwrap_or_else(|| sens_ledger::ROLE_OFF.to_string()),
+        center_cm: r.active_center_cm,
+        measuring,
+    }
+}
+
+/// Grava no ledger a sens usada na run que acabou. Erro vira log: nao bloqueia a run.
+fn record_run_end_sens(
+    app: &AppHandle,
+    file_name: &str,
+    randomizer_enabled: bool,
+    snap: &ActiveRollSnapshot,
+) {
+    let now = sens_ledger::now_ms();
+    // Randomizer desligado: a sens do CSV e a verdade (role "off"); o modo da run segue valendo.
+    let role = if randomizer_enabled { snap.role.as_str() } else { sens_ledger::ROLE_OFF };
+    let entry = sens_ledger::entry_for_snapshot(role, snap.cm, snap.center_cm, snap.measuring, now);
+    let result = storage::sens_ledger_path(app)
+        .and_then(|p| sens_ledger::record_and_save(&p, file_name, entry, now));
+    if let Err(e) = result {
+        eprintln!("[Watcher] Falha ao gravar sens_ledger para {file_name}: {e}");
+    }
+}
+
+/// Sobrepõe sens/role/centro/k da run com a entrada do ledger (se houver).
+fn apply_sens_ledger(app: &AppHandle, file_name: &str, run: &mut KovaakRun) {
+    let entry = storage::sens_ledger_path(app)
+        .ok()
+        .and_then(|p| sens_ledger::lookup(&p, file_name));
+    sens_ledger::apply_to_run(entry.as_ref(), run);
+}
+
+/// Backoff do parse: a run só é válida quando o parser devolve Score + tabela de armas.
+const PARSE_BACKOFF_MS: [u64; 6] = [100, 200, 400, 800, 1600, 3200];
+
 fn wait_for_parse(path: &Path, fallback_dpi: f64) -> Result<KovaakRun, String> {
-    let mut attempts = 0;
-    loop {
-        thread::sleep(Duration::from_millis(1000));
+    for delay in PARSE_BACKOFF_MS {
+        thread::sleep(Duration::from_millis(delay));
         if let Some(run) = parser::parse_stats_file_with_fallback_dpi(path, fallback_dpi) {
             return Ok(run);
         }
-        attempts += 1;
-        if attempts >= 10 {
-            return Err(format!("Não foi possível ler o CSV: {}", path.display()));
+    }
+    Err(err_d("csv_unreadable", path.display()))
+}
+
+/// Lista os CSVs de stats de uma pasta, em ordem.
+fn list_stats_csvs(dir: &Path) -> Result<Vec<PathBuf>, String> {
+    let entries = fs::read_dir(dir).map_err(|e| err_d("read_dir_failed", format!("{}: {e}", dir.display())))?;
+    let mut csvs: Vec<PathBuf> = entries
+        .filter_map(|e| e.ok())
+        .map(|e| e.path())
+        .filter(|p| is_stats_csv(p))
+        .collect();
+    csvs.sort();
+    Ok(csvs)
+}
+
+fn modified_ms(path: &Path) -> Option<i64> {
+    let modified = fs::metadata(path).ok()?.modified().ok()?;
+    let d = modified.duration_since(std::time::UNIX_EPOCH).ok()?;
+    Some(d.as_millis() as i64)
+}
+
+/// Parse (IO pesado, sem lock) + lote único no store. `reason` vai no evento `import_complete`.
+fn import_paths(
+    app: &AppHandle,
+    paths: &[PathBuf],
+    mouse_dpi: f64,
+    reason: &str,
+) -> Result<ImportStats, String> {
+    let total = paths.len();
+    let mut unparsed = 0usize;
+    let mut runs: Vec<KovaakRun> = Vec::with_capacity(total);
+    for path in paths {
+        match parser::parse_stats_file_with_fallback_dpi(path, mouse_dpi) {
+            Some(mut run) => {
+                apply_sens_ledger(app, &file_name_of(path), &mut run);
+                runs.push(run);
+            }
+            None => unparsed += 1,
         }
     }
+
+    // Lote inteiro numa única mutação (uma revisão por import) + flush.
+    // Run já importada: corrige a sens só se estava gravada como sens do jogo (< 2.5).
+    let outcome = crate::data_commands::import_runs(
+        app,
+        &runs,
+        |session, run| {
+            if session.sens > 0.0 && session.sens < 2.5 && run.sens >= 2.5 {
+                session.sens = run.sens;
+                true
+            } else {
+                false
+            }
+        },
+        |_| {},
+    )?;
+
+    let stats = ImportStats {
+        total,
+        new: outcome.new,
+        skipped: outcome.skipped + unparsed,
+    };
+    app.emit(
+        "import_complete",
+        serde_json::json!({
+            "total": stats.total,
+            "new": stats.new,
+            "skipped": stats.skipped,
+            "reason": reason,
+        }),
+    )
+    .map_err(|e| err_d("emit_failed", e))?;
+    Ok(stats)
 }
 
 pub fn import_existing(app: &AppHandle) -> Result<ImportStats, String> {
@@ -354,107 +415,54 @@ pub fn import_existing(app: &AppHandle) -> Result<ImportStats, String> {
         let path = settings
             .kovaak_stats_path
             .clone()
-            .ok_or_else(|| "Nenhuma pasta do KovaaK's configurada".to_string())?;
+            .ok_or_else(|| err("stats_dir_not_configured"))?;
         (PathBuf::from(path), settings.mouse_dpi)
     };
 
-    let entries = fs::read_dir(&dir).map_err(|e| format!("Falha ao ler a pasta {}: {e}", dir.display()))?;
-    let mut csvs: Vec<PathBuf> = entries
-        .filter_map(|e| e.ok())
-        .map(|e| e.path())
-        .filter(|p| is_stats_csv(p))
-        .collect();
-    csvs.sort();
-
-    let total = csvs.len();
-    let mut new = 0usize;
-    let mut skipped = 0usize;
-
-    for path in &csvs {
-        let run = match parser::parse_stats_file_with_fallback_dpi(path, mouse_dpi) {
-            Some(r) => r,
-            None => {
-                skipped += 1;
-                continue;
-            }
-        };
-
-        let already = {
-            let data = state.data.lock().unwrap();
-            has_source_file(&data.tasks, &run.source_file)
-        };
-        if already {
-            // Update session sensitivity only if it was stored as an unconverted in-game sensitivity (< 2.5)
-            let mut data = state.data.lock().unwrap();
-            for task in &mut data.tasks {
-                for session in &mut task.sessions {
-                    if session.source_file.as_deref() == Some(&run.source_file)
-                        && session.sens > 0.0
-                        && session.sens < 2.5
-                        && run.sens >= 2.5
-                    {
-                        session.sens = run.sens;
-                        new += 1;
-                    }
-                }
-            }
-            skipped += 1;
-            continue;
-        }
-
-        add_session_to_data(&state, &run);
-        new += 1;
-    }
-
-    if new > 0 {
-        let data = state.data.lock().unwrap().clone();
-        storage::save_app_data(app, &data)?;
-    }
-
-    let stats = ImportStats {
-        total,
-        new,
-        skipped,
-    };
-    app.emit("import_complete", &stats).map_err(|e| e.to_string())?;
-    Ok(stats)
+    let csvs = list_stats_csvs(&dir)?;
+    import_paths(app, &csvs, mouse_dpi, "manual")
 }
 
-pub fn migrate_existing_sensitivities(data: &mut AppData, stats_dir: Option<&str>, mouse_dpi: f64) -> bool {
-    let mut updated = false;
-    let base_dir = stats_dir.map(PathBuf::from);
-    let effective_dpi = if mouse_dpi > 0.0 { mouse_dpi } else { 800.0 };
+/// Margem para trás no `last_import_scan_at`: arquivos recém-criados (ainda sendo escritos)
+/// são reconsiderados na próxima varredura. Duplicatas são descartadas pelo store.
+const CATCH_UP_MARGIN_MS: i64 = 5 * 60 * 1000;
 
-    for task in &mut data.tasks {
-        for session in &mut task.sessions {
-            // Any sensitivity < 2.5 is clearly an in-game sens rather than physical cm/360
-            if session.sens > 0.0 && session.sens < 2.5 {
-                let mut converted = false;
+/// Importa os CSVs de stats modificados desde a última varredura (ou todos, se nunca houve).
+/// Atualiza `last_import_scan_at` e emite `import_complete` com `reason: "catch_up"`.
+pub fn catch_up_import(app: &AppHandle) -> Result<ImportStats, String> {
+    let state: State<AppState> = app.state();
+    let scan_started_ms = sens_ledger::now_ms();
 
-                // Try to re-parse from source file if available
-                if let (Some(ref dir), Some(ref file_name)) = (&base_dir, &session.source_file) {
-                    let csv_path = dir.join(file_name);
-                    if csv_path.exists() {
-                        if let Some(run) = parser::parse_stats_file_with_fallback_dpi(&csv_path, effective_dpi) {
-                            if run.sens > 2.5 {
-                                session.sens = run.sens;
-                                converted = true;
-                                updated = true;
-                            }
-                        }
-                    }
-                }
+    let (dir, mouse_dpi, since) = {
+        let settings = state.settings.lock().unwrap();
+        let path = settings
+            .kovaak_stats_path
+            .clone()
+            .ok_or_else(|| err("stats_dir_not_configured"))?;
+        (PathBuf::from(path), settings.mouse_dpi, settings.last_import_scan_at)
+    };
 
-                // If source file not found or couldn't be parsed, fallback to Valorant conversion
-                if !converted {
-                    session.sens = parser::convert_sens_to_cm(session.sens, Some("Valorant"), effective_dpi);
-                    updated = true;
-                }
-            }
-        }
-    }
+    // Arquivos que o watcher ao vivo já assumiu (`emitted`) são dele: catch-up não os importa,
+    // para não parsear antes de o ledger da run ser gravado.
+    let claimed_by_live = state.emitted.lock().unwrap().clone();
+    let pending: Vec<PathBuf> = list_stats_csvs(&dir)?
+        .into_iter()
+        .filter(|p| !claimed_by_live.contains(&file_name_of(p)))
+        .filter(|p| match (since, modified_ms(p)) {
+            (Some(since), Some(modified)) => modified > since,
+            _ => true,
+        })
+        .collect();
 
-    updated
+    let stats = import_paths(app, &pending, mouse_dpi, "catch_up")?;
+
+    let snapshot = {
+        let mut settings = state.settings.lock().unwrap();
+        settings.last_import_scan_at = Some(scan_started_ms - CATCH_UP_MARGIN_MS);
+        settings.clone()
+    };
+    storage::save_settings(app, &snapshot)?;
+    Ok(stats)
 }
 
 static ID_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
@@ -469,68 +477,9 @@ pub fn unique_id(prefix: &str) -> String {
     format!("{prefix}_{millis}_{count}_{rand_val:x}")
 }
 
-pub fn has_source_file(tasks: &[Task], source_file: &str) -> bool {
-    tasks
-        .iter()
-        .any(|t| t.sessions.iter().any(|s| s.source_file.as_deref() == Some(source_file)))
-}
-
-pub fn add_session_to_data(state: &State<AppState>, run: &KovaakRun) {
-    let date = run.datetime.get(..10).unwrap_or("").to_string();
-    let session = Session {
-        id: unique_id("sess"),
-        date,
-        sens: run.sens,
-        pb: run.score,
-        threshold: 0.0,
-        source_file: Some(run.source_file.clone()),
-    };
-
-    let mut data = state.data.lock().unwrap();
-
-    if let Some(task) = data
-        .tasks
-        .iter_mut()
-        .find(|t| t.name.eq_ignore_ascii_case(&run.scenario))
-    {
-        task.sessions.push(session);
-        return;
-    }
-
-    let task = Task {
-        id: unique_id("task"),
-        name: run.scenario.clone(),
-        category: DEFAULT_CATEGORY.to_string(),
-        subcategory: DEFAULT_SUBCATEGORY.to_string(),
-        sessions: vec![session],
-    };
-
-    if data.active_task_id.is_none() {
-        data.active_task_id = Some(task.id.clone());
-    }
-    data.tasks.push(task);
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_update_kovaak_csv_sensitivity() {
-        let tmp_path = std::env::temp_dir().join("test_update_sens.csv");
-        let initial_content = "Score:,940.0\r\nScenario:,WALLHACK - VBRClick Easy\r\nSens Scale:,cm/360\r\nHoriz Sens:,50.0\r\nVert Sens:,50.0\r\nDPI:,800\r\nFOV:,103.0\r\n";
-        std::fs::write(&tmp_path, initial_content).unwrap();
-
-        let result = update_kovaak_csv_sensitivity(&tmp_path, 108.35);
-        assert!(result.is_ok());
-
-        let updated_content = std::fs::read_to_string(&tmp_path).unwrap();
-        assert!(updated_content.contains("Horiz Sens:,108.35"));
-        assert!(updated_content.contains("Vert Sens:,108.35"));
-        assert!(updated_content.contains("Sens Scale:,cm/360"));
-
-        let _ = std::fs::remove_file(tmp_path);
-    }
 
     #[test]
     fn test_is_aimlab_replay_json() {
@@ -543,90 +492,6 @@ mod tests {
     }
 
     #[test]
-    fn test_migrate_preserves_randomized_and_cm_sens() {
-        let mut data = AppData {
-            active_task_id: Some("t1".into()),
-            tasks: vec![Task {
-                id: "t1".into(),
-                name: "1w2ts Pasu".into(),
-                category: "Clicking".into(),
-                subcategory: "Dynamic".into(),
-                sessions: vec![
-                    Session {
-                        id: "s1".into(),
-                        date: "2026-09-18".into(),
-                        sens: 75.0,
-                        pb: 120.0,
-                        threshold: 110.0,
-                        source_file: Some("run1.csv".into()),
-                    },
-                    Session {
-                        id: "s2".into(),
-                        date: "2026-09-18".into(),
-                        sens: 50.0,
-                        pb: 115.0,
-                        threshold: 110.0,
-                        source_file: Some("run2.csv".into()),
-                    },
-                ],
-            }],
-            playlists: Vec::new(),
-        };
-
-        let changed = migrate_existing_sensitivities(&mut data, None, 800.0);
-        assert!(!changed, "Sensitividades em cm/360 não devem ser modificadas");
-        assert_eq!(data.tasks[0].sessions[0].sens, 75.0);
-        assert_eq!(data.tasks[0].sessions[1].sens, 50.0);
-    }
-
-    #[test]
-    fn test_migrate_converts_legacy_in_game_sens() {
-        let mut data = AppData {
-            active_task_id: Some("t1".into()),
-            playlists: Vec::new(),
-            tasks: vec![Task {
-                id: "t1".into(),
-                name: "1w2ts Pasu".into(),
-                category: "Clicking".into(),
-                subcategory: "Dynamic".into(),
-                sessions: vec![Session {
-                    id: "s1".into(),
-                    date: "2026-09-18".into(),
-                    sens: 0.24,
-                    pb: 120.0,
-                    threshold: 110.0,
-                    source_file: None,
-                }],
-            }],
-        };
-
-        let changed = migrate_existing_sensitivities(&mut data, None, 800.0);
-        assert!(changed, "Sensitividade legada (< 2.5) deve ser migrada");
-        assert_eq!(data.tasks[0].sessions[0].sens, 68.0);
-    }
-
-    #[test]
-    fn test_has_source_file() {
-        let tasks = vec![Task {
-            id: "t1".into(),
-            name: "Scenario".into(),
-            category: "Clicking".into(),
-            subcategory: "Dynamic".into(),
-            sessions: vec![Session {
-                id: "s1".into(),
-                date: "2026-09-18".into(),
-                sens: 75.0,
-                pb: 100.0,
-                threshold: 90.0,
-                source_file: Some("target_run.csv".into()),
-            }],
-        }];
-
-        assert!(has_source_file(&tasks, "target_run.csv"));
-        assert!(!has_source_file(&tasks, "other_run.csv"));
-    }
-
-    #[test]
     fn test_unique_id_no_collision() {
         use std::collections::HashSet;
         let mut set = HashSet::new();
@@ -635,14 +500,6 @@ mod tests {
             assert!(set.insert(id), "Colisão detectada na geração de IDs únicos");
         }
         assert_eq!(set.len(), 10_000);
-    }
-
-    #[test]
-    fn test_plan_roll_decisions() {
-        assert!(plan_roll(true, false));
-        assert!(!plan_roll(true, true), "Dedupe hit prevents re-roll");
-        assert!(!plan_roll(false, false), "Disabled randomizer prevents roll");
-        assert!(!plan_roll(false, true));
     }
 
     #[test]

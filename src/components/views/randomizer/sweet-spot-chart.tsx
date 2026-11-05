@@ -153,8 +153,8 @@ export function SweetSpotChart({
   const scopeOptions = [
     { value: "current", label: t("randomizer.scopeCurrent") },
     { value: "all", label: t("randomizer.scopeAll") },
-    { value: "playlist", label: t("randomizer.scopePlaylist") || "Playlist" },
-    { value: "category", label: t("randomizer.scopeCategory") || "Categoria" },
+    { value: "playlist", label: t("randomizer.scopePlaylist") },
+    { value: "category", label: t("randomizer.scopeCategory") },
   ];
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {

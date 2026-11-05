@@ -18,6 +18,7 @@ import { APP_THEMES, type AppTheme } from "@/lib/theme";
 import { SettingsKovaakSection } from "./SettingsKovaakSection";
 import { SettingsRawaccelSection } from "./SettingsRawaccelSection";
 import { SettingsAutomationSection } from "./SettingsAutomationSection";
+import { SettingsTrainingSection } from "./SettingsTrainingSection";
 import { SettingsDataSection } from "./SettingsDataSection";
 
 export interface SettingsDialogProps {
@@ -184,6 +185,8 @@ export function SettingsDialog({
               }}
             />
 
+            <SettingsTrainingSection />
+
             {/* Mouse & Hardware */}
             <section className="space-y-2">
               <label className="text-[11px] font-semibold uppercase tracking-wider text-text-faint px-1 flex items-center gap-1.5">
@@ -272,7 +275,7 @@ export function SettingsDialog({
                               {theme.name}
                             </span>
                             <span className="block text-[10px] text-text-faint truncate">
-                              {theme.desc}
+                              {t(theme.descKey)}
                             </span>
                           </div>
                         </div>

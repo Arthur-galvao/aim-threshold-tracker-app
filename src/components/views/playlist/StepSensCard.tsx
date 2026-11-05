@@ -2,15 +2,35 @@ import { useMemo } from "react";
 import { Sliders } from "@phosphor-icons/react";
 import { Button, Badge } from "@/components/ui";
 import type { Playlist, Task } from "@/lib/types";
+import type {
+  RandomizerActiveRole,
+  RandomizerMuscleCue,
+} from "@/hooks/useSensRandomizer";
 import { getRecommendedSens } from "@/lib/viscose";
 import { getScenarioIdealSens } from "@/lib/sens-analytics";
+import { muscleCueFor } from "@/lib/playlist-step";
 import { useI18n } from "@/lib/i18n";
+
+/** Estado do randomizer exibido no card (T5.7e). */
+export interface StepRandomizerInfo {
+  sensCm: number;
+  centerCm: number | null;
+  role: RandomizerActiveRole | null;
+  muscleCue: RandomizerMuscleCue | null;
+}
 
 export interface StepSensCardProps {
   playlist: Playlist;
   tasks: Task[];
   mouseDpi?: number;
   onApplySens?: (sensCm: number, scenarioName?: string) => Promise<void> | void;
+  /** Passo em execução (destacado na tabela). */
+  activeIndex?: number | null;
+  randomizer?: StepRandomizerInfo | null;
+  /** Meta do passo ativo na sens atual (T·exp(b·Δ²)). */
+  activeTarget?: number | null;
+  /** Cue de intenção do passo ativo (T7.7). */
+  activeIntentCue?: string | null;
 }
 
 export function StepSensCard({
@@ -18,8 +38,13 @@ export function StepSensCard({
   tasks,
   mouseDpi = 800,
   onApplySens,
+  activeIndex = null,
+  randomizer = null,
+  activeTarget = null,
+  activeIntentCue = null,
 }: StepSensCardProps) {
   const { t } = useI18n();
+  // Chaves novas vivem em docs/plans/i18n-pending/T7-playlist.json até a integração (o tipo Key ainda não as conhece).
   const taskMap = useMemo(() => new Map(tasks.map((t) => [t.id, t])), [tasks]);
 
   const stepDetails = useMemo(() => {
@@ -44,9 +69,29 @@ export function StepSensCard({
 
   if (stepDetails.length === 0) return null;
 
+  const roleLabel = randomizer?.role
+    ? {
+        base: t("playlistSens.roleBase"),
+        anchor: t("playlistSens.roleAnchor"),
+        random: t("playlistSens.roleRandom"),
+        off: t("playlistSens.roleOff"),
+      }[randomizer.role]
+    : null;
+
+  const cue =
+    randomizer?.muscleCue ??
+    (randomizer && randomizer.centerCm ? muscleCueFor(randomizer.sensCm, randomizer.centerCm) : null);
+  const cueLabel = cue
+    ? {
+        fast: t("playlistSens.cueFast"),
+        slow: t("playlistSens.cueSlow"),
+        base: t("playlistSens.cueBase"),
+      }[cue]
+    : null;
+
   return (
     <div className="liquid-surface p-5 rounded-tile col-span-12 space-y-4">
-      <div className="flex items-center justify-between pb-3 border-b border-edge">
+      <div className="flex items-start justify-between gap-3 pb-3 border-b border-edge">
         <div>
           <h2 className="text-[13px] font-semibold text-text-secondary">
             {t("playlistSens.title")}
@@ -55,7 +100,28 @@ export function StepSensCard({
             {t("playlistSens.subtitle")}
           </p>
         </div>
+
+        {randomizer && randomizer.sensCm > 0 && (
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <Badge variant="score" className="font-mono tabular-nums">
+              {t("playlistSens.chipSens", { sens: randomizer.sensCm.toFixed(2) })}
+            </Badge>
+            {roleLabel && <Badge variant="neutral">{roleLabel}</Badge>}
+            {cueLabel && <Badge variant="neutral">{cueLabel}</Badge>}
+            {activeTarget !== null && (
+              <span className="text-[11px] font-mono text-text-secondary tabular-nums">
+                {t("playlistSens.targetHere", { target: Math.round(activeTarget) })}
+              </span>
+            )}
+          </div>
+        )}
       </div>
+
+      {activeIntentCue && activeIndex !== null && (
+        <p className="text-[11px] text-text-faint">
+          {t("intent.label")}: <span className="text-text-main">{activeIntentCue}</span>
+        </p>
+      )}
 
       <div className="overflow-x-auto scroll-y liquid-well rounded-control p-1">
         <table className="w-full text-left text-xs border-collapse">
@@ -71,7 +137,14 @@ export function StepSensCard({
           </thead>
           <tbody className="divide-y divide-edge">
             {stepDetails.map(({ item, index, task, recSens, idealSource }) => (
-              <tr key={item.id} className="hover:bg-surface-hover/40 transition">
+              <tr
+                key={item.id}
+                className={
+                  index === activeIndex
+                    ? "bg-score-soft"
+                    : "hover:bg-surface-hover/40 transition"
+                }
+              >
                 <td className="py-3 px-3 font-mono text-text-faint tabular-nums text-xs font-semibold">
                   {index + 1}
                 </td>

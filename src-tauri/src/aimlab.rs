@@ -2,13 +2,15 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::{Mutex, OnceLock};
+use std::time::{Duration, Instant};
 use rusqlite::{Connection, OpenFlags};
 use chrono::{DateTime, NaiveDateTime, Utc};
 use tauri::{AppHandle, Manager, State, Emitter};
 
+use crate::errors::{err, err_d};
 use crate::model::{KovaakRun, ImportStats, AppData};
-use crate::watcher::{has_source_file, add_session_to_data};
-use crate::{AppState, storage};
+use crate::AppState;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AimlabCsvRecord {
@@ -23,52 +25,27 @@ pub struct AimlabCsvRecord {
 }
 
 fn process_runs(app: &AppHandle, runs: Vec<KovaakRun>) -> Result<ImportStats, String> {
-    let state: State<AppState> = app.state();
     let total = runs.len();
-    let mut new = 0usize;
-    let mut skipped = 0usize;
 
-    for run in runs {
-        let already = {
-            let data = state.data.lock().unwrap();
-            has_source_file(&data.tasks, &run.source_file)
-        };
-
-        if already {
-            if run.sens > 0.0 {
-                let mut data = state.data.lock().unwrap();
-                let mut updated_sens = false;
-                for task in &mut data.tasks {
-                    for session in &mut task.sessions {
-                        if session.source_file.as_deref() == Some(&run.source_file)
-                            && session.sens <= 0.0
-                        {
-                            session.sens = run.sens;
-                            updated_sens = true;
-                        }
-                    }
-                }
-                if updated_sens {
-                    new += 1;
-                    continue;
-                }
+    // Lote inteiro numa única mutação (uma revisão) + flush. Run já importada: só
+    // completa a sens se estava zerada.
+    let outcome = crate::data_commands::import_runs(
+        app,
+        &runs,
+        |session, run| {
+            if run.sens > 0.0 && session.sens <= 0.0 {
+                session.sens = run.sens;
+                true
+            } else {
+                false
             }
-            skipped += 1;
-            continue;
-        }
+        },
+        |data| {
+            migrate_existing_aimlab_tasks(data);
+        },
+    )?;
 
-        add_session_to_data(&state, &run);
-        new += 1;
-    }
-
-    if new > 0 {
-        let mut data = state.data.lock().unwrap().clone();
-        migrate_existing_aimlab_tasks(&mut data);
-        *state.data.lock().unwrap() = data.clone();
-        storage::save_app_data(app, &data).map_err(|e| e.to_string())?;
-    }
-
-    let stats = ImportStats { total, new, skipped };
+    let stats = ImportStats { total, new: outcome.new, skipped: outcome.skipped };
     let _ = app.emit("import_complete", &stats);
 
     Ok(stats)
@@ -100,13 +77,7 @@ pub fn get_aimlab_users_dir() -> Option<PathBuf> {
         }
     }
 
-    for candidate in candidates {
-        if candidate.exists() && candidate.is_dir() {
-            return Some(candidate);
-        }
-    }
-
-    None
+    candidates.into_iter().find(|candidate| candidate.exists() && candidate.is_dir())
 }
 
 pub fn find_best_aimlab_db(aimlab_dir: &Path) -> Option<PathBuf> {
@@ -398,6 +369,7 @@ pub fn parse_aimlab_replay_file(
         fov,
         datetime: iso_dt,
         source_file,
+        ..Default::default()
     })
 }
 
@@ -678,6 +650,44 @@ pub fn build_aimlab_scenario_map() -> HashMap<String, String> {
     map
 }
 
+/// Validade do cache do mapa de cenários (T3.7).
+const SCENARIO_MAP_TTL: Duration = Duration::from_secs(600);
+
+type CachedScenarioMap = Option<(Instant, HashMap<String, String>)>;
+
+static NAME_MAP: OnceLock<Mutex<CachedScenarioMap>> = OnceLock::new();
+
+/// Mapa de cenários com cache: reconstrói se estiver vazio, com mais de 10 min, ou se `force_refresh`.
+pub fn cached_scenario_map(force_refresh: bool) -> HashMap<String, String> {
+    let cell = NAME_MAP.get_or_init(|| Mutex::new(None));
+    let mut guard = cell.lock().unwrap_or_else(|e| e.into_inner());
+    let fresh = guard
+        .as_ref()
+        .is_some_and(|(built_at, map)| !map.is_empty() && built_at.elapsed() < SCENARIO_MAP_TTL);
+    if force_refresh || !fresh {
+        *guard = Some((Instant::now(), build_aimlab_scenario_map()));
+    }
+    guard.as_ref().map(|(_, map)| map.clone()).unwrap_or_default()
+}
+
+/// `taskName` CsLevel que não está no mapa: sinal de que o mapa pode estar desatualizado.
+pub fn task_name_unmapped(raw: &str, map: &HashMap<String, String>) -> bool {
+    let trimmed = raw.trim();
+    trimmed.starts_with("CsLevel") && !map.contains_key(trimmed)
+}
+
+/// Lê o `taskName` de um replay JSON e diz se ele está fora do mapa.
+pub fn replay_task_unmapped(path: &Path, map: &HashMap<String, String>) -> bool {
+    let Ok(content) = fs::read_to_string(path) else {
+        return false;
+    };
+    let Ok(val) = serde_json::from_str::<serde_json::Value>(&content) else {
+        return false;
+    };
+    let raw = val.get("taskName").and_then(|v| v.as_str()).unwrap_or_default();
+    task_name_unmapped(raw, map)
+}
+
 pub fn clean_aimlab_task_name_with_workshop(
     raw: &str,
     workshop_id: Option<&str>,
@@ -726,7 +736,7 @@ pub fn clean_aimlab_task_name_with_workshop(
         let stripped = trimmed
             .strip_prefix("CsLevel")
             .unwrap_or(trimmed)
-            .trim_start_matches(|c| c == '-' || c == '_' || c == '.')
+            .trim_start_matches(['-', '_', '.'])
             .trim();
         if !stripped.is_empty() {
             return stripped.to_string();
@@ -838,7 +848,7 @@ pub fn migrate_existing_aimlab_tasks(data: &mut AppData) -> bool {
         return false;
     }
 
-    let map = build_aimlab_scenario_map();
+    let map = cached_scenario_map(false);
     let sqlite_lookup = if has_zero_sens_aimlab {
         load_sqlite_sens_and_name_lookup(&map, 800.0)
     } else {
@@ -879,49 +889,10 @@ pub fn migrate_existing_aimlab_tasks(data: &mut AppData) -> bool {
         }
     }
 
-    // 2. Deduplicate tasks that now have identical names (case-insensitive)
-    let mut deduplicated: Vec<crate::model::Task> = Vec::new();
-    let mut id_redirects: HashMap<String, String> = HashMap::new();
-
-    for task in data.tasks.drain(..) {
-        if let Some(existing) = deduplicated
-            .iter_mut()
-            .find(|t| t.name.eq_ignore_ascii_case(&task.name))
-        {
-            id_redirects.insert(task.id, existing.id.clone());
-            for sess in task.sessions {
-                if let Some(dup_sess) = existing.sessions.iter_mut().find(|s| {
-                    (s.source_file.is_some() && s.source_file == sess.source_file)
-                        || (s.date == sess.date && (s.pb - sess.pb).abs() < f64::EPSILON)
-                }) {
-                    if dup_sess.sens <= 0.0 && sess.sens > 0.0 {
-                        dup_sess.sens = sess.sens;
-                    }
-                } else {
-                    existing.sessions.push(sess);
-                }
-            }
-            changed = true;
-        } else {
-            deduplicated.push(task);
-        }
-    }
-    data.tasks = deduplicated;
-
-    // 3. Update active_task_id if redirected
-    if let Some(ref current_id) = data.active_task_id {
-        if let Some(target_id) = id_redirects.get(current_id) {
-            data.active_task_id = Some(target_id.clone());
-        }
-    }
-
-    // 4. Update playlists item taskIds
-    for pl in &mut data.playlists {
-        for item in &mut pl.items {
-            if let Some(target_id) = id_redirects.get(&item.task_id) {
-                item.task_id = target_id.clone();
-            }
-        }
+    // 2-4. Dedupe de tasks com o mesmo nome + redirecionamento de active_task_id/playlists.
+    // A lógica pura vive em `migrations` (sem dependência de Tauri/SQLite).
+    if crate::migrations::dedupe_tasks_by_name(data) {
+        changed = true;
     }
 
     changed
@@ -929,13 +900,9 @@ pub fn migrate_existing_aimlab_tasks(data: &mut AppData) -> bool {
 
 #[tauri::command]
 pub fn sync_aimlab_sqlite(app: AppHandle) -> Result<ImportStats, String> {
-    let aimlab_dir = get_aimlab_users_dir().ok_or_else(|| {
-        "Pasta Users do Aim Lab não encontrada (%USERPROFILE%\\AppData\\LocalLow\\Statespace\\aimlab_tb\\Users)".to_string()
-    })?;
+    let aimlab_dir = get_aimlab_users_dir().ok_or_else(|| err("aimlab_users_dir_not_found"))?;
 
-    let db_path = find_best_aimlab_db(&aimlab_dir).ok_or_else(|| {
-        "Arquivo Klutch.bytes não encontrado na pasta de usuários do Aim Lab".to_string()
-    })?;
+    let db_path = find_best_aimlab_db(&aimlab_dir).ok_or_else(|| err("aimlab_db_not_found"))?;
 
     let fallback_dpi = {
         let state: State<AppState> = app.state();
@@ -943,7 +910,7 @@ pub fn sync_aimlab_sqlite(app: AppHandle) -> Result<ImportStats, String> {
         if s.mouse_dpi > 0.0 { s.mouse_dpi } else { 800.0 }
     };
 
-    let name_map = build_aimlab_scenario_map();
+    let name_map = cached_scenario_map(false);
     let (default_sens_cm, game_profile, default_fov) =
         read_aimlab_profile_defaults(&aimlab_dir, fallback_dpi);
     let replay_sens_map = build_replay_sens_map(&aimlab_dir, fallback_dpi);
@@ -952,11 +919,11 @@ pub fn sync_aimlab_sqlite(app: AppHandle) -> Result<ImportStats, String> {
         "temp_klutch_{}.bytes",
         Utc::now().timestamp_millis()
     ));
-    fs::copy(&db_path, &temp_db_path).map_err(|e| format!("Failed to copy DB: {}", e))?;
+    fs::copy(&db_path, &temp_db_path).map_err(|e| err_d("aimlab_db_copy_failed", e))?;
 
     let runs_result = (|| -> Result<Vec<KovaakRun>, String> {
         let conn = Connection::open_with_flags(&temp_db_path, OpenFlags::SQLITE_OPEN_READ_ONLY)
-            .map_err(|e| format!("Failed to open DB: {}", e))?;
+            .map_err(|e| err_d("sqlite_failed", e))?;
 
         let has_sens_table = conn
             .prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='SensData'")
@@ -972,7 +939,7 @@ pub fn sync_aimlab_sqlite(app: AppHandle) -> Result<ImportStats, String> {
                      FROM TaskData t
                      LEFT JOIN SensData s ON t.playId = s.PlayID AND s.Type = 0",
                 )
-                .map_err(|e| format!("Failed to prepare joined query: {}", e))?;
+                .map_err(|e| err_d("sqlite_failed", e))?;
 
             let runs_iter = stmt
                 .query_map([], |row| {
@@ -1024,9 +991,10 @@ pub fn sync_aimlab_sqlite(app: AppHandle) -> Result<ImportStats, String> {
                         fov,
                         datetime: create_date,
                         source_file: "AimLab_SQLite".to_string(),
+                        ..Default::default()
                     })
                 })
-                .map_err(|e| format!("Failed to execute query: {}", e))?;
+                .map_err(|e| err_d("sqlite_failed", e))?;
 
             for run in runs_iter.flatten() {
                 let mut r = run;
@@ -1039,7 +1007,7 @@ pub fn sync_aimlab_sqlite(app: AppHandle) -> Result<ImportStats, String> {
         } else {
             let mut stmt = conn
                 .prepare("SELECT taskName, score, createDate FROM TaskData")
-                .map_err(|e| format!("Failed to prepare fallback query: {}", e))?;
+                .map_err(|e| err_d("sqlite_failed", e))?;
 
             let runs_iter = stmt
                 .query_map([], |row| {
@@ -1054,9 +1022,10 @@ pub fn sync_aimlab_sqlite(app: AppHandle) -> Result<ImportStats, String> {
                         fov: default_fov,
                         datetime: create_date,
                         source_file: "AimLab_SQLite".to_string(),
+                        ..Default::default()
                     })
                 })
-                .map_err(|e| format!("Failed to execute fallback query: {}", e))?;
+                .map_err(|e| err_d("sqlite_failed", e))?;
 
             for run in runs_iter.flatten() {
                 let mut r = run;
@@ -1081,7 +1050,7 @@ pub fn import_aimlab_csv(app: AppHandle, path: String) -> Result<ImportStats, St
     let mut reader = csv::ReaderBuilder::new()
         .has_headers(true)
         .from_path(&path)
-        .map_err(|e| format!("Falha ao ler CSV: {}", e))?;
+        .map_err(|e| err_d("csv_parse_failed", e))?;
 
     let fallback_dpi = {
         let state: State<AppState> = app.state();
@@ -1089,7 +1058,8 @@ pub fn import_aimlab_csv(app: AppHandle, path: String) -> Result<ImportStats, St
         if s.mouse_dpi > 0.0 { s.mouse_dpi } else { 800.0 }
     };
 
-    let name_map = build_aimlab_scenario_map();
+    let mut name_map = cached_scenario_map(false);
+    let mut name_map_refreshed = false;
     let mut parsed_runs = Vec::new();
     let file_name = PathBuf::from(&path)
         .file_name()
@@ -1104,10 +1074,20 @@ pub fn import_aimlab_csv(app: AppHandle, path: String) -> Result<ImportStats, St
                 datetime = ndt.format("%Y-%m-%dT%H:%M:%SZ").to_string();
             }
 
+            // Nome fora do mapa cacheado: recarrega o mapa uma única vez por importação.
+            if !name_map_refreshed && task_name_unmapped(&record.task_name, &name_map) {
+                name_map = cached_scenario_map(true);
+                name_map_refreshed = true;
+            }
             let cleaned_task_name = clean_aimlab_task_name(&record.task_name, &name_map);
             let raw_sens = record.sens.unwrap_or(0.0);
-            let sens = if raw_sens > 0.0 {
-                crate::parser::convert_sens_to_cm(raw_sens, None, fallback_dpi)
+            // O parser não chuta mais a escala (sem escala, fora de 5..=150 devolve 0.0). O CSV do
+            // Aim Lab não declara escala, então preservamos o comportamento antigo explicitamente:
+            // 5..=150 já é cm/360; abaixo de 5 é sens in-game (Valorant).
+            let sens = if (5.0..=150.0).contains(&raw_sens) {
+                crate::parser::convert_sens_to_cm(raw_sens, Some("cm360"), fallback_dpi)
+            } else if raw_sens > 0.0 && raw_sens < 5.0 {
+                crate::parser::convert_sens_to_cm(raw_sens, Some("valorant"), fallback_dpi)
             } else {
                 0.0
             };
@@ -1119,6 +1099,7 @@ pub fn import_aimlab_csv(app: AppHandle, path: String) -> Result<ImportStats, St
                 fov: 0.0,
                 datetime,
                 source_file: format!("CSV_{}_{}", file_name, i),
+                ..Default::default()
             });
         }
     }
@@ -1135,10 +1116,11 @@ fn scan_aimlab_playlist_dir(dir: &Path, playlists: &mut Vec<crate::model::GamePl
             } else if path.extension().and_then(|s| s.to_str()).map(|s| s.eq_ignore_ascii_case("json")) == Some(true) {
                 if let Ok(content) = fs::read_to_string(&path) {
                     if let Ok(parsed) = serde_json::from_str::<crate::model::GamePlaylist>(&content) {
-                        if !parsed.playlist_name.trim().is_empty() && !parsed.scenario_list.is_empty() {
-                            if !playlists.iter().any(|p| p.playlist_id == parsed.playlist_id && p.playlist_name == parsed.playlist_name) {
-                                playlists.push(parsed);
-                            }
+                        if !parsed.playlist_name.trim().is_empty()
+                            && !parsed.scenario_list.is_empty()
+                            && !playlists.iter().any(|p| p.playlist_id == parsed.playlist_id && p.playlist_name == parsed.playlist_name)
+                        {
+                            playlists.push(parsed);
                         }
                     }
                 }
@@ -1165,7 +1147,7 @@ pub fn load_all_aimlab_playlists() -> Vec<crate::model::GamePlaylist> {
         }
     }
 
-    playlists.sort_by(|a, b| a.playlist_name.to_lowercase().cmp(&b.playlist_name.to_lowercase()));
+    playlists.sort_by_key(|p| p.playlist_name.to_lowercase());
     playlists
 }
 
@@ -1325,6 +1307,7 @@ mod tests {
                     name: "VT Suave".into(),
                     category: "Flick Tech".into(),
                     subcategory: "Speed".into(),
+                    intent_cue: None,
                     sessions: vec![
                         Session {
                             id: "s1".into(),
@@ -1333,6 +1316,7 @@ mod tests {
                             pb: 1000.0,
                             threshold: 950.0,
                             source_file: Some("s1.csv".into()),
+                            ..Default::default()
                         }
                     ],
                 },
@@ -1341,6 +1325,7 @@ mod tests {
                     name: "CsLevel.Lowgravity56.VT Suave.RX1H0T".into(),
                     category: "Click Timing".into(),
                     subcategory: "Precision".into(),
+                    intent_cue: None,
                     sessions: vec![
                         Session {
                             id: "s2".into(),
@@ -1349,11 +1334,13 @@ mod tests {
                             pb: 1050.0,
                             threshold: 980.0,
                             source_file: Some("s2.csv".into()),
+                            ..Default::default()
                         }
                     ],
                 },
             ],
             playlists: vec![],
+            ..Default::default()
         };
 
         let changed = migrate_existing_aimlab_tasks(&mut data);

@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npx tsc -b
+
+      - name: Frontend tests
+        run: npm test
+
+      - uses: dtolnay/rust-toolchain@stable
+        if: success() || failure()
+        with:
+          components: clippy
+
+      - uses: swatinem/rust-cache@v2
+        if: success() || failure()
+        with:
+          workspaces: "./src-tauri -> target"
+
+      - name: Rust tests
+        if: success() || failure()
+        working-directory: src-tauri
+        run: cargo test --locked
+
+      - name: Clippy
+        if: success() || failure()
+        working-directory: src-tauri
+        run: cargo clippy --locked --all-targets -- -D warnings

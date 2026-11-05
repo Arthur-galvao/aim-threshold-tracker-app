@@ -7,6 +7,8 @@ import {
   Wrench,
 } from "@phosphor-icons/react";
 import { useI18n } from "@/lib/i18n";
+import { useApp } from "@/hooks/useAppData";
+import { detectDpiMismatch } from "@/lib/dpi-check";
 import type {
   RandomizerSettings,
   RandomizerState,
@@ -40,6 +42,13 @@ export function TelemetryCard({
   style,
 }: TelemetryCardProps) {
   const { t } = useI18n();
+  const { appData } = useApp();
+
+  // T3.8: DPI autodeclarado no CSV das últimas runs vs DPI configurado no app.
+  const dpiMismatch = useMemo(() => {
+    const sessions = appData.tasks.flatMap((task) => task.sessions);
+    return detectDpiMismatch(sessions, settings?.mouseDpi);
+  }, [appData.tasks, settings?.mouseDpi]);
 
   const safeActiveSensCm = Number.isFinite(randomizerState?.activeSensCm)
     ? randomizerState.activeSensCm
@@ -200,6 +209,18 @@ export function TelemetryCard({
           )}
         </div>
       </div>
+
+      {dpiMismatch && (
+        <div className="px-3.5 py-2 rounded-control bg-amber-soft border border-amber-edge text-xs text-amber flex items-center gap-2">
+          <WarningCircle size={15} weight="fill" className="shrink-0" />
+          <span className="font-medium">
+            {t("randomizer.dpiMismatch", {
+              csv: Math.round(dpiMismatch.csvDpi),
+              app: Math.round(dpiMismatch.appDpi),
+            })}
+          </span>
+        </div>
+      )}
 
       {/* Warning banner if RawAccel GUI is open */}
       {randomizerState?.rawaccelGuiRunning && (

@@ -1,47 +1,185 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
+import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import type {
   AppData,
+  AppDataSnapshot,
   AppSettings,
+  CreateTaskResult,
   DetectedPlaylistEvent,
   ImportStats,
   KovaakPlaylistRaw,
-  KovaakRun,
+  LoadReport,
+  Playlist,
+  ReplaceAllReason,
+  RevisionResult,
+  RunRecordedEvent,
+  ScenarioMeta,
+  SessionFocus,
+  SyncGamePlaylistsResult,
+  TaskMetaPatch,
+  UpsertPlaylistResult,
   WatcherStatus,
 } from "./types";
-import { SAMPLE_DATA } from "./sample-data";
+import { DEFAULT_LAB_SETTINGS, DEFAULT_TRAINING_SETTINGS } from "./types";
+import { toBackendError } from "./backend-error";
+import { getWebBackend } from "./web-backend";
 
 const isTauri = () =>
   typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
-export async function loadAppData(): Promise<AppData> {
-  if (!isTauri()) {
-    const stored = localStorage.getItem("AIM_THRESHOLD_TRACKER_DATA");
-    if (stored) return JSON.parse(stored);
-    return SAMPLE_DATA;
+// ---------------------------------------------------------------------------
+// Dados do app (Plano 02): o Rust é o dono do AppData. O front chama comandos de
+// mutação e recebe snapshots versionados via "app_data_changed". Sem Tauri, o
+// `web-backend` implementa o mesmo contrato sobre localStorage.
+// ---------------------------------------------------------------------------
+
+async function cmd<T>(name: string, args?: Record<string, unknown>): Promise<T> {
+  try {
+    return await invoke<T>(name, args);
+  } catch (err) {
+    throw toBackendError(err);
   }
-  return invoke<AppData>("load_app_data");
 }
 
-export async function saveAppData(data: AppData): Promise<void> {
-  if (!isTauri()) {
-    localStorage.setItem("AIM_THRESHOLD_TRACKER_DATA", JSON.stringify(data));
-    return;
+/** Executa o comando web (síncrono) com o mesmo formato de erro do Rust. */
+async function web<T>(run: () => T): Promise<T> {
+  try {
+    return run();
+  } catch (err) {
+    throw toBackendError(err);
   }
-  await invoke("save_app_data", { data });
 }
 
-export async function importJsonBackup(json: string): Promise<AppData> {
-  if (!isTauri()) {
-    const parsed = JSON.parse(json) as AppData;
-    if (!parsed || !Array.isArray(parsed.tasks)) {
-      throw new Error("JSON inválido");
-    }
-    await saveAppData(parsed);
-    return parsed;
-  }
-  return invoke<AppData>("import_json_backup", { json });
+export async function getAppData(): Promise<AppDataSnapshot> {
+  if (!isTauri()) return web(() => getWebBackend().getAppData());
+  return cmd<AppDataSnapshot>("get_app_data");
+}
+
+export function onAppDataChanged(
+  callback: (snapshot: AppDataSnapshot) => void
+): Promise<UnlistenFn> {
+  if (!isTauri()) return Promise.resolve(getWebBackend().subscribe(callback));
+  return listen<AppDataSnapshot>("app_data_changed", (event) => callback(event.payload));
+}
+
+export function onRunRecorded(callback: (event: RunRecordedEvent) => void): Promise<UnlistenFn> {
+  if (!isTauri()) return Promise.resolve(() => {});
+  return listen<RunRecordedEvent>("run_recorded", (event) => callback(event.payload));
+}
+
+export async function createTask(
+  name: string,
+  category: string,
+  subcategory: string
+): Promise<CreateTaskResult> {
+  if (!isTauri()) return web(() => getWebBackend().createTask(name, category, subcategory));
+  return cmd<CreateTaskResult>("create_task", { name, category, subcategory });
+}
+
+export async function updateTaskMeta(taskId: string, patch: TaskMetaPatch): Promise<RevisionResult> {
+  if (!isTauri()) return web(() => getWebBackend().updateTaskMeta(taskId, patch));
+  return cmd<RevisionResult>("update_task_meta", { taskId, ...patch });
+}
+
+export async function deleteTask(taskId: string): Promise<RevisionResult> {
+  if (!isTauri()) return web(() => getWebBackend().deleteTask(taskId));
+  return cmd<RevisionResult>("delete_task", { taskId });
+}
+
+export async function setActiveTask(taskId: string | null): Promise<RevisionResult> {
+  if (!isTauri()) return web(() => getWebBackend().setActiveTask(taskId));
+  return cmd<RevisionResult>("set_active_task", { taskId });
+}
+
+export async function addManualSessions(
+  taskId: string,
+  date: string,
+  sensCm: number,
+  scores: number[]
+): Promise<RevisionResult> {
+  if (!isTauri()) return web(() => getWebBackend().addManualSessions(taskId, date, sensCm, scores));
+  return cmd<RevisionResult>("add_manual_sessions", { taskId, date, sensCm, scores });
+}
+
+/** Plano 07: "on" | "auto" | null (limpa o foco da sessão). */
+export async function setSessionFocus(
+  taskId: string,
+  sessionId: string,
+  focus: SessionFocus
+): Promise<RevisionResult> {
+  if (!isTauri()) return web(() => getWebBackend().setSessionFocus(taskId, sessionId, focus));
+  return cmd<RevisionResult>("set_session_focus", { taskId, sessionId, focus });
+}
+
+/** Plano 05: substitui `set_scenario_centers`. Chave = nome normalizado do cenário. */
+export async function setScenarioMeta(meta: Record<string, ScenarioMeta>): Promise<void> {
+  if (!isTauri()) return;
+  await cmd<null>("set_scenario_meta", { meta });
+}
+
+/** Plano 05/07: passo de medição ativo => randomizer pausado. Sem Tauri é no-op. */
+export async function setMeasuring(measuring: boolean): Promise<void> {
+  if (!isTauri()) return;
+  await cmd<null>("set_measuring", { measuring });
+}
+
+export async function deleteSession(taskId: string, sessionId: string): Promise<RevisionResult> {
+  if (!isTauri()) return web(() => getWebBackend().deleteSession(taskId, sessionId));
+  return cmd<RevisionResult>("delete_session", { taskId, sessionId });
+}
+
+export async function upsertPlaylist(playlist: Playlist): Promise<UpsertPlaylistResult> {
+  if (!isTauri()) return web(() => getWebBackend().upsertPlaylist(playlist));
+  return cmd<UpsertPlaylistResult>("upsert_playlist", { playlist });
+}
+
+export async function deletePlaylist(playlistId: string): Promise<RevisionResult> {
+  if (!isTauri()) return web(() => getWebBackend().deletePlaylist(playlistId));
+  return cmd<RevisionResult>("delete_playlist", { playlistId });
+}
+
+export async function syncGamePlaylistsCommand(
+  detected?: DetectedPlaylistEvent
+): Promise<SyncGamePlaylistsResult> {
+  if (!isTauri()) return web(() => getWebBackend().syncGamePlaylists());
+  return cmd<SyncGamePlaylistsResult>("sync_game_playlists", { detected: detected ?? null });
+}
+
+export async function replaceAllData(
+  data: AppData,
+  reason: ReplaceAllReason
+): Promise<RevisionResult> {
+  if (!isTauri()) return web(() => getWebBackend().replaceAllData(data, reason));
+  return cmd<RevisionResult>("replace_all_data", { data, reason });
+}
+
+export async function importJsonBackup(json: string): Promise<RevisionResult> {
+  if (!isTauri()) return web(() => getWebBackend().importJsonBackup(json));
+  return cmd<RevisionResult>("import_json_backup", { json });
+}
+
+/** Rust grava o snapshot atual dos dados no caminho escolhido (Plano 08, T8.8). */
+export async function exportAppData(path: string): Promise<{ path: string }> {
+  if (!isTauri()) return { path };
+  return cmd<{ path: string }>("export_app_data", { path });
+}
+
+/** Rótulos do menu da bandeja (Plano 08, T8.6). Sem Tauri é no-op. */
+export async function setTrayLabels(open: string, quit: string): Promise<void> {
+  if (!isTauri()) return;
+  await cmd<null>("set_tray_labels", { open, quit });
+}
+
+/** Progresso do backfill de estatísticas a partir dos CSVs antigos no primeiro boot pós-update. */
+export function onMigrationProgress(
+  callback: (progress: { done: number; total: number }) => void
+): Promise<UnlistenFn> {
+  if (!isTauri()) return Promise.resolve(() => {});
+  return listen<{ done: number; total: number }>("migration_progress", (event) =>
+    callback(event.payload)
+  );
 }
 
 export async function detectKovaakPath(): Promise<string | null> {
@@ -90,23 +228,23 @@ export async function getPlaylistInProgress(): Promise<DetectedPlaylistEvent | n
   }
 }
 
-export async function pickStatsFolder(): Promise<string | null> {
+export async function pickStatsFolder(title?: string): Promise<string | null> {
   if (!isTauri()) return null;
   const selected = await open({
     directory: true,
     multiple: false,
-    title: "Selecione a pasta de stats do KovaaK's",
+    title,
   });
   if (Array.isArray(selected)) return selected[0] ?? null;
   return selected ?? null;
 }
 
-export async function pickAimlabCsvFile(): Promise<string | null> {
+export async function pickAimlabCsvFile(title?: string): Promise<string | null> {
   if (!isTauri()) return null;
   const selected = await open({
     directory: false,
     multiple: false,
-    title: "Selecione o arquivo CSV do Aim Lab",
+    title,
     filters: [{ name: "CSV", extensions: ["csv"] }],
   });
   if (Array.isArray(selected)) return selected[0] ?? null;
@@ -119,6 +257,7 @@ export async function getSettings(): Promise<AppSettings> {
       const stored = localStorage.getItem("AIM_SETTINGS");
       if (stored) {
         try {
+          const parsed = JSON.parse(stored);
           return {
             kovaak_stats_path: null,
             watcher_active: false,
@@ -127,7 +266,9 @@ export async function getSettings(): Promise<AppSettings> {
             auto_detect_playlist: true,
             notify_step_advance: true,
             auto_advance_on_threshold: true,
-            ...JSON.parse(stored),
+            ...parsed,
+            training: { ...DEFAULT_TRAINING_SETTINGS, ...(parsed.training ?? {}) },
+            lab: { ...DEFAULT_LAB_SETTINGS, ...(parsed.lab ?? {}) },
           };
         } catch {}
       }
@@ -140,6 +281,8 @@ export async function getSettings(): Promise<AppSettings> {
       auto_detect_playlist: true,
       notify_step_advance: true,
       auto_advance_on_threshold: true,
+      training: DEFAULT_TRAINING_SETTINGS,
+      lab: DEFAULT_LAB_SETTINGS,
     };
   }
   return invoke<AppSettings>("get_settings");
@@ -194,13 +337,6 @@ export async function importAimlabCsv(path: string): Promise<ImportStats> {
   return invoke<ImportStats>("import_aimlab_csv", { path });
 }
 
-export function onNewRun(callback: (run: KovaakRun) => void): Promise<UnlistenFn> {
-  if (!isTauri()) {
-    return Promise.resolve(() => {});
-  }
-  return listen<KovaakRun>("new_run", (event) => callback(event.payload));
-}
-
 export function onWatcherError(callback: (error: string) => void): Promise<UnlistenFn> {
   if (!isTauri()) {
     return Promise.resolve(() => {});
@@ -233,14 +369,28 @@ export function listenKovaakPlaylistActive(
   });
 }
 
+export async function getLoadReport(): Promise<LoadReport | null> {
+  if (!isTauri()) return null;
+  return invoke<LoadReport | null>("get_load_report");
+}
+
 export async function openExternalUrl(url: string): Promise<void> {
   if (isTauri()) {
     try {
-      await invoke("open_url", { url });
-      return;
+      await openUrl(url);
     } catch (err) {
       console.error("Erro ao abrir URL no Tauri:", err);
     }
+    return;
   }
   window.open(url, "_blank", "noopener,noreferrer");
+}
+
+export async function revealInFolder(path: string): Promise<void> {
+  if (!isTauri()) return;
+  try {
+    await revealItemInDir(path);
+  } catch (err) {
+    console.error("Erro ao abrir pasta:", err);
+  }
 }

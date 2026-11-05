@@ -8,23 +8,23 @@ export type ChartPeriod = "7D" | "30D" | "all";
 export interface ChartToolbarProps {
   period: ChartPeriod;
   onPeriodChange: (p: ChartPeriod) => void;
-  showThreshold: boolean;
-  onToggleThreshold: () => void;
+  showTarget: boolean;
+  onToggleTarget: () => void;
   showPB: boolean;
   onTogglePB: () => void;
-  showMA3: boolean;
-  onToggleMA3: () => void;
+  showMu: boolean;
+  onToggleMu: () => void;
 }
 
 export function ChartToolbar({
   period,
   onPeriodChange,
-  showThreshold,
-  onToggleThreshold,
+  showTarget,
+  onToggleTarget,
   showPB,
   onTogglePB,
-  showMA3,
-  onToggleMA3,
+  showMu,
+  onToggleMu,
 }: ChartToolbarProps) {
   const { t } = useI18n();
 
@@ -36,9 +36,9 @@ export function ChartToolbar({
         </span>
         <div>
           <h2 className="text-[13px] font-semibold text-text-secondary">
-            {t("chart.title")}
+            {t("skill.chart.title")}
           </h2>
-          <p className="text-xs text-text-faint">{t("chart.subtitle")}</p>
+          <p className="text-xs text-text-faint">{t("skill.chart.subtitle")}</p>
         </div>
       </div>
 
@@ -47,17 +47,17 @@ export function ChartToolbar({
         <div className="liquid-well p-1 inline-flex items-center gap-1 rounded-control text-xs font-mono">
           <button
             type="button"
-            onClick={onToggleThreshold}
+            onClick={onToggleTarget}
             className={cn(
               "px-2.5 py-1 rounded-[10px] border transition-all text-xs inline-flex items-center gap-1.5 cursor-pointer press",
-              showThreshold
+              showTarget
                 ? "bg-emerald-soft text-emerald border-emerald-edge shadow-[inset_0_1px_0.5px_rgba(255,255,255,0.2)]"
                 : "bg-transparent text-text-faint border-transparent opacity-60 hover:opacity-90"
             )}
             title={t("chart.toggleSeries")}
           >
-            {showThreshold ? <Eye size={13} /> : <EyeSlash size={13} />}
-            <span>{t("dashboard.seriesThreshold")}</span>
+            {showTarget ? <Eye size={13} /> : <EyeSlash size={13} />}
+            <span>{t("skill.series.target")}</span>
           </button>
 
           <button
@@ -72,22 +72,22 @@ export function ChartToolbar({
             title={t("chart.toggleSeries")}
           >
             {showPB ? <Eye size={13} /> : <EyeSlash size={13} />}
-            <span>{t("dashboard.seriesPB")}</span>
+            <span>{t("skill.series.pb")}</span>
           </button>
 
           <button
             type="button"
-            onClick={onToggleMA3}
+            onClick={onToggleMu}
             className={cn(
               "px-2.5 py-1 rounded-[10px] border transition-all text-xs inline-flex items-center gap-1.5 cursor-pointer press",
-              showMA3
+              showMu
                 ? "liquid-pill text-text-main border-edge"
                 : "bg-transparent text-text-faint border-transparent opacity-60 hover:opacity-90"
             )}
             title={t("chart.toggleSeries")}
           >
-            {showMA3 ? <Eye size={13} /> : <EyeSlash size={13} />}
-            <span>{t("dashboard.seriesMA3")}</span>
+            {showMu ? <Eye size={13} /> : <EyeSlash size={13} />}
+            <span>{t("skill.series.mu")}</span>
           </button>
         </div>
 
