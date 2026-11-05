@@ -1,7 +1,9 @@
 import { useMemo, useState } from "react";
 import { ChartLineUp } from "@phosphor-icons/react";
 import type { Task } from "@/lib/types";
-import { summarizeDays, type DaySummary } from "@/lib/day-summary";
+import { buildChartSeries, filterChartSeries, type ChartSeries } from "@/lib/day-summary";
+import { useSkill } from "@/hooks/useSkill";
+import { useAdvancedStats } from "@/hooks/useAdvancedStats";
 import { useI18n } from "@/lib/i18n";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ChartToolbar, type ChartPeriod } from "./ChartToolbar";
@@ -13,58 +15,51 @@ export interface ProgressChartProps {
   className?: string;
 }
 
-function filterByPeriod(summaries: DaySummary[], period: ChartPeriod): DaySummary[] {
-  if (period === "all" || summaries.length === 0) return summaries;
-  const days = period === "7D" ? 7 : 30;
-  const lastDate = new Date(summaries[summaries.length - 1].date);
-  const now = new Date();
-  const refDate = now > lastDate ? now : lastDate;
-  const cutoff = new Date(refDate);
-  cutoff.setDate(cutoff.getDate() - days);
-  const cutoffStr = `${cutoff.getFullYear()}-${String(cutoff.getMonth() + 1).padStart(2, "0")}-${String(
-    cutoff.getDate()
-  ).padStart(2, "0")}`;
+const DAY_MS = 86_400_000;
+const FALLBACK_RUNS = 20;
 
-  const filtered = summaries.filter((d) => d.date >= cutoffStr);
-  return filtered.length > 0 ? filtered : summaries.slice(-days);
+/** Recorta a série ao período; se nada cair na janela, mostra as últimas runs. */
+function filterByPeriod(series: ChartSeries, period: ChartPeriod, now: number): ChartSeries {
+  if (period === "all" || series.runs.length === 0) return series;
+  const days = period === "7D" ? 7 : 30;
+  const lastT = series.runs[series.runs.length - 1].t;
+  const cutoff = Math.max(now, lastT) - days * DAY_MS;
+  const filtered = filterChartSeries(series, (r) => r.t >= cutoff);
+  if (filtered.runs.length > 0) return filtered;
+  const firstKept = Math.max(0, series.runs.length - FALLBACK_RUNS);
+  return filterChartSeries(series, (r) => r.index >= firstKept);
 }
 
 export function ProgressChart({ activeTask, className }: ProgressChartProps) {
   const { t } = useI18n();
+  const skill = useSkill(activeTask?.id ?? null);
   const [period, setPeriod] = useState<ChartPeriod>("all");
-  const [showThreshold, setShowThreshold] = useState(true);
+  const [showTarget, setShowTarget] = useState(true);
   const [showPB, setShowPB] = useState(true);
-  const [showMA3, setShowMA3] = useState(true);
+  // "Seu nível" (μ) começa desligado: o padrão é pontos + meta + recorde.
+  const [showMu, setShowMu] = useState(false);
+  const advanced = useAdvancedStats();
 
-  const allSummaries = useMemo(() => summarizeDays(activeTask), [activeTask]);
-  const summaries = useMemo(() => filterByPeriod(allSummaries, period), [allSummaries, period]);
-
-  const data = useMemo(() => {
-    return summaries.map((d, i, arr) => {
-      const start = Math.max(0, i - 2);
-      const slice = arr.slice(start, i + 1);
-      const ma3 = Math.round(slice.reduce((acc, curr) => acc + curr.best, 0) / slice.length);
-      return {
-        ...d,
-        ma3,
-      };
-    });
-  }, [summaries]);
+  const allSeries = useMemo(() => buildChartSeries(activeTask, skill), [activeTask, skill]);
+  const series = useMemo(
+    () => filterByPeriod(allSeries, period, Date.now()),
+    [allSeries, period]
+  );
 
   return (
     <div className={cn("glass p-5 flex flex-col", className)}>
       <ChartToolbar
         period={period}
         onPeriodChange={setPeriod}
-        showThreshold={showThreshold}
-        onToggleThreshold={() => setShowThreshold((v) => !v)}
+        showTarget={showTarget}
+        onToggleTarget={() => setShowTarget((v) => !v)}
         showPB={showPB}
         onTogglePB={() => setShowPB((v) => !v)}
-        showMA3={showMA3}
-        onToggleMA3={() => setShowMA3((v) => !v)}
+        showMu={showMu}
+        onToggleMu={() => setShowMu((v) => !v)}
       />
 
-      {data.length === 0 ? (
+      {series.runs.length === 0 ? (
         <EmptyState
           icon={<ChartLineUp size={24} weight="regular" />}
           title={t("chart.empty")}
@@ -73,10 +68,11 @@ export function ProgressChart({ activeTask, className }: ProgressChartProps) {
         />
       ) : (
         <ChartCanvas
-          data={data}
-          showThreshold={showThreshold}
+          series={series}
+          showTarget={showTarget}
           showPB={showPB}
-          showMA3={showMA3}
+          showMu={showMu}
+          showBand={advanced && showMu}
         />
       )}
     </div>

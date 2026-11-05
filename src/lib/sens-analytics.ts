@@ -1,3 +1,4 @@
+import type { Key } from "./i18n.tsx";
 import type { Playlist, Task } from "./types.ts";
 import { DEFAULT_CATEGORY, DEFAULT_SUBCATEGORY, getRecommendedSens } from "./viscose.ts";
 import { buildRunPoints } from "./run-points.ts";
@@ -52,8 +53,8 @@ export type PredictorProfile = "equilibrado" | "neutro" | "teorico" | "consisten
 
 export interface PredictorProfileConfig {
   id: PredictorProfile;
-  labelKey: string;
-  descKey: string;
+  labelKey: Key;
+  descKey: Key;
   wParam: number;
   lambda: number;
   teoricoWeight: number;
@@ -113,7 +114,7 @@ export interface SensPrediction {
   wParam?: number;
   lambda?: number;
   ci?: { low: number | null; high: number | null };
-  reasons?: string[];
+  reasons?: Key[];
 }
 
 export interface RunDataPoint {
@@ -623,7 +624,7 @@ export function predictOptimalSensitivity(
       confidence = "insufficient";
     }
 
-    const reasons: string[] = [];
+    const reasons: Key[] = [];
     if (totalN < 15) {
       reasons.push("randomizer.reasonFewRuns");
     }

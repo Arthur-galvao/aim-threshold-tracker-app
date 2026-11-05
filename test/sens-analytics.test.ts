@@ -925,7 +925,7 @@ describe("sens-analytics", () => {
         "src/lib/sens-analytics.ts",
         "src/components/views/randomizer/index.tsx",
         "src/components/views/randomizer/sweet-spot-chart.tsx",
-        "src/components/views/randomizer/category-cards.tsx",
+        "src/components/views/lab/category-cards.tsx",
         "src/components/views/playlist/index.tsx",
         "src/components/views/playlist/StepSensCard.tsx",
         "src/App.tsx",
@@ -943,8 +943,8 @@ describe("sens-analytics", () => {
 
     it("verifies SensRandomizerChart and PlaylistSensCard component source integrity", () => {
       const chartCode = fs.readFileSync(path.resolve("src/components/views/randomizer/sweet-spot-chart.tsx"), "utf-8");
-      const cardCode = fs.readFileSync(path.resolve("src/components/views/randomizer/category-cards.tsx"), "utf-8");
-      const viewCode = fs.readFileSync(path.resolve("src/components/views/randomizer/index.tsx"), "utf-8");
+      const cardCode = fs.readFileSync(path.resolve("src/components/views/lab/category-cards.tsx"), "utf-8");
+      const viewCode = fs.readFileSync(path.resolve("src/components/views/lab/index.tsx"), "utf-8");
 
       // Verify scope modes in chart
       assert.ok(chartCode.includes('"current"'));
@@ -957,10 +957,8 @@ describe("sens-analytics", () => {
       assert.ok(cardCode.includes("onViewInChart"));
       assert.ok(cardCode.includes("onApplySens"));
 
-      // Verify RandomizerView integrates CategoryCards and passes callbacks
+      // Verify the Lab view integrates CategoryCards (the randomizer no longer renders it)
       assert.ok(viewCode.includes("<CategoryCards"));
-      assert.ok(viewCode.includes("handleViewInChart"));
-      assert.ok(viewCode.includes("handleApplySens"));
     });
   });
 

@@ -14,7 +14,7 @@ import {
   requestPermission,
   sendNotification,
 } from "@tauri-apps/plugin-notification";
-import type { ImportStats, RunRecordedEvent, WatcherStatus } from "@/lib/types";
+import { DEFAULT_TRAINING_SETTINGS, type ImportStats, type RunRecordedEvent, type Task, type TrainingSettings, type WatcherStatus } from "@/lib/types";
 import {
   detectKovaakPath,
   getSettings,
@@ -23,16 +23,24 @@ import {
   onImportComplete,
   onRunRecorded,
   onWatcherError,
-  saveSettings,
   setStatsPath,
   startWatcher,
   stopWatcher,
 } from "@/lib/tauri-bridge";
 import { dataStore } from "@/lib/data-store";
-import { deriveTask } from "@/lib/derived-tasks";
-import { getTargetThresholdForTask } from "@/lib/threshold";
+import { computeSkill } from "@/lib/skill";
+import { buildAllRuns, skillConfigFromTraining } from "@/lib/skill/config";
 import { useI18n } from "@/lib/i18n";
+import { formatBackendError } from "@/lib/backend-error";
+import { requestFocusPrompt } from "@/components/ui/FocusPrompt";
 import { useApp } from "./useAppData";
+import { useSettings } from "./useSettings";
+
+/** Próxima meta do cenário pelo modelo de habilidade (mesmo cálculo do dashboard), arredondada. */
+function nextTargetFor(task: Task, tasks: Task[], training: TrainingSettings): number | null {
+  const summary = computeSkill(task, buildAllRuns(tasks), skillConfigFromTraining(training), Date.now());
+  return summary.nextTarget === null ? null : Math.round(summary.nextTarget);
+}
 
 export interface WatcherContextValue {
   watcherStatus: WatcherStatus;
@@ -56,6 +64,7 @@ const WatcherContext = createContext<WatcherContextValue | null>(null);
 export function WatcherProvider({ children }: { children: ReactNode }) {
   const { showToast, playlistRunner, fixupTaskCategories } = useApp();
   const { t } = useI18n();
+  const { settings, updateSettings } = useSettings();
   const [watcherStatus, setWatcherStatus] = useState<WatcherStatus>({
     active: false,
     path: null,
@@ -72,6 +81,10 @@ export function WatcherProvider({ children }: { children: ReactNode }) {
   playlistRunnerRef.current = playlistRunner;
   const fixupRef = useRef(fixupTaskCategories);
   fixupRef.current = fixupTaskCategories;
+  const focusPromptRef = useRef(settings?.training.focusPrompt === true);
+  focusPromptRef.current = settings?.training.focusPrompt === true;
+  const trainingRef = useRef<TrainingSettings>(settings?.training ?? DEFAULT_TRAINING_SETTINGS);
+  trainingRef.current = settings?.training ?? DEFAULT_TRAINING_SETTINGS;
 
   // Listeners (padrão anti-vazamento: cancelado antes do listen() resolver => desfaz).
   useEffect(() => {
@@ -90,13 +103,18 @@ export function WatcherProvider({ children }: { children: ReactNode }) {
         await dataStore.waitForRevision(event.revision);
         if (cancelled) return;
 
-        const rawTask = dataStore.getSnapshot().data.tasks.find((task) => task.id === event.taskId);
-        const threshold = rawTask ? getTargetThresholdForTask(deriveTask(rawTask)) : null;
+        const snapshotTasks = dataStore.getSnapshot().data.tasks;
+        const rawTask = snapshotTasks.find((task) => task.id === event.taskId);
+        const threshold = rawTask ? nextTargetFor(rawTask, snapshotTasks, trainingRef.current) : null;
 
         showToastRef.current(
           tRef.current("toast.newRun", { score: event.score, threshold: threshold ?? "--" }),
           "success"
         );
+
+        if (focusPromptRef.current) {
+          requestFocusPrompt({ taskId: event.taskId, sessionId: event.sessionId, scenario: event.scenario });
+        }
 
         playlistRunnerRef.current.syncWithDetectedScenario(event.scenario);
         if (event.isNewTask) void fixupRef.current();
@@ -109,8 +127,11 @@ export function WatcherProvider({ children }: { children: ReactNode }) {
           }
           if (granted) {
             sendNotification({
-              title: "Nova Run Registrada",
-              body: `Score: ${event.score} | ${event.scenario}`,
+              title: tRef.current("notif.newRunTitle"),
+              body: tRef.current("notif.newRunBody", {
+                score: event.score,
+                scenario: event.scenario,
+              }),
             });
           }
         } catch {}
@@ -120,7 +141,7 @@ export function WatcherProvider({ children }: { children: ReactNode }) {
     track(
       onWatcherError((error) => {
         setWatcherStatus((prev) => ({ ...prev, error, active: false }));
-        showToastRef.current(tRef.current("toast.watcherError", { error }), "error");
+        showToastRef.current(tRef.current("toast.watcherError", { error: formatBackendError(error, tRef.current) }), "error");
       })
     );
 
@@ -156,10 +177,7 @@ export function WatcherProvider({ children }: { children: ReactNode }) {
         if (detected) {
           await setStatsPath(detected);
           setSettingsPath(detected);
-          await saveSettings({
-            ...settings,
-            kovaak_stats_path: detected,
-          });
+          await updateSettings({ kovaak_stats_path: detected });
         }
       }
 
@@ -182,7 +200,7 @@ export function WatcherProvider({ children }: { children: ReactNode }) {
               "success"
             );
           }
-          await saveSettings({ ...settings, import_on_first_run: false });
+          await updateSettings({ import_on_first_run: false });
         } catch {}
       }
     };
@@ -203,14 +221,16 @@ export function WatcherProvider({ children }: { children: ReactNode }) {
     return importExistingCsvs();
   }, []);
 
-  const updateStatsPath = useCallback(async (path: string) => {
-    await setStatsPath(path);
-    const settings = await getSettings();
-    await saveSettings({ ...settings, kovaak_stats_path: path });
-    setSettingsPath(path);
-    await startWatcher();
-    setWatcherStatus(await getWatcherStatus());
-  }, []);
+  const updateStatsPath = useCallback(
+    async (path: string) => {
+      await setStatsPath(path);
+      await updateSettings({ kovaak_stats_path: path });
+      setSettingsPath(path);
+      await startWatcher();
+      setWatcherStatus(await getWatcherStatus());
+    },
+    [updateSettings]
+  );
 
   const value = useMemo<WatcherContextValue>(
     () => ({

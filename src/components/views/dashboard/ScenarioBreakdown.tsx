@@ -12,11 +12,35 @@ import {
 } from "@phosphor-icons/react";
 import { useTrackerWorkspace } from "@/context/TrackerWorkspaceContext";
 import { useApp } from "@/hooks/useAppData";
+import { useAllRuns, useAllSkills } from "@/hooks/useSkill";
+import { useSettings } from "@/hooks/useSettings";
+import { useAdvancedStats } from "@/hooks/useAdvancedStats";
+import { formatScore } from "@/lib/chart-format";
+import type { WeaknessItem } from "@/lib/skill/weakness";
 import { VISCOSE_CATEGORIES } from "@/lib/viscose";
 import { computeTaskMetrics } from "@/lib/threshold";
+import { groupTrainingSessions } from "@/lib/skill/sessions";
+import { scenarioQuality, type ScenarioQuality } from "@/lib/skill/quality";
+import { rankWeaknesses, WEAKNESS_TOP_N } from "@/lib/skill/weakness";
+import { DEFAULT_TRAINING_SETTINGS } from "@/lib/types";
 import { useI18n } from "@/lib/i18n";
 import { Badge, EmptyState } from "@/components/ui";
 import { cn } from "@/lib/utils";
+
+/** Número com sinal explícito (+1.2 / −0.4). */
+function signed(v: number, digits = 1): string {
+  const s = v.toFixed(digits).replace("-", "−");
+  return v > 0 ? `+${s}` : s;
+}
+
+/** Motivo da fraqueza em palavras simples (chave i18n). */
+function weaknessWhyKey(item: WeaknessItem) {
+  if (item.hitRate14 !== null && item.hitRate14 < 0.35) return "simple.weak.whyLowHit" as const;
+  if (item.trend === "down") return "simple.weak.whyDown" as const;
+  if (item.suggestion === "stress") return "simple.weak.whyStalled" as const;
+  if (item.daysSinceTrained === null || item.daysSinceTrained >= 7) return "simple.weak.whyStale" as const;
+  return "simple.weak.whyReview" as const;
+}
 
 export interface ScenarioBreakdownProps {
   className?: string;
@@ -24,8 +48,14 @@ export interface ScenarioBreakdownProps {
 }
 
 export function ScenarioBreakdown({ className, embedded = false }: ScenarioBreakdownProps) {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
+  const advanced = useAdvancedStats();
+  // Chaves novas vivem em docs/plans/i18n-pending/T7-dashboard.json até a integração (o tipo Key ainda não as conhece).
   const { appData } = useApp();
+  const { settings } = useSettings();
+  const training = settings?.training ?? DEFAULT_TRAINING_SETTINGS;
+  const allRuns = useAllRuns();
+  const allSkills = useAllSkills();
   const { state, actions } = useTrackerWorkspace();
   const { tasks, activeTask } = state;
   const playlists = appData?.playlists ?? [];
@@ -48,6 +78,50 @@ export function ScenarioBreakdown({ className, embedded = false }: ScenarioBreak
   const categories = useMemo(() => {
     return ["All", ...Object.keys(VISCOSE_CATEGORIES)];
   }, []);
+
+  // Sessões globais (todos os cenários) para a qualidade por cenário (T7.9).
+  const sessionsGlobal = useMemo(
+    () => groupTrainingSessions(allRuns, training.sessionGapMinutes),
+    [allRuns, training.sessionGapMinutes]
+  );
+
+  // Fraquezas v2 (T7.10): ranking de subcategorias sobre todos os cenários.
+  const lastTrainedByTask = useMemo(() => {
+    const out = new Map<string, number>();
+    for (const r of allRuns) {
+      const prev = out.get(r.taskId);
+      if (prev === undefined || r.t > prev) out.set(r.taskId, r.t);
+    }
+    return out;
+  }, [allRuns]);
+
+  const weaknessRanking = useMemo(
+    () =>
+      rankWeaknesses(
+        tasks.map((task) => {
+          const sk = allSkills.get(task.id);
+          return {
+            taskId: task.id,
+            category: task.category,
+            subcategory: task.subcategory,
+            trend: sk?.trend ?? "insufficient",
+            hitRate14: sk?.hitRate14 ?? null,
+            lastTrainedMs: lastTrainedByTask.get(task.id) ?? null,
+          };
+        }),
+        Date.now(),
+        Number.MAX_SAFE_INTEGER
+      ),
+    [tasks, allSkills, lastTrainedByTask]
+  );
+
+  const weaknessRank = useMemo(() => {
+    const out = new Map<string, number>();
+    weaknessRanking.forEach((item, idx) => item.taskIds.forEach((id) => out.set(id, idx)));
+    return out;
+  }, [weaknessRanking]);
+
+  const weaknessTop = useMemo(() => weaknessRanking.slice(0, WEAKNESS_TOP_N), [weaknessRanking]);
 
   const filteredTasks = useMemo(() => {
     const selectedPlaylist =
@@ -83,19 +157,23 @@ export function ScenarioBreakdown({ className, embedded = false }: ScenarioBreak
 
     if (!weaknessFocus) return base;
 
-    const weaknessScore = (task: (typeof tasks)[number]): number => {
-      if (!task.sessions || task.sessions.length === 0) return 2;
-      const last = task.sessions[task.sessions.length - 1];
-      const thresh = Number(last.threshold) || 0;
-      const lastPb = Number(last.pb) || 0;
-      const recentRatio = thresh > 0 ? lastPb / thresh : 1;
-      const { hitRate } = computeTaskMetrics(task);
-      const hitNorm = hitRate !== null ? hitRate / 100 : 0.85;
-      return hitNorm * 0.5 + recentRatio * 0.5;
-    };
+    return [...base].sort(
+      (a, b) =>
+        (weaknessRank.get(a.id) ?? Number.MAX_SAFE_INTEGER) -
+        (weaknessRank.get(b.id) ?? Number.MAX_SAFE_INTEGER)
+    );
+  }, [tasks, effectivePlaylistId, playlists, categoryFilter, search, weaknessFocus, weaknessRank]);
 
-    return [...base].sort((a, b) => weaknessScore(a) - weaknessScore(b));
-  }, [tasks, effectivePlaylistId, playlists, categoryFilter, search, weaknessFocus]);
+  const quality = useMemo(
+    () =>
+      new Map<string, ScenarioQuality>(
+        filteredTasks.map((task): [string, ScenarioQuality] => [
+          task.id,
+          scenarioQuality(task.id, sessionsGlobal),
+        ])
+      ),
+    [filteredTasks, sessionsGlobal]
+  );
 
   return (
     <div
@@ -119,7 +197,7 @@ export function ScenarioBreakdown({ className, embedded = false }: ScenarioBreak
           />
         </div>
 
-        {/* Category Pills + Playlist Filter + 60/40 Weakness Focus */}
+        {/* Category Pills + Playlist Filter + Weakness Focus (T7.10) */}
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scroll-y select-none">
           {playlists.length > 0 && (
             <div className="flex items-center gap-1 shrink-0">
@@ -140,11 +218,11 @@ export function ScenarioBreakdown({ className, embedded = false }: ScenarioBreak
                   aria-label={t("dashboard.filterByPlaylist")}
                   className="bg-transparent text-[11px] font-medium py-0.5 pl-1.5 pr-6 appearance-none cursor-pointer focus:outline-none"
                 >
-                  <option value="All" className="bg-bg-canvas text-text-main">
+                  <option value="All">
                     {t("dashboard.allPlaylists")}
                   </option>
                   {playlists.map((pl) => (
-                    <option key={pl.id} value={pl.id} className="bg-bg-canvas text-text-main">
+                    <option key={pl.id} value={pl.id}>
                       {pl.name} ({pl.items.length})
                     </option>
                   ))}
@@ -171,7 +249,7 @@ export function ScenarioBreakdown({ className, embedded = false }: ScenarioBreak
           <button
             type="button"
             onClick={() => setWeaknessFocus((prev) => !prev)}
-            title={t("dashboard.weaknessFocusTooltip")}
+            title={advanced ? t("weak.tooltip") : t("simple.weak.tooltip")}
             className={cn(
               "px-2.5 py-0.5 text-[11px] font-medium rounded-full transition-all shrink-0 cursor-pointer press flex items-center gap-1",
               weaknessFocus
@@ -180,7 +258,7 @@ export function ScenarioBreakdown({ className, embedded = false }: ScenarioBreak
             )}
           >
             <TrendDown size={12} weight="bold" />
-            <span>{t("dashboard.weaknessFocus")}</span>
+            <span>{advanced ? t("weak.button") : t("simple.weak.button")}</span>
           </button>
 
           <div className="h-3.5 w-[1px] bg-edge shrink-0 mx-0.5" />
@@ -206,6 +284,57 @@ export function ScenarioBreakdown({ className, embedded = false }: ScenarioBreak
         </div>
       </div>
 
+      {/* Onde focar (T7.10) */}
+      {weaknessFocus && (
+        <div className="mb-3 space-y-1.5">
+          <div className="text-[11px] font-semibold text-text-secondary">
+            {advanced ? t("weak.top3Title") : t("simple.weak.title")}
+          </div>
+          {weaknessTop.length === 0 ? (
+            <p className="text-[11px] text-text-faint">
+              {advanced ? t("weak.empty") : t("simple.weak.empty")}
+            </p>
+          ) : (
+            <>
+              {weaknessTop.map((item) => (
+                <div
+                  key={JSON.stringify([item.category, item.subcategory])}
+                  className="p-2.5 rounded-control border border-edge glass-inset flex items-center justify-between gap-2"
+                >
+                  <div className="min-w-0">
+                    <div className="text-xs font-semibold text-text-main" title={`${item.category} · ${item.subcategory}`}>
+                      {advanced
+                        ? `${item.category} · ${item.subcategory}`
+                        : t("simple.weak.item", { sub: item.subcategory, why: t(weaknessWhyKey(item)) })}
+                    </div>
+                    {advanced ? (
+                      <div className="text-[10px] text-text-faint font-mono">
+                        {t("weak.priority", { n: Math.round(item.priority * 100) })} · {t(`skill.trend.${item.trend}`)}
+                        {item.hitRate14 !== null ? ` · ${t("scenario.hit", { v: Math.round(item.hitRate14 * 100) })}` : ""}
+                      </div>
+                    ) : (
+                      item.suggestion && (
+                        <div className="text-[11px] text-text-secondary leading-snug mt-0.5">
+                          {item.suggestion === "refine" ? t("simple.weak.refine") : t("simple.weak.stress")}
+                        </div>
+                      )
+                    )}
+                  </div>
+                  {advanced && item.suggestion && (
+                    <Badge variant={item.suggestion === "refine" ? "amber" : "emerald"} className="text-[10px] shrink-0">
+                      {item.suggestion === "refine" ? t("weak.refine") : t("weak.stress")}
+                    </Badge>
+                  )}
+                </div>
+              ))}
+              <p className="text-[10px] text-text-faint">
+                {advanced ? t("weak.variantHint") : t("simple.weak.variantHint")}
+              </p>
+            </>
+          )}
+        </div>
+      )}
+
       {/* Scenario Cards Grid */}
       {filteredTasks.length === 0 ? (
         <EmptyState
@@ -227,10 +356,18 @@ export function ScenarioBreakdown({ className, embedded = false }: ScenarioBreak
               task.sessions && task.sessions.length > 0
                 ? Math.max(...task.sessions.map((s) => Number(s.pb) || 0))
                 : null;
-            const lastThreshold =
-              task.sessions && task.sessions.length > 0
-                ? task.sessions[task.sessions.length - 1].threshold
-                : null;
+            const metrics = computeTaskMetrics(task, allSkills.get(task.id));
+            const q = quality.get(task.id);
+            const hasQualityTrend = q !== undefined && (q.accuracySlope !== null || q.ttkSlope !== null);
+            // Modo simples: no máximo um aviso, em frase.
+            const accuracyDropping = q?.accuracySlope != null && q.accuracySlope < -0.005;
+            const warnKey = q?.possibleAutopilot
+              ? ("simple.scn.warnAutopilot" as const)
+              : accuracyDropping
+                ? ("simple.scn.warnAccuracy" as const)
+                : allSkills.get(task.id)?.trend === "down"
+                  ? ("simple.scn.warnTrend" as const)
+                  : null;
 
             return (
               <div
@@ -260,7 +397,7 @@ export function ScenarioBreakdown({ className, embedded = false }: ScenarioBreak
                       {isActive && (
                         <Badge variant="emerald" className="text-[10px]">
                           <CheckCircle size={10} weight="fill" />
-                          <span>Ativo</span>
+                          <span>{t("scenarioBreakdown.activeBadge")}</span>
                         </Badge>
                       )}
                     </div>
@@ -279,18 +416,64 @@ export function ScenarioBreakdown({ className, embedded = false }: ScenarioBreak
                   </span>
                 </div>
 
-                <div className="pt-2 border-t border-edge flex items-center justify-between text-xs font-mono">
-                  <div className="flex items-center gap-1 text-score">
-                    <Trophy size={13} weight="regular" />
-                    <span className="font-bold tabular">{pb !== null ? `${pb} pts` : "—"}</span>
+                {advanced ? (
+                  <div className="pt-2 border-t border-edge flex items-center justify-between text-xs font-mono">
+                    <div className="flex items-center gap-1 text-score">
+                      <Trophy size={13} weight="regular" />
+                      <span className="font-bold tabular">{pb !== null ? `${pb} pts` : "—"}</span>
+                    </div>
+                    <div className="flex items-center gap-1 text-emerald">
+                      <ShieldCheck size={13} weight="regular" />
+                      <span className="font-semibold tabular">
+                        {metrics.targetThreshold !== null ? `${metrics.targetThreshold} pts` : "—"}
+                      </span>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-1 text-emerald">
-                    <ShieldCheck size={13} weight="regular" />
-                    <span className="font-semibold tabular">
-                      {lastThreshold !== null ? `${lastThreshold} pts` : "—"}
+                ) : (
+                  <div className="pt-2 border-t border-edge flex items-center gap-3 text-xs">
+                    <span className="inline-flex items-center gap-1 text-score">
+                      <Trophy size={13} weight="regular" />
+                      <span className="font-semibold tabular">
+                        {pb !== null
+                          ? metrics.targetThreshold !== null
+                            ? t("simple.scn.line", {
+                                pb: formatScore(pb, lang),
+                                target: formatScore(metrics.targetThreshold, lang),
+                              })
+                            : t("simple.scn.lineNoTarget", { pb: formatScore(pb, lang) })
+                          : "—"}
+                      </span>
                     </span>
                   </div>
-                </div>
+                )}
+
+                {advanced ? (
+                  (metrics.hitRate !== null || hasQualityTrend || q?.possibleAutopilot) && (
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] font-mono text-text-faint">
+                      {metrics.hitRate !== null && <span>{t("scenario.hit", { v: metrics.hitRate.toFixed(0) })}</span>}
+                      {q?.accuracySlope != null && (
+                        <span>{t("quality.accTrend", { v: signed(q.accuracySlope * 100) })}</span>
+                      )}
+                      {q?.ttkSlope != null && <span>{t("quality.ttkTrend", { v: signed(q.ttkSlope) })}</span>}
+                      {q?.possibleAutopilot && (
+                        <span title={t("quality.autopilotHint")}>
+                          <Badge variant="amber" className="text-[10px]">
+                            {t("quality.autopilot")}
+                          </Badge>
+                        </span>
+                      )}
+                    </div>
+                  )
+                ) : (
+                  (metrics.hitRate !== null || warnKey) && (
+                    <div className="flex flex-col gap-0.5 text-[11px] text-text-faint">
+                      {metrics.hitRate !== null && (
+                        <span>{t("simple.scn.hits", { v: metrics.hitRate.toFixed(0) })}</span>
+                      )}
+                      {warnKey && <span className="text-amber">{t(warnKey)}</span>}
+                    </div>
+                  )
+                )}
               </div>
             );
           })}

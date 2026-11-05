@@ -2,6 +2,7 @@ import React from "react";
 import { Dialog as BaseDialog } from "@base-ui/react";
 import { X } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
+import { useI18n } from "@/lib/i18n";
 
 export const Dialog = BaseDialog.Root;
 export const DialogTrigger = BaseDialog.Trigger;
@@ -39,6 +40,7 @@ export const DialogPopup = React.forwardRef<HTMLDivElement, DialogPopupProps>(
     },
     ref
   ) => {
+    const { t } = useI18n();
     const isSheet = variant === "sheet";
 
     return (
@@ -58,7 +60,7 @@ export const DialogPopup = React.forwardRef<HTMLDivElement, DialogPopupProps>(
         )}
         {showClose && (
           <BaseDialog.Close
-            aria-label="Fechar"
+            aria-label={t("common.close")}
             className="absolute right-4 top-4 inline-flex h-8 w-8 items-center justify-center rounded-full liquid-well text-text-secondary hover:text-text-main transition press cursor-pointer focus-visible:outline-none"
           >
             <X size={15} weight="bold" />

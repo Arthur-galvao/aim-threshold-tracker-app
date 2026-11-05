@@ -17,24 +17,27 @@ import type {
   ToastState,
   DetectedPlaylistEvent,
 } from "@/lib/types";
+import { save } from "@tauri-apps/plugin-dialog";
 import { SAMPLE_DATA } from "@/lib/sample-data";
 import * as bridge from "@/lib/tauri-bridge";
 import {
   getPlaylistInProgress,
   listenKovaakPlaylistActive,
-  getSettings,
 } from "@/lib/tauri-bridge";
 import { dataStore, type DataStoreBackend } from "@/lib/data-store";
 import { createTaskDeriver } from "@/lib/derived-tasks";
-import { errorCode } from "@/lib/backend-error";
+import { formatBackendError } from "@/lib/backend-error";
 import {
   isPermissionGranted,
   requestPermission,
   sendNotification,
 } from "@tauri-apps/plugin-notification";
 import { migrateAndCategorizeTasks } from "@/lib/viscose";
-import { useI18n, type Key } from "@/lib/i18n";
+import { useI18n } from "@/lib/i18n";
 import { usePlaylistRunner, type PlaylistRunnerState } from "./usePlaylistRunner";
+import { useSettings } from "./useSettings";
+
+const APP_NOTIFICATION_TITLE = "Aim Threshold Tracker";
 
 const storeBackend: DataStoreBackend = {
   getAppData: bridge.getAppData,
@@ -131,11 +134,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   /** Mostra um erro de comando (códigos curtos do backend, traduzidos aqui). */
   const reportError = useCallback(
     (err: unknown) => {
-      const code = errorCode(err);
       console.error("Erro no comando do backend:", err);
-      const key = `error.${code}` as Key;
-      const text = t(key);
-      showToast(text === key ? code : text, "error");
+      showToast(formatBackendError(err, t), "error");
     },
     [showToast, t]
   );
@@ -224,23 +224,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const [globalAutoAdvance, setGlobalAutoAdvance] = useState<boolean>(true);
-
-  const refreshGlobalSettings = useCallback(async () => {
-    try {
-      const s = await getSettings();
-      if (s.auto_advance_on_threshold !== undefined) {
-        setGlobalAutoAdvance(s.auto_advance_on_threshold !== false);
-      }
-    } catch {}
-  }, []);
-
-  useEffect(() => {
-    void refreshGlobalSettings();
-    const handleFocus = () => void refreshGlobalSettings();
-    window.addEventListener("focus", handleFocus);
-    return () => window.removeEventListener("focus", handleFocus);
-  }, [refreshGlobalSettings]);
+  // Ajustes vêm do SettingsContext (recarregados no foco da janela, ver useSettings).
+  const { settings } = useSettings();
+  const settingsRef = useRef(settings);
+  settingsRef.current = settings;
+  const globalAutoAdvance = settings?.auto_advance_on_threshold !== false;
 
   const playlistRunner = usePlaylistRunner({
     tasks: appData.tasks,
@@ -248,12 +236,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     globalAutoAdvance,
     onStepAdvance: async (_stepIndex, scenarioName, isFinished) => {
       try {
-        const settings = await getSettings();
-        if (settings.notify_step_advance !== false) {
+        if (settingsRef.current?.notify_step_advance !== false) {
           if (isFinished) {
-            await sendNotificationHelper("Aim Threshold Tracker", "Playlist concluída!");
+            await sendNotificationHelper(APP_NOTIFICATION_TITLE, t("notif.playlistDone"));
           } else if (scenarioName) {
-            await sendNotificationHelper("Aim Threshold Tracker", `Etapa avançada: ${scenarioName}`);
+            await sendNotificationHelper(
+              APP_NOTIFICATION_TITLE,
+              t("notif.stepAdvanced", { name: scenarioName })
+            );
           }
         }
       } catch (err) {
@@ -271,8 +261,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const handleDetectedPlaylist = useCallback(
     async (event: DetectedPlaylistEvent) => {
       try {
-        const settings = await getSettings();
-        if (settings.auto_detect_playlist === false) {
+        const settings = settingsRef.current;
+        if (settings?.auto_detect_playlist === false) {
           return;
         }
 
@@ -293,10 +283,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
         if (!isSamePlaylistRunning) {
           runner.start(targetPlaylist);
-          if (settings.notify_step_advance !== false) {
+          if (settings?.notify_step_advance !== false) {
             await sendNotificationHelper(
-              "Aim Threshold Tracker",
-              `Playlist detectada: ${targetPlaylist.name}`
+              APP_NOTIFICATION_TITLE,
+              t("notif.playlistDetected", { name: targetPlaylist.name })
             );
           }
         } else {
@@ -318,7 +308,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         console.error("Erro ao sincronizar playlist ativa do KovaaK:", err);
       }
     },
-    [sendNotificationHelper]
+    [sendNotificationHelper, t]
   );
 
   useEffect(() => {
@@ -366,17 +356,38 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [showToast, reportError, t]);
 
   const exportData = useCallback(() => {
-    const dataStr =
-      "data:text/json;charset=utf-8," +
-      encodeURIComponent(JSON.stringify(appData, null, 2));
-    const anchor = document.createElement("a");
-    anchor.href = dataStr;
-    anchor.download = `aim_thresholds_backup_${new Date().toISOString().split("T")[0]}.json`;
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
-    showToast(t("toast.exported"), "success");
-  }, [appData, showToast, t]);
+    const fileName = `aim_thresholds_backup_${new Date().toISOString().split("T")[0]}.json`;
+    const inTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+
+    if (!inTauri) {
+      const dataStr =
+        "data:text/json;charset=utf-8," +
+        encodeURIComponent(JSON.stringify(appData, null, 2));
+      const anchor = document.createElement("a");
+      anchor.href = dataStr;
+      anchor.download = fileName;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      showToast(t("toast.exported"), "success");
+      return;
+    }
+
+    void (async () => {
+      try {
+        const path = await save({
+          defaultPath: fileName,
+          title: t("dialog.exportTitle"),
+          filters: [{ name: "JSON", extensions: ["json"] }],
+        });
+        if (!path) return;
+        await bridge.exportAppData(path);
+        showToast(t("toast.exported"), "success");
+      } catch (err) {
+        reportError(err);
+      }
+    })();
+  }, [appData, showToast, reportError, t]);
 
   const importData = useCallback(
     async (file: File) => {

@@ -27,7 +27,7 @@ export function SettingsKovaakSection({
   const [reimporting, setReimporting] = useState(false);
 
   const handlePickFolder = async () => {
-    const picked = await pickStatsFolder();
+    const picked = await pickStatsFolder(t("dialog.pickStatsFolder"));
     if (picked && onUpdatePath) {
       setManualKovaak(picked);
       await onUpdatePath(picked);

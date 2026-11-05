@@ -1,10 +1,12 @@
 import type { Task } from "./types.ts";
-import { recalculateAllTaskThresholds } from "./threshold.ts";
 
 /**
- * Derivados do snapshot (Plano 02 / decisão 8): `Session.threshold` não é mais escrito
- * pelo front nem pelo Rust (chega 0). Até o Plano 04, recalculamos o threshold legado
- * numa CÓPIA da task e memoizamos POR TASK: uma mudança em uma task só recomputa ela.
+ * Derivados do snapshot. No Threshold v2 `Session.threshold` não é mais recalculado:
+ * a meta vem de `computeSkill` (hook `useSkill`). Por padrão o deriver é uma passagem direta
+ * que preserva as referências (task e array) — as tasks do snapshot já são imutáveis.
+ *
+ * Um `recalc` explícito (opcional) ativa a derivação por task: recalcula numa CÓPIA da
+ * task, memoizado POR TASK.
  */
 
 export type TaskRecalc = (task: Task) => void;
@@ -18,7 +20,8 @@ export function taskSignature(task: Task): string {
   return [task.id, task.name, task.category, task.subcategory, sessions.length, last, sum].join("\u0001");
 }
 
-export function deriveTask(task: Task, recalc: TaskRecalc = recalculateAllTaskThresholds): Task {
+export function deriveTask(task: Task, recalc?: TaskRecalc): Task {
+  if (!recalc) return task;
   const derived: Task = { ...task, sessions: (task.sessions ?? []).map((s) => ({ ...s })) };
   recalc(derived);
   return derived;
@@ -26,15 +29,19 @@ export function deriveTask(task: Task, recalc: TaskRecalc = recalculateAllTaskTh
 
 export interface TaskDeriver {
   (tasks: Task[]): Task[];
-  /** Quantas tasks foram recomputadas desde a criação (para testes). */
+  /** Quantas tasks foram recomputadas (com `recalc`) desde a criação (para testes). */
   readonly computeCount: () => number;
 }
 
 /**
- * Devolve uma função `tasks -> tasks derivadas`. Tasks inalteradas reaproveitam a MESMA
- * referência; se nenhuma mudou, devolve o mesmo array da chamada anterior.
+ * Devolve uma função `tasks -> tasks derivadas`. Sem `recalc`, devolve o próprio array.
+ * Com `recalc`, tasks inalteradas reaproveitam a MESMA referência derivada.
  */
-export function createTaskDeriver(recalc: TaskRecalc = recalculateAllTaskThresholds): TaskDeriver {
+export function createTaskDeriver(recalc?: TaskRecalc): TaskDeriver {
+  if (!recalc) {
+    return Object.assign((tasks: Task[]): Task[] => tasks, { computeCount: () => 0 });
+  }
+
   let cache = new Map<string, { signature: string; derived: Task }>();
   let lastResult: Task[] = [];
   let computed = 0;

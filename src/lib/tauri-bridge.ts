@@ -15,11 +15,14 @@ import type {
   ReplaceAllReason,
   RevisionResult,
   RunRecordedEvent,
+  ScenarioMeta,
+  SessionFocus,
   SyncGamePlaylistsResult,
   TaskMetaPatch,
   UpsertPlaylistResult,
   WatcherStatus,
 } from "./types";
+import { DEFAULT_LAB_SETTINGS, DEFAULT_TRAINING_SETTINGS } from "./types";
 import { toBackendError } from "./backend-error";
 import { getWebBackend } from "./web-backend";
 
@@ -100,6 +103,28 @@ export async function addManualSessions(
   return cmd<RevisionResult>("add_manual_sessions", { taskId, date, sensCm, scores });
 }
 
+/** Plano 07: "on" | "auto" | null (limpa o foco da sessão). */
+export async function setSessionFocus(
+  taskId: string,
+  sessionId: string,
+  focus: SessionFocus
+): Promise<RevisionResult> {
+  if (!isTauri()) return web(() => getWebBackend().setSessionFocus(taskId, sessionId, focus));
+  return cmd<RevisionResult>("set_session_focus", { taskId, sessionId, focus });
+}
+
+/** Plano 05: substitui `set_scenario_centers`. Chave = nome normalizado do cenário. */
+export async function setScenarioMeta(meta: Record<string, ScenarioMeta>): Promise<void> {
+  if (!isTauri()) return;
+  await cmd<null>("set_scenario_meta", { meta });
+}
+
+/** Plano 05/07: passo de medição ativo => randomizer pausado. Sem Tauri é no-op. */
+export async function setMeasuring(measuring: boolean): Promise<void> {
+  if (!isTauri()) return;
+  await cmd<null>("set_measuring", { measuring });
+}
+
 export async function deleteSession(taskId: string, sessionId: string): Promise<RevisionResult> {
   if (!isTauri()) return web(() => getWebBackend().deleteSession(taskId, sessionId));
   return cmd<RevisionResult>("delete_session", { taskId, sessionId });
@@ -133,6 +158,28 @@ export async function replaceAllData(
 export async function importJsonBackup(json: string): Promise<RevisionResult> {
   if (!isTauri()) return web(() => getWebBackend().importJsonBackup(json));
   return cmd<RevisionResult>("import_json_backup", { json });
+}
+
+/** Rust grava o snapshot atual dos dados no caminho escolhido (Plano 08, T8.8). */
+export async function exportAppData(path: string): Promise<{ path: string }> {
+  if (!isTauri()) return { path };
+  return cmd<{ path: string }>("export_app_data", { path });
+}
+
+/** Rótulos do menu da bandeja (Plano 08, T8.6). Sem Tauri é no-op. */
+export async function setTrayLabels(open: string, quit: string): Promise<void> {
+  if (!isTauri()) return;
+  await cmd<null>("set_tray_labels", { open, quit });
+}
+
+/** Progresso do backfill de estatísticas a partir dos CSVs antigos no primeiro boot pós-update. */
+export function onMigrationProgress(
+  callback: (progress: { done: number; total: number }) => void
+): Promise<UnlistenFn> {
+  if (!isTauri()) return Promise.resolve(() => {});
+  return listen<{ done: number; total: number }>("migration_progress", (event) =>
+    callback(event.payload)
+  );
 }
 
 export async function detectKovaakPath(): Promise<string | null> {
@@ -181,23 +228,23 @@ export async function getPlaylistInProgress(): Promise<DetectedPlaylistEvent | n
   }
 }
 
-export async function pickStatsFolder(): Promise<string | null> {
+export async function pickStatsFolder(title?: string): Promise<string | null> {
   if (!isTauri()) return null;
   const selected = await open({
     directory: true,
     multiple: false,
-    title: "Selecione a pasta de stats do KovaaK's",
+    title,
   });
   if (Array.isArray(selected)) return selected[0] ?? null;
   return selected ?? null;
 }
 
-export async function pickAimlabCsvFile(): Promise<string | null> {
+export async function pickAimlabCsvFile(title?: string): Promise<string | null> {
   if (!isTauri()) return null;
   const selected = await open({
     directory: false,
     multiple: false,
-    title: "Selecione o arquivo CSV do Aim Lab",
+    title,
     filters: [{ name: "CSV", extensions: ["csv"] }],
   });
   if (Array.isArray(selected)) return selected[0] ?? null;
@@ -210,6 +257,7 @@ export async function getSettings(): Promise<AppSettings> {
       const stored = localStorage.getItem("AIM_SETTINGS");
       if (stored) {
         try {
+          const parsed = JSON.parse(stored);
           return {
             kovaak_stats_path: null,
             watcher_active: false,
@@ -218,7 +266,9 @@ export async function getSettings(): Promise<AppSettings> {
             auto_detect_playlist: true,
             notify_step_advance: true,
             auto_advance_on_threshold: true,
-            ...JSON.parse(stored),
+            ...parsed,
+            training: { ...DEFAULT_TRAINING_SETTINGS, ...(parsed.training ?? {}) },
+            lab: { ...DEFAULT_LAB_SETTINGS, ...(parsed.lab ?? {}) },
           };
         } catch {}
       }
@@ -231,6 +281,8 @@ export async function getSettings(): Promise<AppSettings> {
       auto_detect_playlist: true,
       notify_step_advance: true,
       auto_advance_on_threshold: true,
+      training: DEFAULT_TRAINING_SETTINGS,
+      lab: DEFAULT_LAB_SETTINGS,
     };
   }
   return invoke<AppSettings>("get_settings");

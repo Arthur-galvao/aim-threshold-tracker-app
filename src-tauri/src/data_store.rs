@@ -19,7 +19,7 @@ use std::time::Duration;
 
 use crate::model::{
     AppData, GamePlaylist, KovaakRun, Playlist, PlaylistItem, Session, Task, DEFAULT_CATEGORY,
-    DEFAULT_SUBCATEGORY,
+    DEFAULT_SUBCATEGORY, MAX_INTENT_CUE_CHARS,
 };
 use crate::watcher::unique_id;
 
@@ -121,6 +121,7 @@ pub fn create_task(
         subcategory: if subcategory.is_empty() { DEFAULT_SUBCATEGORY } else { subcategory }
             .to_string(),
         sessions: Vec::new(),
+        intent_cue: None,
     };
     let id = task.id.clone();
     data.active_task_id = Some(id.clone());
@@ -134,6 +135,7 @@ pub fn update_task_meta(
     name: Option<&str>,
     category: Option<&str>,
     subcategory: Option<&str>,
+    intent_cue: Option<&str>,
 ) -> Result<(), String> {
     // valida tudo antes de mutar
     let new_name = match name {
@@ -156,6 +158,34 @@ pub fn update_task_meta(
     if let Some(s) = subcategory {
         task.subcategory = s.trim().to_string();
     }
+    if let Some(c) = intent_cue {
+        let c: String = c.trim().chars().take(MAX_INTENT_CUE_CHARS).collect();
+        let c = c.trim_end().to_string();
+        task.intent_cue = if c.is_empty() { None } else { Some(c) };
+    }
+    Ok(())
+}
+
+/// Define o foco da sessão: `Some("on"|"auto")` ou `None` (limpa).
+pub fn set_session_focus(
+    data: &mut AppData,
+    task_id: &str,
+    session_id: &str,
+    focus: Option<&str>,
+) -> Result<(), String> {
+    let focus = match focus {
+        None => None,
+        Some("on") => Some("on".to_string()),
+        Some("auto") => Some("auto".to_string()),
+        Some(_) => return Err(ERR_INVALID_PAYLOAD.to_string()),
+    };
+    let task = find_task_mut(data, task_id)?;
+    let session = task
+        .sessions
+        .iter_mut()
+        .find(|s| s.id == session_id)
+        .ok_or_else(|| ERR_SESSION_NOT_FOUND.to_string())?;
+    session.focus = focus;
     Ok(())
 }
 
@@ -213,6 +243,7 @@ pub fn add_manual_sessions(
             pb: *score,
             threshold: 0.0,
             source_file: None,
+            ..Default::default()
         });
         ids.push(id);
     }
@@ -298,6 +329,28 @@ fn session_from_run(run: &KovaakRun) -> Session {
         pb: run.score,
         threshold: 0.0,
         source_file: Some(run.source_file.clone()),
+        datetime: (run.datetime.len() >= 19).then(|| run.datetime[..19].to_string()),
+        game: (!run.game.is_empty()).then(|| run.game.clone()),
+        fov: (run.fov > 0.0).then_some(run.fov),
+        shots: run.stats.shots,
+        hits: run.stats.hits,
+        accuracy: run.stats.accuracy,
+        kills: run.stats.kills,
+        avg_ttk: run.stats.avg_ttk,
+        damage_done: run.stats.damage_done,
+        damage_possible: run.stats.damage_possible,
+        fight_time: run.stats.fight_time,
+        pause_count: run.stats.pause_count,
+        pause_duration: run.stats.pause_duration,
+        avg_fps: run.stats.avg_fps,
+        game_version: run.stats.game_version.clone(),
+        hash: run.stats.hash.clone(),
+        dpi: run.stats.dpi,
+        sens_role: run.sens_role.clone(),
+        roll_center_cm: run.roll_center_cm,
+        lattice_k: run.lattice_k,
+        run_mode: run.run_mode.clone(),
+        ..Default::default()
     }
 }
 
@@ -308,6 +361,7 @@ fn new_task_for_run(run: &KovaakRun, session: Session) -> Task {
         category: DEFAULT_CATEGORY.to_string(),
         subcategory: DEFAULT_SUBCATEGORY.to_string(),
         sessions: vec![session],
+        intent_cue: None,
     }
 }
 
@@ -491,6 +545,7 @@ fn build_items(
                     category: DEFAULT_CATEGORY.to_string(),
                     subcategory: DEFAULT_SUBCATEGORY.to_string(),
                     sessions: Vec::new(),
+                    intent_cue: None,
                 });
                 task_ids.insert(key, id.clone());
                 id
@@ -501,6 +556,7 @@ fn build_items(
             task_id,
             target_mode: "reps".to_string(),
             target_value: target_reps(entry.play_count),
+            ..Default::default()
         });
     }
     items
@@ -587,6 +643,7 @@ pub fn sync_game_playlists(
                     created_at: chrono::Utc::now().to_rfc3339(),
                     auto_advance_mode: None,
                     source: origin.to_string(),
+                    is_measurement: false,
                 });
                 playlist_idx.insert(key, data.playlists.len() - 1);
                 imported += 1;
@@ -734,6 +791,7 @@ mod tests {
             fov: 103.0,
             datetime: "2026-10-12T14:30:22".into(),
             source_file: source.into(),
+            ..Default::default()
         }
     }
 
@@ -794,8 +852,8 @@ mod tests {
         let (core, task_id) = core_with_task();
         let e = |r: Result<(), String>| r.unwrap_err();
         let mut data = core.snapshot().1;
-        assert_eq!(e(update_task_meta(&mut data, "nope", Some("x"), None, None)), "task_not_found");
-        assert_eq!(e(update_task_meta(&mut data, &task_id, Some(" "), None, None)), "empty_name");
+        assert_eq!(e(update_task_meta(&mut data, "nope", Some("x"), None, None, None)), "task_not_found");
+        assert_eq!(e(update_task_meta(&mut data, &task_id, Some(" "), None, None, None)), "empty_name");
         assert_eq!(e(delete_task(&mut data, "nope")), "task_not_found");
         assert_eq!(e(set_active_task(&mut data, Some("nope"))), "task_not_found");
         assert_eq!(e(delete_session(&mut data, "nope", "s")), "task_not_found");
@@ -823,7 +881,7 @@ mod tests {
         assert_eq!(data.tasks[0].name, "A");
         assert_eq!(data.tasks[0].category, DEFAULT_CATEGORY);
         assert_eq!(data.active_task_id.as_deref(), Some(b.as_str()));
-        update_task_meta(&mut data, &a, Some("A2"), Some("C2"), None).unwrap();
+        update_task_meta(&mut data, &a, Some("A2"), Some("C2"), None, None).unwrap();
         assert_eq!(data.tasks[0].name, "A2");
         assert_eq!(data.tasks[0].category, "C2");
         assert_eq!(data.tasks[0].subcategory, DEFAULT_SUBCATEGORY);
@@ -831,6 +889,46 @@ mod tests {
         assert_eq!(data.active_task_id.as_deref(), Some(a.as_str()));
         delete_task(&mut data, &a).unwrap();
         assert_eq!(data.active_task_id, None);
+    }
+
+    #[test]
+    fn set_session_focus_sets_and_clears() {
+        let (core, task_id) = core_with_task();
+        let (ids, _, _) = core
+            .mutate(|d| add_manual_sessions(d, &task_id, "2026-10-12", 40.0, &[100.0]))
+            .unwrap();
+        let sid = ids[0].clone();
+        let mut data = core.snapshot().1;
+        set_session_focus(&mut data, &task_id, &sid, Some("on")).unwrap();
+        assert_eq!(data.tasks[0].sessions[0].focus.as_deref(), Some("on"));
+        set_session_focus(&mut data, &task_id, &sid, Some("auto")).unwrap();
+        assert_eq!(data.tasks[0].sessions[0].focus.as_deref(), Some("auto"));
+        set_session_focus(&mut data, &task_id, &sid, None).unwrap();
+        assert_eq!(data.tasks[0].sessions[0].focus, None);
+        assert_eq!(
+            set_session_focus(&mut data, &task_id, &sid, Some("bogus")).unwrap_err(),
+            "invalid_payload"
+        );
+        assert_eq!(set_session_focus(&mut data, "nope", &sid, None).unwrap_err(), "task_not_found");
+        assert_eq!(
+            set_session_focus(&mut data, &task_id, "nope", None).unwrap_err(),
+            "session_not_found"
+        );
+    }
+
+    #[test]
+    fn intent_cue_is_trimmed_truncated_and_clearable() {
+        let mut data = AppData::default();
+        let id = create_task(&mut data, "A", "", "").unwrap();
+        let long = "x".repeat(200);
+        update_task_meta(&mut data, &id, None, None, None, Some(&long)).unwrap();
+        assert_eq!(data.tasks[0].intent_cue.as_ref().unwrap().chars().count(), 80);
+        update_task_meta(&mut data, &id, None, None, None, Some("  foco no pulso  ")).unwrap();
+        assert_eq!(data.tasks[0].intent_cue.as_deref(), Some("foco no pulso"));
+        update_task_meta(&mut data, &id, None, None, None, None).unwrap();
+        assert_eq!(data.tasks[0].intent_cue.as_deref(), Some("foco no pulso"));
+        update_task_meta(&mut data, &id, None, None, None, Some("  ")).unwrap();
+        assert_eq!(data.tasks[0].intent_cue, None);
     }
 
     #[test]
@@ -989,6 +1087,7 @@ mod tests {
             task_id: task_id.into(),
             target_mode: mode.into(),
             target_value: value,
+            ..Default::default()
         }
     }
 
@@ -1003,6 +1102,7 @@ mod tests {
             created_at: "2026-01-01".into(),
             auto_advance_mode: None,
             source: "user".into(),
+            ..Default::default()
         });
         let before = serde_json::to_string(&data.playlists).unwrap();
 
@@ -1109,6 +1209,7 @@ mod tests {
             created_at: "2026-01-01".into(),
             auto_advance_mode: None,
             source: "user".into(),
+            ..Default::default()
         });
 
         let out = sync_game_playlists(&mut data, &[game("routine", &[("A", 1.0), ("B", 1.0)])], &[])

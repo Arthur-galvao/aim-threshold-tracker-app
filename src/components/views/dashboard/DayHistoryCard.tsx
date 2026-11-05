@@ -9,19 +9,25 @@ import {
 } from "@phosphor-icons/react";
 import { Badge } from "@/components/ui";
 import { useI18n } from "@/lib/i18n";
-import type { Session } from "@/lib/types";
-import type { DaySummary } from "@/lib/day-summary";
+import type { TrainingSessionSummary } from "@/lib/day-summary";
+import { roundScore } from "@/lib/metric-deltas";
+import { formatSensSummary, formatScore } from "@/lib/chart-format";
+import { sessionStatus } from "@/lib/simple-summary";
+import { useAdvancedStats } from "@/hooks/useAdvancedStats";
+import { InfoTip } from "./InfoTip";
 import { cn } from "@/lib/utils";
 
-export interface DayGroupItem extends DaySummary {
-  individualSessions: Session[];
-}
-
 export interface DayHistoryCardProps {
-  day: DayGroupItem;
+  /** Uma sessão de treino (gap <= 45 min), não um dia. */
+  day: TrainingSessionSummary;
   isExpanded: boolean;
   onToggle: () => void;
   onDeleteSession: (sessionId: string) => Promise<void>;
+}
+
+function fmtTime(t: number): string {
+  const d = new Date(t);
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
 export function DayHistoryCard({
@@ -31,6 +37,7 @@ export function DayHistoryCard({
   onDeleteSession,
 }: DayHistoryCardProps) {
   const { t, lang } = useI18n();
+  const advanced = useAdvancedStats();
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   const formatDayDate = (dateStr: string) => {
@@ -46,6 +53,15 @@ export function DayHistoryCard({
   };
 
   const { formatted, weekday } = formatDayDate(day.date);
+  const hasClock = day.items.some((i) => Boolean(i.session.datetime));
+  const timeRange = hasClock
+    ? day.startedAt === day.endedAt
+      ? fmtTime(day.startedAt)
+      : `${fmtTime(day.startedAt)}–${fmtTime(day.endedAt)}`
+    : null;
+
+  const status = sessionStatus(day.hit, day.validRuns);
+  const sensText = formatSensSummary(day.sens).text;
 
   const handleDelete = async (sessionId: string) => {
     await onDeleteSession(sessionId);
@@ -94,10 +110,18 @@ export function DayHistoryCard({
               <span className="text-[11px] text-text-faint uppercase font-mono">
                 ({weekday})
               </span>
-              {day.isPbDay && <Badge variant="amber">{t("hist.pbBadge")}</Badge>}
+              {day.isPb && (
+                <Badge variant="amber">{advanced ? t("hist.pbBadge") : t("simple.sim.newBest")}</Badge>
+              )}
             </div>
             <span className="text-[11px] font-mono text-text-faint tabular block mt-0.5">
-              {t("hist.runsCount", { n: day.runs })} · Sens: {day.sens.join(", ")}cm
+              {timeRange ? `${timeRange} · ` : ""}
+              {advanced
+                ? t("skill.hist.runsValid", { n: day.runs, v: day.validRuns })
+                : day.runs === 1
+                  ? t("simple.hist.run1")
+                  : t("simple.hist.runs", { n: day.runs })}
+              {sensText ? ` · ${advanced ? `Sens: ${day.sens.join(", ")}cm` : t("simple.hist.sens", { v: sensText })}` : ""}
             </span>
           </div>
         </div>
@@ -105,24 +129,37 @@ export function DayHistoryCard({
         <div className="flex items-center gap-3 shrink-0">
           <div className="text-right font-mono">
             <div className="text-xs font-bold text-score tabular transition-transform duration-200 group-hover/card:scale-105 origin-right">
-              {day.best}{" "}
+              {advanced
+                ? day.bestAdjusted !== null
+                  ? roundScore(day.bestAdjusted)
+                  : day.best
+                : formatScore(day.bestAdjusted ?? day.best, lang)}{" "}
               <span className="text-[10px] text-text-faint font-normal">
-                {t("metric.pts")}
+                {advanced && day.bestAdjusted !== null ? t("skill.hist.adjusted") : t("metric.pts")}
               </span>
             </div>
             <div className="text-[11px] text-emerald tabular flex items-center justify-end gap-1">
               <ShieldCheck size={12} weight="regular" />
-              <span>{day.threshold} pts</span>
+              <span>
+                {advanced
+                  ? day.target !== null
+                    ? `${roundScore(day.target)} pts`
+                    : "—"
+                  : day.target !== null
+                    ? t("simple.hist.target", { val: formatScore(day.target, lang) })
+                    : t("simple.hist.noTarget")}
+              </span>
             </div>
           </div>
 
-          {day.hit !== null ? (
-            <Badge variant={day.hit ? "emerald" : "red"}>
-              {day.hit ? t("hist.hit") : t("hist.miss")}
-            </Badge>
-          ) : (
-            <Badge variant="neutral">{t("hist.firstDay")}</Badge>
-          )}
+          <Badge
+            variant={
+              status === "hit" ? "emerald" : status === "miss" ? "amber" : "neutral"
+            }
+            title={status === "warmupOnly" ? t("simple.hist.warmupOnlyTip") : undefined}
+          >
+            {t(`simple.hist.status.${status}`)}
+          </Badge>
         </div>
       </div>
 
@@ -142,7 +179,7 @@ export function DayHistoryCard({
                 <span>{t("hist.colAction")}</span>
               </div>
 
-              {day.individualSessions.map((sess, idx) => {
+              {day.items.map(({ session: sess, validity }, idx) => {
                 const isConfirming = confirmDeleteId === sess.id;
 
                 return (
@@ -157,6 +194,14 @@ export function DayHistoryCard({
                       <span className="font-bold text-text-main tabular">
                         {sess.pb} pts
                       </span>
+                      {validity.valid ? null : (
+                        <span className="flex items-center gap-1 text-[10px] text-amber">
+                          {validity.reason ? t(`simple.reason.${validity.reason}`) : t("simple.tip.notCounted")}
+                          {validity.reason && (
+                            <InfoTip text={t(`simple.reasonDesc.${validity.reason}`)} size={11} />
+                          )}
+                        </span>
+                      )}
                       {sess.sourceFile && (
                         <span
                           className="text-[10px] text-text-faint truncate max-w-[200px]"

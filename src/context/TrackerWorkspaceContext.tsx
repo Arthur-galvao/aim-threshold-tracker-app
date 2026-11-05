@@ -9,31 +9,15 @@ import {
 import type { Task, WatcherStatus } from "@/lib/types";
 import { useApp } from "@/hooks/useAppData";
 import { useWatcher } from "@/hooks/useKovaakWatcher";
-import {
-  computeDayThreshold,
-  computeTaskMetrics,
-  getTargetThresholdForTask,
-} from "@/lib/threshold";
+import { simulateDraftRuns, type SimulatedOutcome } from "@/lib/threshold";
+import { computedMetricsFromSkill, type ComputedMetrics } from "@/lib/metric-deltas";
+import { skillConfigFromTraining } from "@/lib/skill/config";
+import { useSkill, useAllRuns } from "@/hooks/useSkill";
+import { useSettings } from "@/hooks/useSettings";
+import { DEFAULT_TRAINING_SETTINGS } from "@/lib/types";
 import { getStoredTheme, applyTheme, type AppTheme } from "@/lib/theme";
 
-export type RatchetStatus = "ratchet_up" | "plateau_held" | "initial";
-
-export interface ComputedMetrics {
-  currentThreshold: number | null;
-  dailyTarget: number | null;
-  personalBest: number | null;
-  consistencyRatio: number | null;
-  movingAverage3: number[];
-  ratchetStatus: RatchetStatus;
-}
-
-export interface SimulatedOutcome {
-  willRaiseRatchet: boolean;
-  projectedThreshold: number | null;
-  thresholdDelta: number;
-  willBreakPB: boolean;
-  status: RatchetStatus;
-}
+export type { ComputedMetrics, SimulatedOutcome };
 
 export interface TrackerWorkspaceState {
   tasks: Task[];
@@ -188,101 +172,28 @@ export function TrackerWorkspaceProvider({ children }: { children: ReactNode }) 
     exportData();
   }, [exportData]);
 
-  // Computed metrics calculation
-  const computedMetrics = useMemo<ComputedMetrics>(() => {
-    if (!activeTask || !activeTask.sessions || activeTask.sessions.length === 0) {
-      return {
-        currentThreshold: null,
-        dailyTarget: null,
-        personalBest: null,
-        consistencyRatio: null,
-        movingAverage3: [],
-        ratchetStatus: "initial",
-      };
-    }
+  // Meta/habilidade derivadas do modelo v2 (computeSkill)
+  const skill = useSkill(activeTask?.id ?? null);
+  const allRuns = useAllRuns();
+  const { settings } = useSettings();
+  const training = settings?.training ?? DEFAULT_TRAINING_SETTINGS;
 
-    const sortedSessions = [...activeTask.sessions].sort((a, b) =>
-      a.date.localeCompare(b.date)
-    );
-    const metrics = computeTaskMetrics(activeTask);
-    const currentThreshold = getTargetThresholdForTask(activeTask);
-    const personalBest = metrics.maxPB;
+  const computedMetrics = useMemo<ComputedMetrics>(
+    () => computedMetricsFromSkill(skill),
+    [skill]
+  );
 
-    const consistencyRatio =
-      personalBest && currentThreshold
-        ? Number(((currentThreshold / personalBest) * 100).toFixed(1))
-        : null;
-
-    // Moving average of 3 sessions
-    const movingAverage3: number[] = [];
-    for (let i = 0; i < sortedSessions.length; i++) {
-      const sliceStart = Math.max(0, i - 2);
-      const window = sortedSessions.slice(sliceStart, i + 1);
-      const avg =
-        window.reduce((sum, s) => sum + (Number(s.pb) || 0), 0) / window.length;
-      movingAverage3.push(Number(avg.toFixed(1)));
-    }
-
-    // Ratchet status
-    let ratchetStatus: RatchetStatus = "initial";
-    if (sortedSessions.length >= 2) {
-      const last = sortedSessions[sortedSessions.length - 1];
-      const prev = sortedSessions[sortedSessions.length - 2];
-      if (last.threshold > prev.threshold) {
-        ratchetStatus = "ratchet_up";
-      } else {
-        ratchetStatus = "plateau_held";
-      }
-    }
-
-    return {
-      currentThreshold,
-      dailyTarget: currentThreshold,
-      personalBest,
-      consistencyRatio,
-      movingAverage3,
-      ratchetStatus,
-    };
-  }, [activeTask]);
-
-  // Live simulation of ratchet outcome as user drafts runs
+  // Simulação ao vivo das runs digitadas (sens = última sens do cenário, data = hoje)
   const simulatedOutcome = useMemo<SimulatedOutcome>(() => {
-    const currentThreshold = computedMetrics.currentThreshold;
-    const personalBest = computedMetrics.personalBest;
-
-    if (draftRuns.length === 0) {
-      return {
-        willRaiseRatchet: false,
-        projectedThreshold: currentThreshold,
-        thresholdDelta: 0,
-        willBreakPB: false,
-        status: "initial",
-      };
-    }
-
-    const projectedThreshold = computeDayThreshold(currentThreshold, draftRuns);
-    const willRaiseRatchet =
-      currentThreshold === null ? true : projectedThreshold > currentThreshold;
-    const thresholdDelta =
-      currentThreshold === null
-        ? projectedThreshold
-        : projectedThreshold - currentThreshold;
-    const willBreakPB =
-      personalBest === null
-        ? true
-        : draftRuns.some((r) => r > personalBest);
-    const status: RatchetStatus = willRaiseRatchet
-      ? "ratchet_up"
-      : "plateau_held";
-
-    return {
-      willRaiseRatchet,
-      projectedThreshold,
-      thresholdDelta,
-      willBreakPB,
-      status,
-    };
-  }, [computedMetrics.currentThreshold, computedMetrics.personalBest, draftRuns]);
+    const lastSens = activeTask?.sessions?.slice(-1)[0]?.sens ?? 0;
+    return simulateDraftRuns(
+      activeTask,
+      allRuns,
+      { scores: draftRuns, sens: lastSens, date: new Date().toISOString().slice(0, 10) },
+      skillConfigFromTraining(training),
+      Date.now()
+    );
+  }, [activeTask, allRuns, draftRuns, training]);
 
   const state: TrackerWorkspaceState = useMemo(
     () => ({

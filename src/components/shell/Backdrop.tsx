@@ -1,4 +1,12 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import {
+  BACKDROP_FPS,
+  createFrameThrottle,
+  shouldRunBackdropCanvas,
+  type AnimationLevel,
+} from "@/lib/frame-throttle";
+
+const REDUCED_MOTION_QUERY = "(prefers-reduced-motion: reduce)";
 
 interface RGB {
   r: number;
@@ -121,14 +129,31 @@ function evaluateFilamentPoint(
  * Renders a deep pitch-black void with high-contrast fibrous 3D stardust filaments and nebula gas
  * directly behind the Liquid Glass UI cards, reactive to mouse movement and theme palette.
  */
-export function Backdrop() {
+export function Backdrop({ animationLevel = "moderado" }: { animationLevel?: AnimationLevel }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  const [reducedMotion, setReducedMotion] = useState(
+    () =>
+      typeof window !== "undefined" &&
+      typeof window.matchMedia === "function" &&
+      window.matchMedia(REDUCED_MOTION_QUERY).matches
+  );
+
+  useEffect(() => {
+    if (typeof window.matchMedia !== "function") return;
+    const mql = window.matchMedia(REDUCED_MOTION_QUERY);
+    const onChange = (event: MediaQueryListEvent) => setReducedMotion(event.matches);
+    mql.addEventListener("change", onChange);
+    return () => mql.removeEventListener("change", onChange);
+  }, []);
+
+  const canvasOn = shouldRunBackdropCanvas(animationLevel, reducedMotion);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     const container = containerRef.current;
-    if (!canvas || !container) return;
+    if (!canvas || !container || !canvasOn) return;
 
     const ctx = canvas.getContext("2d", { alpha: true });
     if (!ctx) return;
@@ -232,6 +257,7 @@ export function Backdrop() {
 
     let rafId = 0;
     let time = 0;
+    const throttle = createFrameThrottle(BACKDROP_FPS);
 
     const getNebulaColor = (mix: number): RGB => {
       if (mix < 0.36) return palette.secondary;
@@ -240,9 +266,9 @@ export function Backdrop() {
       return { r: 242, g: 248, b: 255 };
     };
 
-    const renderFrame = () => {
-      rafId = 0;
-      time += 0.009;
+    const drawFrame = () => {
+      // Passo de tempo compensa o teto de FPS: a animação mantém a velocidade de 60 Hz.
+      time += 0.009 * (60 / BACKDROP_FPS);
 
       mouse.x += (mouse.targetX - mouse.x) * 0.1;
       mouse.y += (mouse.targetY - mouse.y) * 0.1;
@@ -401,15 +427,20 @@ export function Backdrop() {
       }
 
       ctx.globalCompositeOperation = "source-over";
+    };
 
-      if (!isPaused) {
-        rafId = window.requestAnimationFrame(renderFrame);
-      }
+    // Agenda todo frame do monitor, mas só desenha quando o acumulador libera (teto de FPS).
+    const tick = (now: number) => {
+      rafId = 0;
+      if (isPaused) return;
+      rafId = window.requestAnimationFrame(tick);
+      if (throttle.tick(now)) drawFrame();
     };
 
     const startLoop = () => {
       if (!rafId && !isPaused) {
-        rafId = window.requestAnimationFrame(renderFrame);
+        throttle.reset();
+        rafId = window.requestAnimationFrame(tick);
       }
     };
 
@@ -422,11 +453,11 @@ export function Backdrop() {
 
     const handleResize = () => {
       resize();
-      renderFrame();
+      drawFrame();
     };
     window.addEventListener("resize", handleResize, { passive: true });
 
-    renderFrame();
+    drawFrame();
     startLoop();
 
     const handleVisibilityChange = () => {
@@ -487,7 +518,7 @@ export function Backdrop() {
         handleContentVisibility
       );
     };
-  }, []);
+  }, [canvasOn]);
 
   return (
     <div
@@ -512,11 +543,13 @@ export function Backdrop() {
         }}
       />
 
-      {/* Interactive 3D Cosmic Dust & Filament Nebula Canvas */}
-      <canvas
-        ref={canvasRef}
-        className="absolute inset-0 w-full h-full block"
-      />
+      {/* Interactive 3D Cosmic Dust & Filament Nebula Canvas (desligado em "sutil" ou movimento reduzido) */}
+      {canvasOn && (
+        <canvas
+          ref={canvasRef}
+          className="absolute inset-0 w-full h-full block"
+        />
+      )}
     </div>
   );
 }

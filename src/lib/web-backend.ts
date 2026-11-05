@@ -6,6 +6,7 @@ import type {
   ReplaceAllReason,
   RevisionResult,
   Session,
+  SessionFocus,
   SyncGamePlaylistsResult,
   Task,
   TaskMetaPatch,
@@ -23,6 +24,7 @@ import { SAMPLE_DATA } from "./sample-data.ts";
 export const WEB_STORAGE_KEY = "AIM_THRESHOLD_TRACKER_DATA";
 const DEFAULT_CATEGORY = "Click Timing";
 const DEFAULT_SUBCATEGORY = "Precision";
+const MAX_INTENT_CUE_CHARS = 80;
 
 export interface WebStorage {
   getItem(key: string): string | null;
@@ -159,6 +161,11 @@ export function createWebBackend(options: WebBackendOptions = {}) {
         if (patch.name !== undefined) task.name = patch.name.trim();
         if (patch.category !== undefined) task.category = patch.category.trim();
         if (patch.subcategory !== undefined) task.subcategory = patch.subcategory.trim();
+        if (patch.intentCue !== undefined) {
+          const cue = patch.intentCue.trim().slice(0, MAX_INTENT_CUE_CHARS).trimEnd();
+          if (cue) task.intentCue = cue;
+          else delete task.intentCue;
+        }
       });
       return { revision: rev };
     },
@@ -203,6 +210,20 @@ export function createWebBackend(options: WebBackendOptions = {}) {
           };
           task.sessions.push(session);
         }
+      });
+      return { revision: rev };
+    },
+
+    setSessionFocus(taskId: string, sessionId: string, focus: SessionFocus): RevisionResult {
+      if (focus !== null && focus !== "on" && focus !== "auto") {
+        throw new BackendError("invalid_payload");
+      }
+      const { revision: rev } = mutate((d) => {
+        const task = findTask(d, taskId);
+        const session = task.sessions.find((s) => s.id === sessionId);
+        if (!session) throw new BackendError("session_not_found");
+        if (focus === null) delete session.focus;
+        else session.focus = focus;
       });
       return { revision: rev };
     },

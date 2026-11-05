@@ -15,6 +15,8 @@ export interface PlaylistCardProps {
   onStart: (playlist: Playlist) => void;
   onEdit: (playlist: Playlist) => void;
   onDelete?: (id: string) => void;
+  /** Lembrete semanal: algum cenário da playlist sem medição há mais de 7 dias (T7.5). */
+  measureDue?: boolean;
 }
 
 export function PlaylistCard({
@@ -24,8 +26,10 @@ export function PlaylistCard({
   onStart,
   onEdit,
   onDelete,
+  measureDue = false,
 }: PlaylistCardProps) {
   const { t } = useI18n();
+  // Chaves novas vivem em docs/plans/i18n-pending/T7-playlist.json até a integração (o tipo Key ainda não as conhece).
   const taskMap = useMemo(() => new Map(tasks.map((t) => [t.id, t])), [tasks]);
 
   const stats = useMemo(() => {
@@ -40,9 +44,16 @@ export function PlaylistCard({
           <h3 className="text-base font-bold text-text-main font-sans truncate">
             {playlist.name}
           </h3>
-          <Badge variant="neutral" className="font-mono tabular-nums">
-            {playlist.items.length} {t("playlist.repsUnit")}
-          </Badge>
+          <div className="flex items-center gap-1.5 shrink-0">
+            {measureDue && (
+              <Badge variant="amber" title={t("playlist.measureDueHint")}>
+                {t("playlist.measureDue")}
+              </Badge>
+            )}
+            <Badge variant="neutral" className="font-mono tabular-nums">
+              {playlist.items.length} {t("playlist.repsUnit")}
+            </Badge>
+          </div>
         </div>
 
         {/* Recommended Sens Banner */}

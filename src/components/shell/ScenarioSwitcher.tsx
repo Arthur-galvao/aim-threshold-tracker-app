@@ -110,7 +110,7 @@ export function ScenarioSwitcher({
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Buscar cenários..."
+                placeholder={t("scenarioSwitcher.search")}
                 className="field pl-8 py-1.5 text-xs rounded-full"
                 autoFocus
               />

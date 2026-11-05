@@ -1,24 +1,25 @@
 import { useMemo, useState, useCallback, useRef } from "react";
-import type { DaySummary } from "@/lib/day-summary";
+import type { ChartSeries } from "@/lib/day-summary";
 import { ChartTooltip } from "./ChartTooltip";
 import { useI18n } from "@/lib/i18n";
+import { pickXLabels } from "@/lib/chart-format";
 
 export interface ChartCanvasProps {
-  data: (DaySummary & { ma3: number })[];
-  showThreshold: boolean;
+  series: ChartSeries;
+  showTarget: boolean;
   showPB: boolean;
-  showMA3: boolean;
+  showMu: boolean;
+  /** Faixa μ ± σ (só no modo avançado). */
+  showBand?: boolean;
 }
 
-export function ChartCanvas({
-  data,
-  showThreshold,
-  showPB,
-  showMA3,
-}: ChartCanvasProps) {
+export function ChartCanvas({ series, showTarget, showPB, showMu, showBand = false }: ChartCanvasProps) {
   const { t } = useI18n();
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  const { runs, sessions, pbRunning } = series;
+  const n = runs.length;
 
   const width = 800;
   const height = 280;
@@ -30,16 +31,16 @@ export function ChartCanvas({
   const chartH = height - padTop - padBottom;
 
   const { minVal, maxVal, yTicks } = useMemo(() => {
-    if (data.length === 0) return { minVal: 0, maxVal: 100, yTicks: [0, 50, 100] };
+    if (n === 0) return { minVal: 0, maxVal: 100, yTicks: [0, 50, 100] };
 
     const values: number[] = [];
-    data.forEach((d) => {
-      if (showPB) values.push(d.best);
-      if (showThreshold) values.push(d.threshold);
-      if (showMA3) values.push(d.ma3);
-    });
-
-    if (values.length === 0) values.push(0, 100);
+    for (const r of runs) values.push(r.score);
+    for (const s of sessions) {
+      if (showTarget && s.target !== null) values.push(s.target);
+      if (showBand && Number.isFinite(s.lo) && Number.isFinite(s.hi)) values.push(s.lo, s.hi);
+      else if (showMu && Number.isFinite(s.mu)) values.push(s.mu);
+    }
+    if (showPB) values.push(pbRunning[pbRunning.length - 1]);
 
     const rawMin = Math.min(...values);
     const rawMax = Math.max(...values);
@@ -49,92 +50,86 @@ export function ChartCanvas({
     const max = Math.ceil(rawMax + range * 0.12);
 
     const step = (max - min) / 4;
-    const ticks = [min, min + step, min + step * 2, min + step * 3, max].map((v) =>
-      Math.round(v)
-    );
-
+    const ticks = [min, min + step, min + step * 2, min + step * 3, max].map((v) => Math.round(v));
     return { minVal: min, maxVal: max, yTicks: ticks };
-  }, [data, showPB, showThreshold, showMA3]);
+  }, [runs, sessions, pbRunning, n, showTarget, showMu, showBand, showPB]);
 
   const getY = useCallback(
     (val: number) => {
       const range = maxVal - minVal || 1;
-      const normalized = (val - minVal) / range;
-      return padTop + chartH - normalized * chartH;
+      return padTop + chartH - ((val - minVal) / range) * chartH;
     },
     [maxVal, minVal, chartH]
   );
 
-  const getX = useCallback(
-    (idx: number) => {
-      if (data.length <= 1) return padLeft + chartW / 2;
-      return padLeft + (idx / (data.length - 1)) * chartW;
+  /** Posição X em unidades de "slot" (0..n): cada run ocupa um slot de largura chartW/n. */
+  const slotX = useCallback((u: number) => padLeft + (u / Math.max(n, 1)) * chartW, [n, chartW]);
+  const runX = useCallback((idx: number) => slotX(idx + 0.5), [slotX]);
+
+  /** Caminho em degraus: um valor por sessão, ocupando os slots da sessão. */
+  const stepPath = useCallback(
+    (valueOf: (i: number) => number | null) => {
+      let d = "";
+      let open = false;
+      sessions.forEach((s, i) => {
+        const v = valueOf(i);
+        if (v === null || !Number.isFinite(v)) {
+          open = false;
+          return;
+        }
+        const y = getY(v).toFixed(1);
+        const x0 = slotX(s.startIdx).toFixed(1);
+        const x1 = slotX(s.endIdx + 1).toFixed(1);
+        d += open ? ` L ${x0},${y} L ${x1},${y}` : `${d ? " " : ""}M ${x0},${y} L ${x1},${y}`;
+        open = true;
+      });
+      return d;
     },
-    [data.length, chartW]
+    [sessions, getY, slotX]
   );
 
-  const stepThresholdPath = useMemo(() => {
-    if (!showThreshold || data.length === 0) return "";
+  const targetPath = useMemo(
+    () => (showTarget ? stepPath((i) => sessions[i].target) : ""),
+    [showTarget, stepPath, sessions]
+  );
+  const muPath = useMemo(() => (showMu ? stepPath((i) => sessions[i].mu) : ""), [showMu, stepPath, sessions]);
+
+  const pbPath = useMemo(() => {
+    if (!showPB || n === 0) return "";
     let d = "";
-    data.forEach((item, idx) => {
-      const x = getX(idx);
-      const y = getY(item.threshold);
-      if (idx === 0) {
-        d += `M ${x},${y}`;
-      } else {
-        const prevY = getY(data[idx - 1].threshold);
-        d += ` L ${x},${prevY} L ${x},${y}`;
-      }
-    });
+    for (let i = 0; i < n; i++) {
+      const y = getY(pbRunning[i]).toFixed(1);
+      const x0 = slotX(i).toFixed(1);
+      const x1 = slotX(i + 1).toFixed(1);
+      d += i === 0 ? `M ${x0},${y} L ${x1},${y}` : ` L ${x0},${y} L ${x1},${y}`;
+    }
     return d;
-  }, [data, showThreshold, getX, getY]);
-
-  const pbLinePath = useMemo(() => {
-    if (!showPB || data.length === 0) return "";
-    return data
-      .map((item, idx) => {
-        const x = getX(idx);
-        const y = getY(item.best);
-        return `${idx === 0 ? "M" : "L"} ${x.toFixed(1)},${y.toFixed(1)}`;
-      })
-      .join(" ");
-  }, [data, showPB, getX, getY]);
-
-  const pbAreaPath = useMemo(() => {
-    if (!showPB || data.length === 0 || !pbLinePath) return "";
-    const firstX = getX(0).toFixed(1);
-    const lastX = getX(data.length - 1).toFixed(1);
-    const bottomY = (padTop + chartH).toFixed(1);
-    return `${pbLinePath} L ${lastX},${bottomY} L ${firstX},${bottomY} Z`;
-  }, [showPB, data.length, pbLinePath, getX, chartH]);
-
-  const ma3LinePath = useMemo(() => {
-    if (!showMA3 || data.length === 0) return "";
-    return data
-      .map((item, idx) => {
-        const x = getX(idx);
-        const y = getY(item.ma3);
-        return `${idx === 0 ? "M" : "L"} ${x.toFixed(1)},${y.toFixed(1)}`;
-      })
-      .join(" ");
-  }, [data, showMA3, getX, getY]);
+  }, [showPB, n, pbRunning, getY, slotX]);
 
   const handleMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
-    if (data.length === 0) return;
+    if (n === 0) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const mouseX = ((e.clientX - rect.left) / rect.width) * width;
-
-    if (data.length === 1) {
-      setHoveredIdx(0);
-      return;
-    }
-
     const relX = Math.max(0, Math.min(chartW, mouseX - padLeft));
-    const rawIdx = (relX / chartW) * (data.length - 1);
-    setHoveredIdx(Math.round(rawIdx));
+    setHoveredIdx(Math.max(0, Math.min(n - 1, Math.floor((relX / chartW) * n))));
   };
 
-  const hoveredItem = hoveredIdx !== null && data[hoveredIdx] ? data[hoveredIdx] : null;
+  const hoveredRun = hoveredIdx !== null ? runs[hoveredIdx] ?? null : null;
+  const hoveredStep = hoveredRun ? sessions[hoveredRun.sessionIdx] : null;
+
+  // Rótulos do eixo X: no máximo ~8, sem datas repetidas nem sobrepostas.
+  const xLabels = useMemo(() => {
+    const candidates = sessions.map((s, i) => {
+      const d = new Date(s.startedAt);
+      return {
+        key: s.key,
+        sessionIdx: i,
+        x: slotX((s.startIdx + s.endIdx + 1) / 2),
+        label: `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`,
+      };
+    });
+    return pickXLabels(candidates, chartW / 8);
+  }, [sessions, slotX, chartW]);
 
   return (
     <div ref={containerRef} className="relative w-full overflow-hidden select-none liquid-well p-2">
@@ -143,15 +138,8 @@ export function ChartCanvas({
         className="w-full h-auto overflow-visible cursor-crosshair"
         onMouseMove={handleMouseMove}
         onMouseLeave={() => setHoveredIdx(null)}
-        aria-label={t("chart.title")}
+        aria-label={t("skill.chart.title")}
       >
-        <defs>
-          <linearGradient id="pb-area-gradient" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="var(--score)" stopOpacity="0.22" />
-            <stop offset="100%" stopColor="var(--score)" stopOpacity="0.0" />
-          </linearGradient>
-        </defs>
-
         {yTicks.map((val) => {
           const y = getY(val);
           return (
@@ -177,9 +165,50 @@ export function ChartCanvas({
           );
         })}
 
-        {showThreshold && stepThresholdPath && (
+        {/* Faixa mu +/- sigma (um retângulo por sessão) */}
+        {showBand &&
+          sessions.map((s) =>
+            Number.isFinite(s.lo) && Number.isFinite(s.hi) ? (
+              <rect
+                key={s.key}
+                x={slotX(s.startIdx)}
+                y={getY(s.hi)}
+                width={slotX(s.endIdx + 1) - slotX(s.startIdx)}
+                height={Math.max(1, getY(s.lo) - getY(s.hi))}
+                fill="var(--score)"
+                opacity="0.12"
+              />
+            ) : null
+          )}
+
+        {showPB && pbPath && (
           <path
-            d={stepThresholdPath}
+            d={pbPath}
+            fill="none"
+            stroke="var(--amber)"
+            strokeWidth="1.5"
+            strokeDasharray="2 4"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            opacity="0.9"
+          />
+        )}
+
+        {showMu && muPath && (
+          <path
+            d={muPath}
+            fill="none"
+            stroke="var(--score)"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            opacity="0.85"
+          />
+        )}
+
+        {showTarget && targetPath && (
+          <path
+            d={targetPath}
             fill="none"
             stroke="var(--emerald)"
             strokeWidth="2"
@@ -188,139 +217,98 @@ export function ChartCanvas({
           />
         )}
 
-        {showMA3 && ma3LinePath && (
-          <path
-            d={ma3LinePath}
-            fill="none"
-            stroke="var(--text-secondary)"
-            strokeWidth="1.5"
-            strokeDasharray="4 4"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            opacity="0.75"
-          />
-        )}
+        {/* Runs: válidas cheias, inválidas vazadas */}
+        {runs.map((r) => {
+          const isHovered = hoveredIdx === r.index;
+          const radius = isHovered ? 5.5 : 3.2;
+          return (
+            <circle
+              key={r.id}
+              cx={runX(r.index)}
+              cy={getY(r.score)}
+              r={radius}
+              fill={r.valid ? "var(--score)" : "none"}
+              stroke={r.valid ? "var(--base)" : "var(--score)"}
+              strokeWidth={r.valid ? 1.2 : 1.4}
+              style={{
+                transition: "r 160ms cubic-bezier(0.16, 1, 0.3, 1), opacity 160ms ease",
+                opacity: hoveredIdx !== null && !isHovered ? 0.65 : 1,
+              }}
+            />
+          );
+        })}
 
-        {showPB && pbAreaPath && (
-          <path d={pbAreaPath} fill="url(#pb-area-gradient)" />
-        )}
-
-        {showPB && pbLinePath && (
-          <path
-            d={pbLinePath}
-            fill="none"
-            stroke="var(--score)"
-            strokeWidth="2.2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        )}
-
-        {showPB &&
-          data.map((item, idx) => {
-            const x = getX(idx);
-            const y = getY(item.best);
-            const isPb = item.isPbDay;
-            const isHovered = hoveredIdx === idx;
-            return (
-              <circle
-                key={idx}
-                cx={x}
-                cy={y}
-                r={isHovered ? 6 : isPb ? 4.5 : 3.2}
-                fill={isPb ? "var(--amber)" : "var(--score)"}
-                stroke="var(--base)"
-                strokeWidth="1.5"
-                style={{
-                  transition: "r 160ms cubic-bezier(0.16, 1, 0.3, 1), opacity 160ms ease",
-                  opacity: hoveredIdx !== null && !isHovered ? 0.65 : 1,
-                }}
-              />
-            );
-          })}
-
-        {data.map((item, idx) => {
-          const showLabel =
-            data.length <= 10 ||
-            idx === 0 ||
-            idx === data.length - 1 ||
-            idx % Math.ceil(data.length / 7) === 0;
-          if (!showLabel) return null;
-          const x = getX(idx);
-          const [, m, day] = item.date.split("-");
-          const isHovered = hoveredIdx === idx;
+        {xLabels.map((l) => {
+          const isHovered = hoveredRun?.sessionIdx === l.sessionIdx;
           return (
             <text
-              key={idx}
-              x={x}
+              key={l.key}
+              x={l.x}
               y={height - 10}
               textAnchor="middle"
               className={`font-mono tabular text-[10px] transition-colors ${
                 isHovered ? "fill-text-main font-semibold" : "fill-text-faint"
               }`}
             >
-              {`${day}/${m}`}
+              {l.label}
             </text>
           );
         })}
 
-        {hoveredIdx !== null && hoveredItem && (
-          <g>
-            <line
-              x1={getX(hoveredIdx)}
-              y1={padTop}
-              x2={getX(hoveredIdx)}
-              y2={height - padBottom}
-              stroke="var(--edge-strong)"
-              strokeWidth="1"
-              strokeDasharray="3 3"
-            />
-            {showPB && (
-              <>
-                <circle
-                  cx={getX(hoveredIdx)}
-                  cy={getY(hoveredItem.best)}
-                  r="11"
-                  fill="var(--score)"
-                  opacity="0.2"
-                />
-                <circle
-                  cx={getX(hoveredIdx)}
-                  cy={getY(hoveredItem.best)}
-                  r="6"
-                  fill="var(--score)"
-                  stroke="var(--base)"
-                  strokeWidth="2"
-                />
-              </>
-            )}
-            {showThreshold && (
-              <>
-                <circle
-                  cx={getX(hoveredIdx)}
-                  cy={getY(hoveredItem.threshold)}
-                  r="9"
-                  fill="var(--emerald)"
-                  opacity="0.2"
-                />
-                <circle
-                  cx={getX(hoveredIdx)}
-                  cy={getY(hoveredItem.threshold)}
-                  r="5"
-                  fill="var(--emerald)"
-                  stroke="var(--base)"
-                  strokeWidth="2"
-                />
-              </>
-            )}
-          </g>
+        {hoveredRun && (
+          <line
+            x1={runX(hoveredRun.index)}
+            y1={padTop}
+            x2={runX(hoveredRun.index)}
+            y2={height - padBottom}
+            stroke="var(--edge-strong)"
+            strokeWidth="1"
+            strokeDasharray="3 3"
+          />
         )}
       </svg>
 
-      {hoveredIdx !== null && hoveredItem && (
+      {/* Legenda sempre visível */}
+      <ul className="flex flex-wrap items-center gap-x-4 gap-y-1 px-2 pt-1 pb-0.5 text-[11px] text-text-secondary">
+        <li className="inline-flex items-center gap-1.5">
+          <svg width="10" height="10" aria-hidden="true">
+            <circle cx="5" cy="5" r="3.6" fill="var(--score)" />
+          </svg>
+          {t("simple.legend.counted")}
+        </li>
+        <li className="inline-flex items-center gap-1.5">
+          <svg width="10" height="10" aria-hidden="true">
+            <circle cx="5" cy="5" r="3.4" fill="none" stroke="var(--score)" strokeWidth="1.4" />
+          </svg>
+          {t("simple.legend.notCounted")}
+        </li>
+        <li className="inline-flex items-center gap-1.5">
+          <svg width="18" height="8" aria-hidden="true">
+            <line x1="1" y1="4" x2="17" y2="4" stroke="var(--emerald)" strokeWidth="2" strokeLinecap="round" />
+          </svg>
+          {t("simple.legend.target")}
+        </li>
+        <li className="inline-flex items-center gap-1.5">
+          <svg width="18" height="8" aria-hidden="true">
+            <line x1="1" y1="4" x2="17" y2="4" stroke="var(--amber)" strokeWidth="1.5" strokeDasharray="2 4" strokeLinecap="round" />
+          </svg>
+          {t("simple.legend.best")}
+        </li>
+        {showMu && (
+          <li className="inline-flex items-center gap-1.5">
+            <svg width="18" height="8" aria-hidden="true">
+              <line x1="1" y1="4" x2="17" y2="4" stroke="var(--score)" strokeWidth="1.8" strokeLinecap="round" />
+            </svg>
+            {t("simple.legend.level")}
+          </li>
+        )}
+      </ul>
+
+      {hoveredRun && hoveredStep && (
         <ChartTooltip
-          item={hoveredItem}
-          xPos={getX(hoveredIdx)}
+          run={hoveredRun}
+          step={hoveredStep}
+          xPos={runX(hoveredRun.index)}
           totalWidth={width}
         />
       )}

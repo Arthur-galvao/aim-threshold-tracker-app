@@ -1,10 +1,12 @@
+import type { Key } from "./i18n.tsx";
 export type AppTheme = "cyber-lab" | "tactical-emerald" | "amethyst-purple" | "obsidian-amber";
 
 export interface ThemeConfig {
   id: AppTheme;
   name: string;
   color: string;
-  desc: string;
+  /** Chave i18n da descrição (traduzida onde é exibida). */
+  descKey: Key;
 }
 
 export const APP_THEMES: ThemeConfig[] = [
@@ -12,25 +14,25 @@ export const APP_THEMES: ThemeConfig[] = [
     id: "cyber-lab",
     name: "Cyber Lab",
     color: "#38bdf8",
-    desc: "Ciano elétrico esportivo, estética de laboratório de alta precisão.",
+    descKey: "theme.desc.cyberLab",
   },
   {
     id: "tactical-emerald",
     name: "Tactical Emerald",
     color: "#10b981",
-    desc: "Verde esmeralda militar tático, foco cirúrgico de atirador.",
+    descKey: "theme.desc.tacticalEmerald",
   },
   {
     id: "amethyst-purple",
     name: "Amethyst Purple",
     color: "#a855f7",
-    desc: "Violeta elétrico vibrante, estética noturna de alto contraste.",
+    descKey: "theme.desc.amethystPurple",
   },
   {
     id: "obsidian-amber",
     name: "Obsidian Amber",
     color: "#f59e0b",
-    desc: "Âmbar aeroespacial mecânico, alto contraste industrial analógico.",
+    descKey: "theme.desc.obsidianAmber",
   },
 ];
 

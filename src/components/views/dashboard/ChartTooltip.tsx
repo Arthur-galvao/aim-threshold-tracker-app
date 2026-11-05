@@ -1,56 +1,94 @@
 import { useI18n } from "@/lib/i18n";
-import type { DaySummary } from "@/lib/day-summary";
+import type { ChartRunPoint, ChartSessionStep } from "@/lib/day-summary";
+import { useAdvancedStats } from "@/hooks/useAdvancedStats";
+import { formatScore } from "@/lib/chart-format";
 
 export interface ChartTooltipProps {
-  item: DaySummary & { ma3: number };
+  run: ChartRunPoint;
+  step: ChartSessionStep;
   xPos: number;
   totalWidth: number;
 }
 
-export function ChartTooltip({ item, xPos, totalWidth }: ChartTooltipProps) {
-  const { t } = useI18n();
+export function ChartTooltip({ run, step, xPos, totalWidth }: ChartTooltipProps) {
+  const { t, lang } = useI18n();
+  const advanced = useAdvancedStats();
 
-  const leftPercent = Math.min(Math.max(12, (xPos / totalWidth) * 100), 86);
+  const ratio = totalWidth > 0 ? xPos / totalWidth : 0;
+  const pointPercent = ratio * 100;
+  // Abre para o lado com mais espaço: nunca centraliza no ponto (vazava do card nas bordas).
+  const openLeft = ratio > 0.5;
+  const when = new Date(run.t).toLocaleDateString(lang === "pt" ? "pt-BR" : "en-US", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+  const shortDate = new Date(run.t).toLocaleDateString(lang === "pt" ? "pt-BR" : "en-US", {
+    day: "2-digit",
+    month: "2-digit",
+  });
 
   return (
     <div
-      className="absolute z-20 pointer-events-none glass-float p-2.5 rounded-control shadow-float border border-glass-edge-strong text-xs font-mono space-y-1 animate-pop-in min-w-[148px]"
+      className="absolute z-20 pointer-events-none glass-float p-2.5 rounded-control shadow-float border border-glass-edge-strong text-xs font-mono space-y-1 animate-pop-in w-max min-w-[170px] max-w-[240px]"
       style={{
-        left: `${leftPercent}%`,
+        ...(openLeft
+          ? { right: `calc(${100 - pointPercent}% + 12px)` }
+          : { left: `calc(${pointPercent}% + 12px)` }),
         top: "14px",
-        transform: "translateX(-50%)",
-        transition: "left 140ms cubic-bezier(0.16, 1, 0.3, 1)",
+        transition: "left 140ms cubic-bezier(0.16, 1, 0.3, 1), right 140ms cubic-bezier(0.16, 1, 0.3, 1)",
       }}
     >
-      <div className="flex items-center justify-between pb-1 border-b border-edge text-[11px] text-text-faint">
-        <span>{item.date}</span>
-        <span className="tabular">{item.runs} runs</span>
+      <div className="flex items-center justify-between gap-3 pb-1 border-b border-edge text-[11px] text-text-faint whitespace-nowrap">
+        <span title={when}>{t("simple.tip.run", { date: shortDate })}</span>
+        <span className="tabular">{run.sens} cm/360</span>
       </div>
-      <div className="flex items-center justify-between gap-3 text-text-main">
+      <div className="flex items-center justify-between gap-3 text-text-main whitespace-nowrap">
         <span className="flex items-center gap-1.5 text-score">
-          <span className="w-1.5 h-1.5 rounded-full bg-score inline-block shadow-[0_0_6px_var(--score)]" />
+          <span
+            className={`w-1.5 h-1.5 rounded-full inline-block ${
+              run.valid ? "bg-score shadow-[0_0_6px_var(--score)]" : "border border-score"
+            }`}
+          />
           {t("chart.score")}
         </span>
-        <span className="font-bold tabular">{item.best} pts</span>
+        <span className="font-bold tabular">{formatScore(run.score, lang)} pts</span>
       </div>
-      <div className="flex items-center justify-between gap-3 text-emerald">
-        <span className="flex items-center gap-1.5">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald inline-block shadow-[0_0_6px_var(--emerald)]" />
-          {t("chart.threshold")}
-        </span>
-        <span className="font-bold tabular">{item.threshold} pts</span>
-      </div>
-      <div className="flex items-center justify-between gap-3 text-text-secondary">
-        <span className="flex items-center gap-1.5">
-          <span className="w-1.5 h-1.5 rounded-full bg-text-secondary inline-block" />
-          {t("chart.avgMoving")}
-        </span>
-        <span className="tabular">{item.ma3} pts</span>
-      </div>
-      {item.sens.length > 0 && (
-        <div className="pt-1 border-t border-edge flex items-center justify-between text-[10px] text-text-faint">
-          <span>{t("metric.sens")}</span>
-          <span className="tabular">{item.sens.join(", ")} cm</span>
+      {run.valid ? (
+        <div className="text-[10px] text-emerald whitespace-nowrap">{t("simple.tip.counted")}</div>
+      ) : (
+        <div className="text-[10px] text-amber whitespace-normal leading-snug">
+          <span className="font-semibold block">
+            {t("simple.tip.notCounted")}
+            {run.reason ? `: ${t(`simple.reason.${run.reason}`).toLowerCase()}` : ""}
+          </span>
+          {run.reason && (
+            <span className="text-text-faint font-sans">{t(`simple.reasonDesc.${run.reason}`)}</span>
+          )}
+        </div>
+      )}
+      {step.target !== null && (
+        <div className="flex items-center justify-between gap-3 text-emerald whitespace-nowrap">
+          <span className="flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald inline-block shadow-[0_0_6px_var(--emerald)]" />
+            {t("simple.tip.sessionTarget")}
+          </span>
+          <span className="font-bold tabular">{formatScore(step.target, lang)} pts</span>
+        </div>
+      )}
+      {advanced && (
+        <div className="flex items-center justify-between gap-3 text-text-secondary whitespace-nowrap">
+          <span>{t("skill.series.mu")}</span>
+          <span className="tabular">
+            {Number.isFinite(step.mu) ? formatScore(step.mu, lang) : "—"} pts
+          </span>
+        </div>
+      )}
+      {step.hit !== null && (
+        <div
+          className={`text-[10px] whitespace-nowrap ${step.hit ? "text-emerald" : "text-amber"}`}
+        >
+          {step.hit ? t("simple.tip.hit") : t("simple.tip.miss")}
         </div>
       )}
     </div>

@@ -2,54 +2,49 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-import { computeDayThreshold, getTargetThresholdForTask } from "../src/lib/threshold.ts";
-import { summarizeDays } from "../src/lib/day-summary.ts";
-import type { Task } from "../src/lib/types.ts";
+import { simulateDraftRuns } from "../src/lib/threshold.ts";
+import { summarizeTrainingSessions } from "../src/lib/day-summary.ts";
+import { computeSkill } from "../src/lib/skill/index.ts";
+import { buildAllRuns, skillConfigFromTraining } from "../src/lib/skill/config.ts";
+import { DEFAULT_TRAINING_SETTINGS } from "../src/lib/types.ts";
+import { makeTask } from "./_helpers_skill.ts";
 
-describe("v2.0 Glass HUD: Ratchet Simulation and Component Integrity", () => {
-  it("simulates ratchet outcome correctly: raises ratchet when session candidate beats target", () => {
-    const task: Task = {
-      id: "task-1",
-      name: "VT 1w4ts",
-      category: "Click Timing",
-      subcategory: "Precision",
-      sessions: [
-        { id: "s1", date: "2026-10-01", sens: 35, pb: 100, threshold: 92 },
-      ],
-    };
+const CFG = skillConfigFromTraining(DEFAULT_TRAINING_SETTINGS);
+const NOW = new Date("2026-10-10T12:00:00").getTime();
 
-    const currentTarget = getTargetThresholdForTask(task);
-    assert.equal(currentTarget, 92);
-
-    // Draft runs that exceed the target: candidate = round(120 * 0.93) = 112 > 92
-    const draftRuns = [115, 120];
-    const projected = computeDayThreshold(currentTarget, draftRuns);
-    assert.ok(projected > currentTarget);
-    assert.equal(projected, 115); // second best is 115, max(112, 115) = 115
-    const delta = projected - currentTarget;
-    assert.equal(delta, 23);
+describe("v2.0 Glass HUD: Target Simulation and Component Integrity", () => {
+  it("simulates the v2 target: strong draft runs hit the target and raise it", () => {
+    const task = makeTask([
+      { date: "2026-10-01", scores: [90, 100, 102, 101, 103, 99] },
+      { date: "2026-10-03", scores: [92, 102, 104, 103, 101, 105] },
+    ]);
+    const out = simulateDraftRuns(
+      task,
+      buildAllRuns([task]),
+      { scores: [100, 125, 126, 124, 127], sens: 40, date: "2026-10-10" },
+      CFG,
+      NOW
+    );
+    assert.equal(out.willHit, true);
+    assert.equal(out.willBreakPB, true);
+    assert.ok(out.projectedTarget! > out.targetBefore!);
   });
 
-  it("simulates ratchet outcome correctly: holds plateau when session runs fall below threshold", () => {
-    const task: Task = {
-      id: "task-1",
-      name: "VT 1w4ts",
-      category: "Click Timing",
-      subcategory: "Precision",
-      sessions: [
-        { id: "s1", date: "2026-10-01", sens: 35, pb: 150, threshold: 140 },
-      ],
-    };
-
-    const currentTarget = getTargetThresholdForTask(task);
-    assert.equal(currentTarget, 140);
-
-    // Bad day: runs are 80, 85 -> candidate is far below 140
-    const draftRuns = [80, 85];
-    const projected = computeDayThreshold(currentTarget, draftRuns);
-    assert.equal(projected, 140); // Plateau hold: never drops!
-    const delta = projected - currentTarget;
-    assert.equal(delta, 0);
+  it("simulates the v2 target: a bad draft misses and the target falls (no ratchet floor)", () => {
+    const task = makeTask([
+      { date: "2026-10-01", scores: [140, 150, 152, 151, 153, 149] },
+      { date: "2026-10-03", scores: [142, 152, 154, 153, 151, 155] },
+    ]);
+    const out = simulateDraftRuns(
+      task,
+      buildAllRuns([task]),
+      { scores: [70, 80, 85, 82, 79], sens: 40, date: "2026-10-10" },
+      CFG,
+      NOW
+    );
+    assert.equal(out.willHit, false);
+    assert.equal(out.willBreakPB, false);
+    assert.ok(out.projectedTarget! < out.targetBefore!);
   });
 
   it("verifies compound component exports and contracts across component sources", () => {
@@ -62,6 +57,7 @@ describe("v2.0 Glass HUD: Ratchet Simulation and Component Integrity", () => {
     const chartSrc = fs.readFileSync(path.resolve("src/components/views/dashboard/ProgressChart.tsx"), "utf-8");
     const historySrc = fs.readFileSync(path.resolve("src/components/views/dashboard/SessionHistory.tsx"), "utf-8");
     const randSrc = fs.readFileSync(path.resolve("src/components/views/randomizer/index.tsx"), "utf-8");
+    const labSrc = fs.readFileSync(path.resolve("src/components/views/lab/index.tsx"), "utf-8");
     const appSrc = fs.readFileSync(path.resolve("src/App.tsx"), "utf-8");
 
     // Shell hierarchy
@@ -80,7 +76,8 @@ describe("v2.0 Glass HUD: Ratchet Simulation and Component Integrity", () => {
     assert.ok(dashSrc.includes("<KPIStrip"));
     assert.ok(dashSrc.includes("<ProgressChart"));
     assert.ok(dashSrc.includes("<SessionHistory"));
-    assert.ok(kpiSrc.includes("targetThreshold"));
+    assert.ok(kpiSrc.includes("nextTarget"));
+    assert.ok(!kpiSrc.includes("ratchet"));
     assert.ok(chartSrc.includes("ChartCanvas"));
     assert.ok(historySrc.includes("DayHistoryCard"));
 
@@ -88,7 +85,8 @@ describe("v2.0 Glass HUD: Ratchet Simulation and Component Integrity", () => {
     assert.ok(randSrc.includes("<TelemetryCard"));
     assert.ok(randSrc.includes("<Controls"));
     assert.ok(randSrc.includes("<SweetSpotChart"));
-    assert.ok(randSrc.includes("<CategoryCards"));
+    // CategoryCards moved to the Lab view (src/components/views/lab/index.tsx)
+    assert.ok(labSrc.includes("<CategoryCards"));
 
     // App.tsx integrates AppShell, DashboardView, RandomizerView, PlaylistView
     assert.ok(appSrc.includes("<AppShell"));
@@ -97,31 +95,23 @@ describe("v2.0 Glass HUD: Ratchet Simulation and Component Integrity", () => {
     assert.ok(appSrc.includes("<PlaylistView"));
   });
 
-  it("verifies SessionLedger day grouping and average calculation for multiple runs per date", () => {
-    const task: Task = {
-      id: "task-group",
-      name: "VT Pasu",
-      category: "Click Timing",
-      subcategory: "Dynamic",
-      sessions: [
-        { id: "s1", date: "2026-10-01", sens: 35, pb: 100, threshold: 92 },
-        { id: "s2", date: "2026-10-01", sens: 35, pb: 120, threshold: 92 },
-        { id: "s3", date: "2026-10-02", sens: 35, pb: 80, threshold: 92 },
-      ],
-    };
+  it("verifies history groups by training session (gap <= 45 min), not by calendar day", () => {
+    const task = makeTask([{ date: "2026-10-01", scores: [100, 120, 110] }]);
+    // mesmo dia, mas 5 horas depois: outra sessão de treino
+    const evening = makeTask([{ date: "2026-10-01", scores: [80, 90] }]);
+    evening.sessions.forEach((s, i) => {
+      s.id = `eve_${i}`;
+      s.datetime = `2026-10-01T15:${String(i * 3).padStart(2, "0")}:00`;
+    });
+    task.sessions.push(...evening.sessions);
 
-    const summaries = summarizeDays(task);
-    assert.equal(summaries.length, 2);
-
-    // Day 1 has 2 runs, avg = (100 + 120) / 2 = 110, best = 120
-    assert.equal(summaries[0].runs, 2);
-    assert.equal(summaries[0].avg, 110);
-    assert.equal(summaries[0].best, 120);
-
-    // Day 2 has 1 run, avg = 80, best = 80
-    assert.equal(summaries[1].runs, 1);
-    assert.equal(summaries[1].avg, 80);
-    assert.equal(summaries[1].best, 80);
+    const skill = computeSkill(task, buildAllRuns([task]), CFG, NOW);
+    const sessions = summarizeTrainingSessions(task, skill);
+    assert.equal(sessions.length, 2);
+    assert.equal(sessions[0].runs, 3);
+    assert.equal(sessions[0].best, 120);
+    assert.equal(sessions[1].runs, 2);
+    assert.equal(sessions[1].best, 90);
   });
 
   it("verifies zero emojis across all v2.0 Glass HUD component and context files", () => {
@@ -142,7 +132,7 @@ describe("v2.0 Glass HUD: Ratchet Simulation and Component Integrity", () => {
       "src/components/views/randomizer/sweet-spot-chart.tsx",
       "src/components/views/randomizer/analytics.tsx",
       "src/components/views/randomizer/buckets-table.tsx",
-      "src/components/views/randomizer/category-cards.tsx",
+      "src/components/views/lab/category-cards.tsx",
       "src/lib/threshold.ts",
       "src/lib/viscose.ts",
     ];
@@ -201,10 +191,10 @@ describe("v2.0 Glass HUD: Ratchet Simulation and Component Integrity", () => {
     assert.ok(toolbarSrc.includes('"30D"'));
     assert.ok(toolbarSrc.includes('"all"'));
 
-    // Check for threshold, PB and MA3 series toggles
-    assert.ok(toolbarSrc.includes("showThreshold"));
+    // Check for target, PB and mu series toggles
+    assert.ok(toolbarSrc.includes("showTarget"));
     assert.ok(toolbarSrc.includes("showPB"));
-    assert.ok(toolbarSrc.includes("showMA3"));
+    assert.ok(toolbarSrc.includes("showMu"));
     assert.ok(chartSrc.includes("filterByPeriod"));
   });
 
@@ -224,7 +214,7 @@ describe("v2.0 Glass HUD: Ratchet Simulation and Component Integrity", () => {
     assert.ok(backdropSrc.includes("--cursor-x"));
     assert.ok(backdropSrc.includes("contentvisibilityautostatechange"));
 
-    // KPIStrip must not multiply consistencyRatio by 100 (9300% bug fix)
+    // KPIStrip must not multiply consistencyRatio by 100 (target/PB is already a percentage)
     assert.ok(!kpiSrc.includes("consistencyRatio * 100"));
     assert.ok(kpiSrc.includes("consistencyRatio.toFixed(1)"));
 

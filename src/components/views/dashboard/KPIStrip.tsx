@@ -2,127 +2,115 @@ import { useMemo, useState } from "react";
 import {
   Check,
   Copy,
-  Info,
   Lightning,
-  ShieldCheck,
+  Minus,
   Target,
+  TrendDown,
   TrendUp,
   Trophy,
+  Waveform,
+  Barbell,
 } from "@phosphor-icons/react";
 import { useTrackerWorkspace } from "@/context/TrackerWorkspaceContext";
-import {
-  buildEscalateFormat,
-  computeTaskMetrics,
-  estimateSessionThreshold,
-} from "@/lib/threshold";
-import { summarizeDays } from "@/lib/day-summary";
-import { computeMetricDeltas } from "@/lib/metric-deltas";
+import { useSensRandomizer } from "@/hooks/useSensRandomizer";
+import { useAllRuns } from "@/hooks/useSkill";
+import { useAdvancedStats } from "@/hooks/useAdvancedStats";
+import { useSettings } from "@/hooks/useSettings";
+import { buildEscalateFormat, simulateDraftRuns } from "@/lib/threshold";
+import { summarizeTrainingSessions } from "@/lib/day-summary";
+import { computeMetricDeltas, roundScore } from "@/lib/metric-deltas";
+import { targetAtSens } from "@/lib/skill";
+import { skillConfigFromTraining } from "@/lib/skill/config";
+import { DEFAULT_TRAINING_SETTINGS } from "@/lib/types";
+import { formatScore } from "@/lib/chart-format";
+import { recentHitCounts, stabilityLevel } from "@/lib/simple-summary";
 import { useI18n } from "@/lib/i18n";
-import { Badge, Button, NumberTicker, Tooltip, useToast } from "@/components/ui";
+import { Badge, Button, NumberTicker, useToast } from "@/components/ui";
+import { InfoTip } from "./InfoTip";
 import { cn } from "@/lib/utils";
 
 export interface KPIStripProps {
   className?: string;
 }
 
+function decimals(v: number): number {
+  return Number.isInteger(roundScore(v)) ? 0 : 1;
+}
+
 export function KPIStrip({ className }: KPIStripProps) {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
+  const advanced = useAdvancedStats();
   const { showToast } = useToast();
-  const { state, meta } = useTrackerWorkspace();
+  const { state } = useTrackerWorkspace();
   const { activeTask, computedMetrics } = state;
-  const { simulatedOutcome } = meta;
+  const { skill, nextTarget, nextStretch, mu, cv, personalBest, hitRate14, trend, consistencyRatio } =
+    computedMetrics;
+  const { settings: randomizerSettings, randomizerState } = useSensRandomizer();
+  const { settings } = useSettings();
+  const allRuns = useAllRuns();
 
   const [simScoreInput, setSimScoreInput] = useState<string>("");
   const [copied, setCopied] = useState(false);
 
   const hasData = Boolean(activeTask?.sessions && activeTask.sessions.length > 0);
-  const taskMetrics = useMemo(() => computeTaskMetrics(activeTask), [activeTask]);
-  const deltas = useMemo(() => computeMetricDeltas(activeTask), [activeTask]);
-  const summaries = useMemo(() => summarizeDays(activeTask), [activeTask]);
+  const sessions = useMemo(() => summarizeTrainingSessions(activeTask, skill), [activeTask, skill]);
+  const deltas = useMemo(() => computeMetricDeltas(sessions), [sessions]);
 
-  const now = new Date();
-  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(
-    now.getDate()
-  ).padStart(2, "0")}`;
-  const todaySummary = summaries.find((d) => d.date === todayStr) ?? null;
-
-  const currentThreshold =
-    taskMetrics.targetThreshold ?? computedMetrics.currentThreshold;
-  const todayTarget = hasData
-    ? (todaySummary?.targetBefore ?? currentThreshold)
-    : null;
-
-  const todayProgressPct =
-    todaySummary && todayTarget && todayTarget > 0
-      ? Math.min(100, Math.round((todaySummary.best / todayTarget) * 100))
-      : 0;
-
-  const ratioPct =
-    taskMetrics.maxPB && currentThreshold && taskMetrics.maxPB > 0
-      ? ((currentThreshold / taskMetrics.maxPB) * 100).toFixed(1)
-      : null;
-
-  const ratchetBadge = useMemo(() => {
-    if (computedMetrics.ratchetStatus === "ratchet_up") {
-      const delta =
-        simulatedOutcome.thresholdDelta > 0
-          ? `+${simulatedOutcome.thresholdDelta}`
-          : "";
-      return {
-        variant: "emerald" as const,
-        label: `${t("dashboard.ratchetUp")} ${delta}`.trim(),
-      };
+  const streak = useMemo(() => {
+    if (!skill) return 0;
+    let n = 0;
+    for (let i = skill.points.length - 1; i >= 0; i--) {
+      const hit = skill.points[i].hit;
+      if (hit === null) continue;
+      if (hit) n++;
+      else break;
     }
-    if (computedMetrics.ratchetStatus === "plateau_held") {
-      return {
-        variant: "amber" as const,
-        label: t("dashboard.ratchetHeld"),
-      };
-    }
-    return {
-      variant: "neutral" as const,
-      label: t("dashboard.ratchetInitial"),
-    };
-  }, [computedMetrics.ratchetStatus, simulatedOutcome.thresholdDelta, t]);
+    return n;
+  }, [skill]);
 
-  const consistencyBadge = useMemo(() => {
-    if (taskMetrics.hitRate === null) return null;
-    if (taskMetrics.hitRate >= 80) {
-      return { variant: "emerald" as const, label: t("metric.consistencyHigh") };
-    }
-    if (taskMetrics.hitRate >= 60) {
-      return { variant: "amber" as const, label: t("metric.consistencyMed") };
-    }
+  // Meta equivalente na sens atual do randomizer (só quando o ajuste por sens é confiável).
+  const targetHere = useMemo(() => {
+    if (!skill || nextTarget === null) return null;
+    if (!randomizerSettings.enabled || !skill.model.reliable) return null;
+    const sens = randomizerState.activeSensCm;
+    if (!sens || sens <= 0) return null;
+    const center = randomizerState.activeCenterCm ?? skill.model.centerFallback;
+    if (!center || center <= 0) return null;
+    return { sens, value: targetAtSens(nextTarget, sens, center, skill.model) };
+  }, [skill, nextTarget, randomizerSettings.enabled, randomizerState.activeSensCm, randomizerState.activeCenterCm]);
+
+  const trendBadge = useMemo(() => {
+    const variant = trend === "up" ? "emerald" : trend === "down" ? "red" : trend === "flat" ? "amber" : "neutral";
+    return { variant: variant as "emerald" | "red" | "amber" | "neutral", label: t(`skill.trend.${trend}`) };
+  }, [trend, t]);
+
+  const cvBadge = useMemo(() => {
+    if (cv === null) return null;
+    if (cv < 0.05) return { variant: "emerald" as const, label: t("metric.consistencyHigh") };
+    if (cv < 0.1) return { variant: "amber" as const, label: t("metric.consistencyMed") };
     return { variant: "neutral" as const, label: t("metric.consistencyVar") };
-  }, [taskMetrics.hitRate, t]);
+  }, [cv, t]);
 
   const liveSim = useMemo(() => {
     const val = parseFloat(simScoreInput);
-    if (isNaN(val) || val <= 0) return null;
-
-    const estimated = estimateSessionThreshold(activeTask, [val]);
-    const nextThresh = estimated.threshold ?? currentThreshold ?? val;
-    const delta = currentThreshold !== null ? nextThresh - currentThreshold : 0;
-    const currentPB =
-      activeTask?.sessions && activeTask.sessions.length > 0
-        ? Math.max(...activeTask.sessions.map((s) => s.pb))
-        : 0;
-
-    return {
-      inputScore: val,
-      projectedThreshold: nextThresh,
-      delta: Math.round(delta * 10) / 10,
-      willRaise: delta > 0,
-      willBreakPB: val > currentPB,
-    };
-  }, [simScoreInput, activeTask, currentThreshold]);
+    if (isNaN(val) || val <= 0 || !activeTask) return null;
+    const lastSens = activeTask.sessions.slice(-1)[0]?.sens ?? 0;
+    const out = simulateDraftRuns(
+      activeTask,
+      allRuns,
+      { scores: [val], sens: lastSens, date: new Date().toISOString().slice(0, 10) },
+      skillConfigFromTraining(settings?.training ?? DEFAULT_TRAINING_SETTINGS),
+      Date.now()
+    );
+    return { inputScore: val, ...out };
+  }, [simScoreInput, activeTask, allRuns, settings?.training]);
 
   const handleCopyEscalate = () => {
     if (!activeTask || !activeTask.sessions.length) {
       showToast(t("toast.noData"), "error");
       return;
     }
-    const text = buildEscalateFormat(activeTask);
+    const text = buildEscalateFormat(activeTask, skill);
     if (!text) {
       showToast(t("toast.noData"), "error");
       return;
@@ -133,6 +121,210 @@ export function KPIStrip({ className }: KPIStripProps) {
     showToast(t("toast.copiedEscalate"), "success");
   };
 
+  const bigNumber = (value: number | null, className: string) =>
+    hasData && value !== null ? (
+      <NumberTicker
+        value={roundScore(value)}
+        decimalPlaces={decimals(value)}
+        className={className}
+      />
+    ) : (
+      <span className={cn(className, "text-text-faint font-mono")}>—</span>
+    );
+
+  const simulator = (
+  <div
+    className={cn(
+      "liquid-well px-3 py-2 flex items-center justify-between gap-2.5 transition-all duration-200 focus-within:border-score/50 focus-within:shadow-[0_0_16px_rgb(var(--score-rgb)/0.16)]",
+      liveSim &&
+        (liveSim.willHit
+          ? "border-emerald-edge shadow-[0_0_18px_rgb(var(--emerald-rgb)/0.18)]"
+          : "border-amber-edge")
+    )}
+  >
+    <div className="flex items-center gap-2 shrink-0">
+      <Lightning
+        size={13}
+        weight="fill"
+        className={cn(
+          "text-amber shrink-0 transition-transform duration-200",
+          liveSim && "scale-125"
+        )}
+      />
+      <input
+        type="number"
+        value={simScoreInput}
+        onChange={(e) => setSimScoreInput(e.target.value)}
+        placeholder={t("dashboard.testScorePh")}
+        aria-label={t("dashboard.simulatedOutcome")}
+        className="w-24 bg-transparent text-xs font-mono text-text-main placeholder:text-text-faint focus:outline-none tabular"
+      />
+    </div>
+
+    <div className="flex items-center gap-1.5 text-[11px] font-mono min-w-0">
+      {liveSim ? (
+        <div className="flex items-center gap-1.5 animate-pop-in">
+          <Badge variant={liveSim.willHit ? "emerald" : "amber"}>
+            {liveSim.willHit ? t("skill.sim.hit") : t("skill.sim.miss")}
+          </Badge>
+          {liveSim.projectedTarget !== null && (
+            <span className="text-text-secondary tabular">
+              {t("skill.sim.newTarget")}{" "}
+              <strong className="text-emerald">{roundScore(liveSim.projectedTarget)}</strong>
+            </span>
+          )}
+          {liveSim.validCount === 0 && (
+            <span className="text-text-faint truncate">{t("skill.sim.notCounted")}</span>
+          )}
+          {liveSim.willBreakPB && (
+                <Badge variant="amber">{advanced ? "PB" : t("simple.sim.newBest")}</Badge>
+              )}
+        </div>
+      ) : (
+        <span className="text-text-faint leading-snug">{t("skill.sim.hint")}</span>
+      )}
+    </div>
+  </div>
+  );
+
+  if (!advanced) {
+    const fmt = (v: number) => formatScore(v, lang);
+    const plannedRuns = (settings?.training ?? DEFAULT_TRAINING_SETTINGS).plannedRuns;
+    const hits = recentHitCounts(skill);
+    const level = stabilityLevel(cv);
+    const levelWord = t(`simple.trend.${trend}`);
+    const LevelIcon = trend === "up" ? TrendUp : trend === "down" ? TrendDown : Minus;
+    const levelTone =
+      trend === "up" ? "text-emerald" : trend === "down" ? "text-red" : "text-text-secondary";
+
+    return (
+      <section
+        className={cn(
+          "liquid-surface liquid-interactive overflow-hidden grid grid-cols-1 lg:grid-cols-12 divide-y lg:divide-y-0 lg:divide-x divide-edge",
+          className
+        )}
+      >
+        {/* Cartão do treinador: a meta e o que fazer */}
+        <div className="group/z1 lg:col-span-7 p-5 flex flex-col justify-between gap-4">
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <span className="text-emerald inline-flex" aria-hidden="true">
+                <Target size={18} weight="fill" />
+              </span>
+              <span className="text-xs font-semibold text-text-secondary">
+                {t("simple.kpi.title")}
+              </span>
+              <InfoTip text={t("simple.kpi.explainTarget")} />
+            </div>
+
+            <div className="flex items-baseline gap-2 pt-1">
+              {bigNumber(nextTarget, "text-5xl font-bold tracking-tight text-text-main tabular")}
+              <span className="text-xs font-mono text-text-faint tabular">{t("metric.pts")}</span>
+            </div>
+
+            <div className="text-xs text-text-secondary leading-relaxed space-y-1">
+              {nextTarget !== null && (
+                <p>
+                  {t("simple.kpi.plan", { n: plannedRuns, target: fmt(nextTarget) })}
+                </p>
+              )}
+              {hasData && nextTarget === null && (
+                <p className="text-text-faint">{t("simple.kpi.noTarget")}</p>
+              )}
+              {nextStretch !== null && (
+                <p className="text-text-faint">
+                  {t("simple.kpi.stretch", { val: fmt(nextStretch) })}
+                </p>
+              )}
+              {targetHere && (
+                <p className="text-emerald">
+                  {t("simple.kpi.atSens", {
+                    sens: targetHere.sens.toFixed(1),
+                    val: fmt(targetHere.value),
+                  })}
+                </p>
+              )}
+              {hasData && nextTarget !== null && trend === "insufficient" && (
+                <p className="text-amber">{t("simple.kpi.calibrating")}</p>
+              )}
+            </div>
+          </div>
+
+          {simulator}
+        </div>
+
+        {/* Três números com rótulo */}
+        <div className="lg:col-span-5 p-5 flex flex-col justify-between gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="liquid-well p-3 flex flex-col gap-1 min-w-0">
+              <div className="flex items-center gap-1.5 text-[11px] font-semibold text-text-secondary">
+                <Barbell size={14} weight="regular" className="text-score shrink-0" />
+                <span className="truncate">{t("simple.kpi.level")}</span>
+                <InfoTip text={t("simple.kpi.levelTip")} size={12} />
+              </div>
+              {bigNumber(mu, "text-2xl font-bold tracking-tight text-score tabular")}
+              <span className={cn("inline-flex items-center gap-1 text-[11px] font-semibold", levelTone)}>
+                <LevelIcon size={12} weight="bold" />
+                {levelWord}
+              </span>
+            </div>
+
+            <div className="liquid-well p-3 flex flex-col gap-1 min-w-0">
+              <div className="flex items-center gap-1.5 text-[11px] font-semibold text-text-secondary">
+                <Trophy size={14} weight="regular" className="text-amber shrink-0" />
+                <span className="truncate">{t("simple.kpi.best")}</span>
+              </div>
+              {bigNumber(personalBest, "text-2xl font-bold tracking-tight text-text-main tabular")}
+              <span className="text-[11px] text-text-faint">
+                {deltas.scoreDelta !== null && deltas.scoreDelta !== 0
+                  ? `${deltas.scoreDelta > 0 ? "+" : ""}${deltas.scoreDelta} ${t("metric.pts")}`
+                  : t("metric.pts")}
+              </span>
+            </div>
+
+            <div className="liquid-well p-3 flex flex-col gap-1 min-w-0">
+              <div className="flex items-center gap-1.5 text-[11px] font-semibold text-text-secondary">
+                <TrendUp size={14} weight="regular" className="text-score shrink-0" />
+                <span className="truncate">{t("simple.kpi.hits")}</span>
+                <InfoTip
+                  text={`${t("simple.kpi.hitsTip")} ${
+                    streak > 0 ? t("skill.kpi.streak", { n: streak }) : t("skill.kpi.noStreak")
+                  }`}
+                  size={12}
+                />
+              </div>
+              {hasData && hits.total > 0 ? (
+                <span className="text-lg font-bold tracking-tight text-text-main tabular leading-8">
+                  {t("simple.kpi.hitsOf", { hit: hits.hit, total: hits.total })}
+                </span>
+              ) : (
+                <span className="text-[11px] text-text-faint leading-snug min-h-8 flex items-center">
+                  {t("simple.kpi.hitsNone")}
+                </span>
+              )}
+              <span className="text-[11px] text-text-faint">
+                {t("skill.kpi.sessionsCount", { n: sessions.length })}
+              </span>
+            </div>
+          </div>
+
+          {level && cv !== null && (
+            <div className="flex items-center gap-1.5 text-xs text-text-secondary">
+              <Waveform size={14} weight="regular" className="shrink-0" />
+              <span>
+                {t("simple.kpi.stability", {
+                  level: t(`simple.stab.${level}`),
+                  pct: Math.max(1, Math.round(cv * 100)),
+                })}
+              </span>
+              <InfoTip text={t("simple.kpi.stabilityTip")} />
+            </div>
+          )}
+        </div>
+      </section>
+    );
+  }
+
   return (
     <section
       className={cn(
@@ -140,7 +332,7 @@ export function KPIStrip({ className }: KPIStripProps) {
         className
       )}
     >
-      {/* Zone 1 (5 cols): Focal Ratchet Command & Live Score Simulator */}
+      {/* Zona 1: meta da próxima sessão + simulador */}
       <div className="group/z1 lg:col-span-5 p-5 flex flex-col justify-between gap-4 transition-colors duration-300 hover:bg-white/[0.012]">
         <div className="space-y-2">
           <div className="flex items-center justify-between gap-2">
@@ -149,48 +341,27 @@ export function KPIStrip({ className }: KPIStripProps) {
                 className="text-emerald inline-flex transition-transform duration-300 group-hover/z1:scale-110"
                 aria-hidden="true"
               >
-                <ShieldCheck size={18} weight="fill" />
+                <Target size={18} weight="fill" />
               </span>
               <span className="text-xs font-semibold text-text-secondary">
-                {t("dashboard.kpiThreat")}
+                {t("skill.kpi.nextTarget")}
               </span>
-              <Tooltip content={t("metric.targetExplanation")}>
-                <span className="text-text-faint hover:text-text-main transition-transform duration-200 hover:scale-110 cursor-pointer inline-flex">
-                  <Info size={13} />
-                </span>
-              </Tooltip>
+              <InfoTip text={t("skill.explain.target")} />
             </div>
-            <div className="flex items-center gap-1.5">
-              {taskMetrics.streak > 0 && (
-                <Badge variant="amber">
-                  {t("metric.streak", { n: taskMetrics.streak })}
-                </Badge>
-              )}
-              <Badge variant={ratchetBadge.variant}>{ratchetBadge.label}</Badge>
-            </div>
+            <Badge variant={trendBadge.variant}>{trendBadge.label}</Badge>
           </div>
 
           <div className="flex items-baseline justify-between gap-3 pt-1">
             <div className="flex items-baseline gap-2">
-              {hasData && currentThreshold !== null ? (
-                <NumberTicker
-                  value={currentThreshold}
-                  decimalPlaces={Number.isInteger(currentThreshold) ? 0 : 1}
-                  className="text-4xl font-bold tracking-tight text-text-main tabular"
-                />
-              ) : (
-                <span className="text-4xl font-bold tracking-tight text-text-faint font-mono tabular">
-                  —
-                </span>
-              )}
-              <span className="text-xs font-mono text-text-faint tabular">
-                {t("metric.pts")}
-              </span>
+              {bigNumber(nextTarget, "text-4xl font-bold tracking-tight text-text-main tabular")}
+              <span className="text-xs font-mono text-text-faint tabular">{t("metric.pts")}</span>
             </div>
 
             <div className="flex items-center gap-2">
               <span className="text-xs font-mono text-text-secondary tabular">
-                {ratioPct ? t("metric.thresholdRatio", { pct: ratioPct }) : "—"}
+                {consistencyRatio !== null
+                  ? t("metric.thresholdRatio", { pct: consistencyRatio.toFixed(1) })
+                  : "—"}
               </span>
               {hasData && (
                 <Button
@@ -214,134 +385,75 @@ export function KPIStrip({ className }: KPIStripProps) {
               )}
             </div>
           </div>
-        </div>
 
-        {/* Inline Recessed Simulator Well with reactive status border */}
-        <div
-          className={cn(
-            "liquid-well px-3 py-2 flex items-center justify-between gap-2.5 transition-all duration-200 focus-within:border-score/50 focus-within:shadow-[0_0_16px_rgb(var(--score-rgb)/0.16)]",
-            liveSim &&
-              (liveSim.willRaise
-                ? "border-emerald-edge shadow-[0_0_18px_rgb(var(--emerald-rgb)/0.18)]"
-                : "border-amber-edge")
-          )}
-        >
-          <div className="flex items-center gap-2 shrink-0">
-            <Lightning
-              size={13}
-              weight="fill"
-              className={cn(
-                "text-amber shrink-0 transition-transform duration-200",
-                liveSim && "scale-125"
-              )}
-            />
-            <input
-              type="number"
-              value={simScoreInput}
-              onChange={(e) => setSimScoreInput(e.target.value)}
-              placeholder={t("dashboard.testScorePh")}
-              aria-label={t("dashboard.simulatedOutcome")}
-              className="w-24 bg-transparent text-xs font-mono text-text-main placeholder:text-text-faint focus:outline-none tabular"
-            />
-          </div>
-
-          <div className="flex items-center gap-1.5 text-[11px] font-mono truncate">
-            {liveSim ? (
-              <div className="flex items-center gap-1.5 animate-pop-in">
-                <Badge variant={liveSim.willRaise ? "emerald" : "amber"}>
-                  {liveSim.willRaise
-                    ? `+${liveSim.delta} pts`
-                    : t("dashboard.ratchetHeld")}
-                </Badge>
-                <span className="text-text-secondary tabular">
-                  <strong className="text-emerald">
-                    {liveSim.projectedThreshold}
-                  </strong>
-                </span>
-                {liveSim.willBreakPB && <Badge variant="amber">PB</Badge>}
-              </div>
-            ) : (
-              <span className="text-text-faint truncate">
-                {t("dashboard.ratchetProtected")}
+          <div className="text-[11px] font-mono text-text-faint tabular min-h-[16px] flex flex-wrap items-center gap-x-3">
+            {targetHere && (
+              <span className="text-emerald">
+                {t("skill.kpi.atCurrentSens", {
+                  sens: targetHere.sens.toFixed(1),
+                  val: roundScore(targetHere.value),
+                })}
               </span>
             )}
+            {nextStretch !== null && (
+              <span>{t("skill.kpi.stretch", { val: roundScore(nextStretch) })}</span>
+            )}
+            {hasData && nextTarget === null && <span>{t("skill.kpi.noTargetYet")}</span>}
           </div>
         </div>
+
+        {simulator}
       </div>
 
-      {/* Zone 2 (4 cols): Daily Target & Today's Execution */}
+      {/* Zona 2: habilidade (μ) e consistência (CV) */}
       <div className="group/z2 lg:col-span-4 p-5 flex flex-col justify-between gap-4 transition-colors duration-300 hover:bg-white/[0.012]">
         <div className="space-y-2">
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <span
-                className="text-score inline-flex transition-transform duration-300 group-hover/z2:rotate-12 group-hover/z2:scale-110"
-                aria-hidden="true"
-              >
-                <Target size={18} weight="regular" />
-              </span>
-              <span className="text-xs font-semibold text-text-secondary">
-                {t("metric.todayTarget")}
-              </span>
-            </div>
-            {todaySummary ? (
-              <Badge variant={todaySummary.hit ? "emerald" : "score"}>
-                {todaySummary.hit ? "HIT" : `${todayProgressPct}%`}
-              </Badge>
-            ) : (
-              <span className="text-[11px] font-mono text-text-faint">
-                {t("dashboard.nextRung")}
-              </span>
-            )}
-          </div>
-
-          <div className="flex items-baseline gap-2 pt-1">
-            {hasData && todayTarget !== null ? (
-              <NumberTicker
-                value={todayTarget}
-                decimalPlaces={Number.isInteger(todayTarget) ? 0 : 1}
-                className="text-3xl font-bold tracking-tight text-score tabular"
-              />
-            ) : (
-              <span className="text-3xl font-bold tracking-tight text-text-faint font-mono tabular">
-                —
-              </span>
-            )}
-            <span className="text-xs font-mono text-text-faint tabular">
-              {t("metric.pts")}
+          <div className="flex items-center gap-2">
+            <span
+              className="text-score inline-flex transition-transform duration-300 group-hover/z2:scale-110"
+              aria-hidden="true"
+            >
+              <Barbell size={18} weight="regular" />
             </span>
+            <span className="text-xs font-semibold text-text-secondary">{t("skill.kpi.mu")}</span>
+            <InfoTip text={t("skill.explain.mu")} />
+          </div>
+          <div className="flex items-baseline gap-2 pt-1">
+            {bigNumber(mu, "text-3xl font-bold tracking-tight text-score tabular")}
+            <span className="text-xs font-mono text-text-faint tabular">{t("metric.pts")}</span>
           </div>
         </div>
 
-        <div className="space-y-2">
-          <div className="w-full h-2 rounded-full liquid-well overflow-hidden p-0.5">
-            <div
-              className={cn(
-                "h-full rounded-full transition-all duration-500 ease-out relative",
-                todaySummary?.hit
-                  ? "bg-emerald shadow-[0_0_12px_rgb(var(--emerald-rgb)/0.65)]"
-                  : "bg-score shadow-[0_0_12px_rgb(var(--score-rgb)/0.65)]"
+        <div className="border-t border-edge" />
+
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-text-secondary">
+              <Waveform size={15} weight="regular" className="text-text-secondary" />
+              <span>{t("skill.kpi.cv")}</span>
+              <InfoTip text={t("skill.explain.cv")} />
+            </div>
+            <div className="flex items-baseline gap-1 mt-1">
+              {hasData && cv !== null ? (
+                <NumberTicker
+                  value={Number((cv * 100).toFixed(1))}
+                  decimalPlaces={1}
+                  className="text-2xl font-bold tracking-tight text-text-main tabular"
+                />
+              ) : (
+                <span className="text-2xl font-bold tracking-tight text-text-faint font-mono tabular">
+                  —
+                </span>
               )}
-              style={{ width: `${Math.max(todayProgressPct, hasData ? 4 : 0)}%` }}
-            />
+              <span className="text-xs font-mono text-text-faint tabular">%</span>
+            </div>
           </div>
-          <div className="flex items-center justify-between text-[11px] font-mono text-text-faint tabular">
-            <span className="truncate">
-              {todaySummary
-                ? t("metric.todayRuns", {
-                    best: todaySummary.best,
-                    runs: todaySummary.runs,
-                  })
-                : t("metric.noRunsToday")}
-            </span>
-            <span>{todayProgressPct}%</span>
-          </div>
+          {cvBadge && <Badge variant={cvBadge.variant}>{cvBadge.label}</Badge>}
         </div>
       </div>
 
-      {/* Zone 3 (3 cols): Personal Best & Hit Rate Consistency */}
+      {/* Zona 3: PB e hit rate */}
       <div className="group/z3 lg:col-span-3 p-5 flex flex-col justify-between gap-3 transition-colors duration-300 hover:bg-white/[0.012]">
-        {/* Top half: Personal Best */}
         <div className="flex items-center justify-between gap-2">
           <div>
             <div className="flex items-center gap-1.5 text-xs font-semibold text-text-secondary">
@@ -353,20 +465,8 @@ export function KPIStrip({ className }: KPIStripProps) {
               <span>{t("metric.pb")}</span>
             </div>
             <div className="flex items-baseline gap-1.5 mt-1">
-              {hasData && taskMetrics.maxPB !== null ? (
-                <NumberTicker
-                  value={taskMetrics.maxPB}
-                  decimalPlaces={Number.isInteger(taskMetrics.maxPB) ? 0 : 1}
-                  className="text-2xl font-bold tracking-tight text-text-main tabular"
-                />
-              ) : (
-                <span className="text-2xl font-bold tracking-tight text-text-faint font-mono tabular">
-                  —
-                </span>
-              )}
-              <span className="text-[11px] font-mono text-text-faint tabular">
-                {t("metric.pts")}
-              </span>
+              {bigNumber(personalBest, "text-2xl font-bold tracking-tight text-text-main tabular")}
+              <span className="text-[11px] font-mono text-text-faint tabular">{t("metric.pts")}</span>
             </div>
           </div>
 
@@ -374,23 +474,18 @@ export function KPIStrip({ className }: KPIStripProps) {
             {deltas.scoreDelta !== null && deltas.scoreDelta !== 0 && (
               <div>
                 <Badge variant={deltas.scoreDelta > 0 ? "emerald" : "red"}>
-                  {deltas.scoreDelta > 0
-                    ? `+${deltas.scoreDelta}`
-                    : deltas.scoreDelta}
+                  {deltas.scoreDelta > 0 ? `+${deltas.scoreDelta}` : deltas.scoreDelta}
                 </Badge>
               </div>
             )}
             <span className="block text-[11px] font-mono text-text-faint tabular">
-              {t("metric.sessionsCount", {
-                n: activeTask?.sessions?.length ?? 0,
-              })}
+              {t("skill.kpi.sessionsCount", { n: sessions.length })}
             </span>
           </div>
         </div>
 
         <div className="border-t border-edge" />
 
-        {/* Bottom half: Hit Rate & Consistency */}
         <div className="flex items-center justify-between gap-2">
           <div>
             <div className="flex items-center gap-1.5 text-xs font-semibold text-text-secondary">
@@ -399,12 +494,17 @@ export function KPIStrip({ className }: KPIStripProps) {
                 weight="regular"
                 className="text-score transition-transform duration-300 group-hover/z3:translate-x-0.5 group-hover/z3:-translate-y-0.5"
               />
-              <span>{t("metric.consistency")}</span>
+              <span>{t("skill.kpi.hitRate")}</span>
+              <InfoTip
+                text={`${t("skill.explain.hitRate")} ${
+                  streak > 0 ? t("skill.kpi.streak", { n: streak }) : t("skill.kpi.noStreak")
+                }`}
+              />
             </div>
             <div className="flex items-baseline gap-1 mt-1">
-              {hasData && taskMetrics.hitRate !== null ? (
+              {hasData && hitRate14 !== null ? (
                 <NumberTicker
-                  value={taskMetrics.hitRate}
+                  value={Math.round(hitRate14 * 100)}
                   decimalPlaces={0}
                   className="text-2xl font-bold tracking-tight text-text-main tabular"
                 />
@@ -416,24 +516,9 @@ export function KPIStrip({ className }: KPIStripProps) {
               <span className="text-xs font-mono text-text-faint tabular">%</span>
             </div>
           </div>
-
-          <div className="text-right space-y-1">
-            {consistencyBadge && (
-              <div>
-                <Badge variant={consistencyBadge.variant}>
-                  {consistencyBadge.label}
-                </Badge>
-              </div>
-            )}
-            <span className="block text-[11px] font-mono text-text-faint tabular">
-              Threshold / PB:{" "}
-              <strong className="text-text-secondary">
-                {computedMetrics.consistencyRatio !== null
-                  ? `${computedMetrics.consistencyRatio.toFixed(1)}%`
-                  : "—"}
-              </strong>
-            </span>
-          </div>
+          {skill?.difficultyHint && (
+            <Badge variant="amber">{t(`skill.difficulty.${skill.difficultyHint}`)}</Badge>
+          )}
         </div>
       </div>
     </section>

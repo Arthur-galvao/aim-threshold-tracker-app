@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Check, Gear, Palette, Plus, Target } from "@phosphor-icons/react";
+import { Check, Gear, Palette, Plus, Target, Timer, Warning } from "@phosphor-icons/react";
 import {
   Button,
   Popover,
@@ -13,10 +13,28 @@ import {
 import { Dock, type NavTab } from "./Dock";
 import { ScenarioSwitcher } from "./ScenarioSwitcher";
 import { WatcherOrb } from "./WatcherOrb";
-import { useI18n } from "@/lib/i18n";
+import { useI18n, type Key } from "@/lib/i18n";
 import { APP_THEMES, type AppTheme } from "@/lib/theme";
 import type { Task } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { useSensRandomizer } from "@/hooks/useSensRandomizer";
+import { useLiveSession } from "@/hooks/useLiveSession";
+import type { RandomizerActiveRole, RandomizerMuscleCue } from "@/hooks/useSensRandomizer";
+
+/** Chaves i18n do papel do randomizer (compartilhadas com o card de sens da playlist). */
+const ROLE_KEYS: Record<RandomizerActiveRole, Key> = {
+  base: "playlistSens.roleBase",
+  anchor: "playlistSens.roleAnchor",
+  random: "playlistSens.roleRandom",
+  off: "playlistSens.roleOff",
+};
+
+/** Cue muscular: rápida = pulso/dedos, lenta = braço (Plano 05). */
+const CUE_KEYS: Record<RandomizerMuscleCue, Key> = {
+  fast: "playlistSens.cueFast",
+  slow: "playlistSens.cueSlow",
+  base: "playlistSens.cueBase",
+};
 
 export interface TopBarProps {
   activeTab: NavTab;
@@ -51,6 +69,11 @@ export function TopBar({
 }: TopBarProps) {
   const { t } = useI18n();
   const [themeOpen, setThemeOpen] = useState(false);
+  const { settings: randomizerSettings, randomizerState } = useSensRandomizer();
+  const live = useLiveSession();
+
+  const roleKey = randomizerState.activeRole ? ROLE_KEYS[randomizerState.activeRole] : null;
+  const cueKey = randomizerState.muscleCue ? CUE_KEYS[randomizerState.muscleCue] : null;
 
   return (
     <header
@@ -79,6 +102,40 @@ export function TopBar({
             onSelectTask={onSelectTask}
             onNewScenario={onNewScenario}
           />
+
+          {/* Sens ativa do randomizer: valor, papel e cue muscular (Plano 05, T5.7e) */}
+          {randomizerSettings.enabled && (
+            <div
+              className="hidden lg:flex items-center gap-1.5 min-w-0 px-2.5 py-1 rounded-full liquid-well text-[11px] font-mono text-text-secondary whitespace-nowrap"
+              title={t("topbar.randomizerChip")}
+            >
+              <span className="tabular-nums text-text-main">
+                {randomizerState.activeSensCm.toFixed(2)} cm/360
+              </span>
+              {roleKey && (
+                <>
+                  <span className="text-text-faint">·</span>
+                  <span>{t(roleKey)}</span>
+                </>
+              )}
+              {cueKey && (
+                <>
+                  <span className="text-text-faint">·</span>
+                  <span className="truncate">{t(cueKey)}</span>
+                </>
+              )}
+            </div>
+          )}
+
+          {randomizerSettings.enabled && randomizerState.rawaccelGuiRunning && (
+            <span
+              role="status"
+              className="hidden md:flex items-center gap-1 px-2 py-1 rounded-full border border-amber-edge bg-amber-soft text-amber text-[11px] whitespace-nowrap"
+            >
+              <Warning size={12} weight="bold" />
+              {t("topbar.rawaccelGui")}
+            </span>
+          )}
         </div>
 
         {/* Center: Spatial Segmented Navigation Capsule (Desktop) */}
@@ -93,6 +150,22 @@ export function TopBar({
 
         {/* Right: Watcher Status + Quick Session Record + Theme + Settings */}
         <div className="flex items-center gap-2 shrink-0">
+          {(live.openKey || live.endedKey) && (
+            <button
+              type="button"
+              onClick={() => live.openSummary()}
+              aria-label={t("session.summary.title")}
+              className="flex items-center gap-1.5 h-8 px-3 rounded-full liquid-pill text-[11px] text-text-main whitespace-nowrap cursor-pointer focus-visible:outline-none press"
+            >
+              <Timer size={13} weight="bold" className={live.openKey ? "text-emerald" : "text-score"} />
+              <span className="tabular-nums">
+                {live.openKey
+                  ? t("session.live.badge", { n: live.openRuns })
+                  : t("session.live.ready")}
+              </span>
+            </button>
+          )}
+
           <WatcherOrb active={watcherActive} onToggle={onToggleWatcher} />
 
           <Button
@@ -109,9 +182,9 @@ export function TopBar({
             className="rounded-full px-3.5"
           >
             <span className="hidden sm:inline">
-              {t("session.title") || "Registrar sessão"}
+              {t("session.title")}
             </span>
-            <span className="sm:hidden">Run</span>
+            <span className="sm:hidden">{t("topbar.runShort")}</span>
           </Button>
 
           {onThemeChange && (
@@ -120,8 +193,8 @@ export function TopBar({
                 render={
                   <button
                     type="button"
-                    aria-label="Tema visual"
-                    title="Tema visual"
+                    aria-label={t("topbar.themeVisual")}
+                    title={t("topbar.themeVisual")}
                     className="group hidden sm:flex h-8 w-8 items-center justify-center rounded-full liquid-pill text-score hover:text-text-main cursor-pointer focus-visible:outline-none press"
                   />
                 }

@@ -5,11 +5,15 @@ use std::path::{Path, PathBuf};
 use serde::de::DeserializeOwned;
 use tauri::{AppHandle, Manager};
 
+use crate::errors::err_d;
 use crate::model::{AppData, AppSettings};
+use crate::sampler::SamplerSnapshot;
 
 pub const APP_DATA_FILE: &str = "app_data.json";
 pub const APP_DATA_BACKUPS: usize = 5;
 pub const SETTINGS_FILE: &str = "settings.json";
+pub const SENS_LEDGER_FILE: &str = "sens_ledger.json";
+pub const SAMPLER_STATE_FILE: &str = "sampler_state.json";
 pub const SETTINGS_BACKUPS: usize = 3;
 
 /// Resultado do carregamento de um arquivo de dados.
@@ -36,8 +40,8 @@ pub fn data_dir(app: &AppHandle) -> Result<PathBuf, String> {
     let dir = app
         .path()
         .app_data_dir()
-        .map_err(|e| format!("Falha ao resolver app_data_dir: {e}"))?;
-    fs::create_dir_all(&dir).map_err(|e| format!("Falha ao criar app_data_dir: {e}"))?;
+        .map_err(|e| err_d("app_data_dir_failed", e))?;
+    fs::create_dir_all(&dir).map_err(|e| err_d("app_data_dir_failed", e))?;
     Ok(dir)
 }
 
@@ -100,6 +104,26 @@ pub fn save_settings(app: &AppHandle, settings: &AppSettings) -> Result<(), Stri
     write_json(&dir.join(SETTINGS_FILE), settings)
 }
 
+pub fn sens_ledger_path(app: &AppHandle) -> Result<PathBuf, String> {
+    Ok(data_dir(app)?.join(SENS_LEDGER_FILE))
+}
+
+/// Estado do sorteio (sacos + sessao). Arquivo ausente ou JSON invalido -> default (descartavel).
+pub fn load_sampler_state(app: &AppHandle) -> SamplerSnapshot {
+    data_dir(app)
+        .map(|d| load_sampler_state_from(&d.join(SAMPLER_STATE_FILE)))
+        .unwrap_or_default()
+}
+
+pub fn load_sampler_state_from(path: &Path) -> SamplerSnapshot {
+    read_json(path.to_path_buf()).unwrap_or_default()
+}
+
+pub fn save_sampler_state(app: &AppHandle, snapshot: &SamplerSnapshot) -> Result<(), String> {
+    let dir = data_dir(app)?;
+    write_json(&dir.join(SAMPLER_STATE_FILE), snapshot)
+}
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct RawAccelBackup {
@@ -124,19 +148,19 @@ pub fn save_rawaccel_backup(app: &AppHandle, backup: &RawAccelBackup) -> Result<
 pub fn atomic_write(path: &Path, bytes: &[u8]) -> Result<(), String> {
     let file_name = path
         .file_name()
-        .ok_or_else(|| format!("Caminho sem nome de arquivo: {}", path.display()))?;
+        .ok_or_else(|| err_d("invalid_path", path.display()))?;
     let mut tmp_name = file_name.to_os_string();
     tmp_name.push(".tmp");
     let tmp_path = path.with_file_name(tmp_name);
 
     if let Err(e) = write_and_sync(&tmp_path, bytes) {
         let _ = fs::remove_file(&tmp_path);
-        return Err(format!("Falha ao escrever arquivo temporário: {e}"));
+        return Err(err_d("write_failed", e));
     }
 
     fs::rename(&tmp_path, path).map_err(|e| {
         let _ = fs::remove_file(&tmp_path);
-        format!("Falha ao substituir arquivo final: {e}")
+        err_d("write_failed", e)
     })
 }
 
@@ -183,7 +207,7 @@ where
             // Só regrava o arquivo principal se o original já está preservado no quarentenado.
             if quarantined.is_some() {
                 let restored = fs::read(&backup)
-                    .map_err(|e| e.to_string())
+                    .map_err(|e| err_d("read_failed", e))
                     .and_then(|bytes| atomic_write(&path, &bytes));
                 if let Err(e) = restored {
                     eprintln!("[storage] falha ao restaurar backup: {e}");
@@ -267,9 +291,9 @@ pub fn rotate_backups(dir: &Path, name: &str, keep: usize) -> Result<(), String>
     }
 
     let backups = dir.join("backups");
-    fs::create_dir_all(&backups).map_err(|e| format!("Falha ao criar pasta de backups: {e}"))?;
+    fs::create_dir_all(&backups).map_err(|e| err_d("backup_failed", e))?;
 
-    let bytes = fs::read(&source).map_err(|e| format!("Falha ao ler para backup: {e}"))?;
+    let bytes = fs::read(&source).map_err(|e| err_d("backup_failed", e))?;
     // Sem mudança desde o último backup: não gira (evita encher os slots com cópias iguais).
     if fs::read(backup_file(dir, name, 1)).is_ok_and(|prev| prev == bytes) {
         return Ok(());
@@ -277,13 +301,13 @@ pub fn rotate_backups(dir: &Path, name: &str, keep: usize) -> Result<(), String>
 
     let oldest = backup_file(dir, name, keep);
     if oldest.exists() {
-        fs::remove_file(&oldest).map_err(|e| format!("Falha ao remover backup antigo: {e}"))?;
+        fs::remove_file(&oldest).map_err(|e| err_d("backup_failed", e))?;
     }
     for index in (1..keep).rev() {
         let from = backup_file(dir, name, index);
         if from.exists() {
             fs::rename(&from, backup_file(dir, name, index + 1))
-                .map_err(|e| format!("Falha ao girar backup: {e}"))?;
+                .map_err(|e| err_d("backup_failed", e))?;
         }
     }
 
@@ -308,32 +332,46 @@ pub fn latest_valid_backup<T: DeserializeOwned>(dir: &Path, name: &str, keep: us
 /// substituição total dos dados (`reason`: "import", "demo", "clear").
 pub fn write_pre_backup(dir: &Path, reason: &str, data: &AppData) -> Result<PathBuf, String> {
     let backups = dir.join("backups");
-    fs::create_dir_all(&backups).map_err(|e| format!("Falha ao criar pasta de backups: {e}"))?;
+    fs::create_dir_all(&backups).map_err(|e| err_d("backup_failed", e))?;
     let stamp = chrono::Local::now().format("%Y%m%d-%H%M%S");
     let target = unique_path(&backups, &format!("pre-{reason}-{stamp}"), "json");
-    let bytes = serde_json::to_vec(data).map_err(|e| e.to_string())?;
+    let bytes = serde_json::to_vec(data).map_err(|e| err_d("json_serialize_failed", e))?;
     atomic_write(&target, &bytes)?;
     Ok(target)
 }
 
-/// Cópia do estado atual em `dir/backups/pre-import-<timestamp>.json`, antes de um import.
-pub fn write_pre_import_backup(dir: &Path, data: &AppData) -> Result<PathBuf, String> {
-    write_pre_backup(dir, "import", data)
-}
-
 fn read_json<T: serde::de::DeserializeOwned>(path: PathBuf) -> Result<T, String> {
-    let text = fs::read_to_string(&path).map_err(|e| e.to_string())?;
-    serde_json::from_str(&text).map_err(|e| e.to_string())
+    let text = fs::read_to_string(&path).map_err(|e| err_d("read_failed", e))?;
+    serde_json::from_str(&text).map_err(|e| err_d("json_invalid", e))
 }
 
 fn write_json<T: serde::Serialize>(path: &Path, value: &T) -> Result<(), String> {
-    let bytes = serde_json::to_vec(value).map_err(|e| e.to_string())?;
+    let bytes = serde_json::to_vec(value).map_err(|e| err_d("json_serialize_failed", e))?;
     atomic_write(path, &bytes)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn sampler_state_roundtrip_and_invalid_is_default() {
+        let dir = std::env::temp_dir().join(format!("att_sampler_{}_{}", std::process::id(), std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join(SAMPLER_STATE_FILE);
+        assert_eq!(load_sampler_state_from(&path), SamplerSnapshot::default());
+
+        let mut snap = SamplerSnapshot::default();
+        snap.sampler.bags.insert("1:8:center:0".into(), vec![3, 5]);
+        snap.sampler.last_k = Some(4);
+        snap.roll_session.runs_in_session = 7;
+        write_json(&path, &snap).unwrap();
+        assert_eq!(load_sampler_state_from(&path), snap);
+
+        fs::write(&path, "{ not json").unwrap();
+        assert_eq!(load_sampler_state_from(&path), SamplerSnapshot::default());
+        let _ = fs::remove_dir_all(&dir);
+    }
     use crate::model::{Session, Task};
 
     fn temp_case_dir(tag: &str) -> PathBuf {
@@ -354,9 +392,11 @@ mod tests {
                 name: "Task".into(),
                 category: "Clicking".into(),
                 subcategory: "Precision".into(),
+                intent_cue: None,
                 sessions: vec![],
             }],
             playlists: vec![],
+            ..Default::default()
         }
     }
 
@@ -370,6 +410,7 @@ mod tests {
                     name: "Task A".into(),
                     category: "Clicking".into(),
                     subcategory: "Precision".into(),
+                    intent_cue: None,
                     sessions: vec![
                         Session {
                             id: "sess_dupe".into(),
@@ -378,6 +419,7 @@ mod tests {
                             pb: 100.0,
                             threshold: 90.0,
                             source_file: None,
+                            ..Default::default()
                         },
                     ],
                 },
@@ -386,6 +428,7 @@ mod tests {
                     name: "Task B".into(),
                     category: "Clicking".into(),
                     subcategory: "Precision".into(),
+                    intent_cue: None,
                     sessions: vec![
                         Session {
                             id: "sess_dupe".into(),
@@ -394,11 +437,13 @@ mod tests {
                             pb: 110.0,
                             threshold: 95.0,
                             source_file: None,
+                            ..Default::default()
                         },
                     ],
                 },
             ],
             playlists: vec![],
+            ..Default::default()
         };
 
         let changed = sanitize_app_data(&mut data);
@@ -546,15 +591,4 @@ mod tests {
         let _ = fs::remove_dir_all(&dir);
     }
 
-    #[test]
-    fn pre_import_backup_is_written_under_backups() {
-        let dir = temp_case_dir("pre_import");
-        let path = write_pre_import_backup(&dir, &sample_data("current")).expect("pre-import backup");
-        assert!(path.starts_with(dir.join("backups")));
-        let name = path.file_name().unwrap().to_string_lossy().into_owned();
-        assert!(name.starts_with("pre-import-") && name.ends_with(".json"));
-        let saved: AppData = serde_json::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
-        assert_eq!(saved.tasks[0].id, "current");
-        let _ = fs::remove_dir_all(&dir);
-    }
 }

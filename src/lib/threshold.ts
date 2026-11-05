@@ -1,12 +1,15 @@
 import type { AppData, Task, Playlist } from "./types.ts";
+import { DEFAULT_TRAINING_SETTINGS } from "./types.ts";
 import { categorizeScenario } from "./viscose.ts";
-import { summarizeDays } from "./day-summary.ts";
+import { computeSkill, type SkillSummary } from "./skill/index.ts";
+import { buildAllRuns, skillConfigFromTraining, type SkillConfig } from "./skill/config.ts";
+import { runTime, type RunRef } from "./skill/sessions.ts";
 
-export function cloneAppData(data: AppData): AppData {
-  return typeof structuredClone === "function"
-    ? structuredClone(data)
-    : JSON.parse(JSON.stringify(data));
-}
+/**
+ * Threshold v2: a meta vem de `computeSkill` (src/lib/skill). Este módulo guarda só utilitários
+ * de dados (sanitização, criação de task), a simulação de runs digitadas e o formato Escalate.
+ * `Session.threshold` NÃO é mais escrito; o campo existe apenas para ler dados antigos.
+ */
 
 export function sanitizeAppData(data: AppData): boolean {
   let changed = false;
@@ -48,95 +51,16 @@ export function createTaskFromScenario(scenario: string): Task {
   };
 }
 
-export function addSessionsFromRun(
-  data: AppData,
-  scenario: string,
-  date: string,
-  sens: number,
-  score: number,
-  sourceFile?: string
-): { task: Task; isNew: boolean } {
-  let task = findTaskByScenario(data.tasks, scenario);
-  let isNew = false;
-
-  if (!task) {
-    task = createTaskFromScenario(scenario);
-    data.tasks.push(task);
-    isNew = true;
-  }
-
-  task.sessions.push({
-    id: `sess_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-    date,
-    sens,
-    pb: score,
-    threshold: 0,
-    sourceFile,
-  });
-
-  recalculateAllTaskThresholds(task);
-
-  if (isNew || data.activeTaskId === null) {
-    data.activeTaskId = task.id;
-  }
-
-  return { task, isNew };
-}
-
+/**
+ * LEGADO: lê o `threshold` gravado na sessão mais recente (dados antigos; chega 0 em dados novos).
+ * Para a meta atual use `SkillSummary.nextTarget` (hook `useSkill`).
+ */
 export function getTargetThresholdForTask(task: Task | null): number | null {
   if (!task || !task.sessions || task.sessions.length === 0) {
     return null;
   }
   const sorted = [...task.sessions].sort((a, b) => a.date.localeCompare(b.date));
   return sorted[sorted.length - 1].threshold;
-}
-
-export function computeDayThreshold(prev: number | null, scores: number[]): number {
-  if (!scores || scores.length === 0) return prev ?? 0;
-  const numScores = scores.map((s) => Number(s) || 0);
-  const dayPB = Math.max(...numScores);
-  const sortedScores = numScores.length > 1 ? [...numScores].sort((a, b) => b - a) : null;
-  const secondPB = sortedScores ? sortedScores[1] : null;
-
-  if (prev === null) {
-    return secondPB !== null ? Math.round(secondPB) : Math.round(dayPB * 0.92);
-  }
-
-  let candidate = Math.round(dayPB * 0.93);
-  if (secondPB !== null) {
-    candidate = Math.max(candidate, Math.round(secondPB));
-  }
-
-  return Math.max(prev, candidate);
-}
-
-export function recalculateAllTaskThresholds(task: Task): void {
-  if (!task.sessions || task.sessions.length === 0) return;
-
-  task.sessions.sort((a, b) => a.date.localeCompare(b.date));
-
-  const dateGroups = new Map<string, typeof task.sessions>();
-  for (const sess of task.sessions) {
-    const list = dateGroups.get(sess.date);
-    if (list) {
-      list.push(sess);
-    } else {
-      dateGroups.set(sess.date, [sess]);
-    }
-  }
-
-  let prevThreshold: number | null = null;
-
-  for (const entries of dateGroups.values()) {
-    const scores = entries.map((e) => Number(e.pb) || 0);
-    const groupThreshold = computeDayThreshold(prevThreshold, scores);
-
-    for (const entry of entries) {
-      entry.threshold = groupThreshold;
-    }
-
-    prevThreshold = groupThreshold;
-  }
 }
 
 export function parseInputScores(rawInput: string): number[] {
@@ -148,69 +72,97 @@ export function parseInputScores(rawInput: string): number[] {
     .filter((v) => !isNaN(v) && v > 0);
 }
 
-export type SessionDetailKey =
-  | "session.detailNoTask"
-  | "session.detailFirst"
-  | "session.detailTypeScores"
-  | "session.detailGoal"
-  | "session.detailEvolved"
-  | "session.detailMaintained";
+// ---------------------------------------------------------------------------
+// Simulação de runs digitadas (lançamento manual)
+// ---------------------------------------------------------------------------
 
-export function estimateSessionThreshold(
+export interface SimulatedOutcome {
+  /** Próxima meta (escala de score) depois de contabilizar as runs digitadas. */
+  projectedTarget: number | null;
+  /** Alguma run digitada >= meta que valia antes. */
+  willHit: boolean;
+  willBreakPB: boolean;
+  /** Meta que valia antes (nextTarget atual). */
+  targetBefore: number | null;
+  /** Quantas das runs digitadas contam para a meta (as demais são aquecimento etc.). */
+  validCount: number;
+}
+
+export interface DraftInput {
+  scores: number[];
+  sens: number;
+  /** YYYY-MM-DD; as runs manuais não têm horário (são tratadas como um grupo do dia). */
+  date: string;
+}
+
+/**
+ * Roda `computeSkill` com as runs digitadas anexadas e compara com o estado atual.
+ * Função pura: `allRuns` deve ser o conjunto global (ver `buildAllRuns`).
+ */
+export function simulateDraftRuns(
   task: Task | null,
-  rawScores: number[]
-): {
-  threshold: number | null;
-  detailKey: SessionDetailKey;
-  detailParams: Record<string, string | number>;
-} {
-  const targetThresh = task ? getTargetThresholdForTask(task) : null;
-
+  allRuns: RunRef[],
+  draft: DraftInput,
+  cfg: SkillConfig,
+  now: number,
+): SimulatedOutcome {
   if (!task) {
+    return { projectedTarget: null, willHit: false, willBreakPB: false, targetBefore: null, validCount: 0 };
+  }
+  const before = computeSkill(task, allRuns, cfg, now);
+  const scores = draft.scores.filter((s) => Number.isFinite(s) && s > 0);
+  if (scores.length === 0) {
     return {
-      threshold: null,
-      detailKey: "session.detailNoTask",
-      detailParams: {},
+      projectedTarget: before.nextTarget,
+      willHit: false,
+      willBreakPB: false,
+      targetBefore: before.nextTarget,
+      validCount: 0,
     };
   }
 
-  if (targetThresh === null) {
-    if (rawScores.length > 0) {
-      const firstThreshold = computeDayThreshold(null, rawScores);
-      return {
-        threshold: firstThreshold,
-        detailKey: "session.detailFirst",
-        detailParams: { n: rawScores.length, t: firstThreshold },
-      };
-    }
-    return {
-      threshold: null,
-      detailKey: "session.detailTypeScores",
-      detailParams: {},
+  const base = task.sessions.length;
+  const refs: RunRef[] = scores.map((pb, i) => {
+    const session = {
+      id: `__draft_${i}`,
+      date: draft.date,
+      sens: draft.sens,
+      pb,
+      threshold: 0,
+      game: "manual" as const,
+      sensRole: "unknown" as const,
     };
-  }
-
-  if (rawScores.length === 0) {
-    return {
-      threshold: targetThresh,
-      detailKey: "session.detailGoal",
-      detailParams: { t: targetThresh },
-    };
-  }
-
-  const estimatedThreshold = computeDayThreshold(targetThresh, rawScores);
+    return { taskId: task.id, session, t: runTime(session, base + i) };
+  });
+  const after = computeSkill(task, [...allRuns, ...refs], cfg, now);
+  const draftIds = new Set(refs.map((r) => r.session.id));
+  const validCount = after.runs.filter((r) => draftIds.has(r.sessionId) && r.validity.valid).length;
+  const best = Math.max(...scores);
 
   return {
-    threshold: estimatedThreshold,
-    detailKey:
-      estimatedThreshold > targetThresh
-        ? "session.detailEvolved"
-        : "session.detailMaintained",
-    detailParams: { t: estimatedThreshold },
+    projectedTarget: after.nextTarget,
+    willHit: before.nextTarget !== null && best >= before.nextTarget,
+    willBreakPB: before.pb === null ? true : best > before.pb,
+    targetBefore: before.nextTarget,
+    validCount,
   };
 }
 
-export function computeTaskMetrics(task: Task | null) {
+// ---------------------------------------------------------------------------
+// Métricas rápidas e Escalate
+// ---------------------------------------------------------------------------
+
+function localSkill(task: Task): SkillSummary {
+  const cfg = skillConfigFromTraining(DEFAULT_TRAINING_SETTINGS);
+  return computeSkill(task, buildAllRuns([task]), cfg, Date.now());
+}
+
+/**
+ * Métricas resumidas de um task. Sem `skill`, calcula localmente só com as runs do próprio task
+ * (agrupamento de sessões sem os outros cenários); prefira passar o `SkillSummary` de `useSkill`.
+ * `hitRate` em % (0-100) das últimas 14 sessões; `targetThreshold` = próxima meta arredondada.
+ */
+export function computeTaskMetrics(task: Task | null, skill?: SkillSummary | null) {
   if (!task || !task.sessions || task.sessions.length === 0) {
     return {
       maxPB: null as number | null,
@@ -221,61 +173,59 @@ export function computeTaskMetrics(task: Task | null) {
     };
   }
 
-  const pbs = task.sessions.map((s) => Number(s.pb) || 0);
-  const maxPB = Math.max(...pbs);
-  const targetThreshold = getTargetThresholdForTask(task);
-
-  const summaries = summarizeDays(task);
-  const eligibleDays = summaries.filter((d) => d.hit !== null);
-  let hitRate: number | null = null;
-  if (eligibleDays.length > 0) {
-    const hits = eligibleDays.filter((d) => d.hit === true).length;
-    hitRate = Number(((hits / eligibleDays.length) * 100).toFixed(1));
-  }
+  const sk = skill ?? localSkill(task);
+  const hitRate = sk.hitRate14 === null ? null : Number((sk.hitRate14 * 100).toFixed(1));
 
   let streak = 0;
-  for (let i = summaries.length - 1; i >= 0; i--) {
-    if (summaries[i].hit === true) {
-      streak++;
-    } else {
-      break;
-    }
+  for (let i = sk.points.length - 1; i >= 0; i--) {
+    const hit = sk.points[i].hit;
+    if (hit === null) continue;
+    if (hit) streak++;
+    else break;
   }
 
   const sorted = [...task.sessions].sort((a, b) => a.date.localeCompare(b.date));
-  const lastSession = sorted[sorted.length - 1];
-
   return {
-    maxPB,
-    targetThreshold,
+    maxPB: sk.pb,
+    targetThreshold: sk.nextTarget === null ? null : Math.round(sk.nextTarget),
     hitRate,
     streak,
-    lastSens: lastSession.sens,
+    lastSens: sorted[sorted.length - 1].sens,
   };
 }
 
-export function buildEscalateFormat(task: Task): string | null {
+/**
+ * Formato Escalate: `PB [meta da sessão] (dd/mm)` por run.
+ * A meta é a da sessão de treino da run (v2); runs sem meta (1ª sessão) usam o `threshold`
+ * legado se existir, senão saem sem colchetes. FOV e sens vêm da última run (fallback 103).
+ */
+export function buildEscalateFormat(task: Task, skill?: SkillSummary | null): string | null {
   if (!task.sessions.length) return null;
+  const sk = skill ?? localSkill(task);
 
-  const sortedSessions = [...task.sessions].sort((a, b) =>
-    a.date.localeCompare(b.date)
-  );
-  const lastSession = sortedSessions[sortedSessions.length - 1];
+  const targetByKey = new Map(sk.points.map((p) => [p.sessionKey, p.target]));
+  const firstKey = sk.points[0]?.sessionKey ?? null;
+  const infoById = new Map(sk.runs.map((r) => [r.sessionId, r]));
 
-  let textOutput = `${task.name} - ${lastSession.sens}cm 103\n`;
+  const ordered = task.sessions
+    .map((s, i) => ({ s, t: infoById.get(s.id)?.t ?? runTime(s, i), i }))
+    .sort((a, b) => a.t - b.t || a.i - b.i);
+  const last = ordered[ordered.length - 1].s;
+  const fov = last.fov && last.fov > 0 ? last.fov : 103;
 
-  for (const s of sortedSessions) {
+  let textOutput = `${task.name} - ${last.sens}cm ${fov}\n`;
+
+  for (const { s } of ordered) {
+    const info = infoById.get(s.id);
     const [, month, day] = s.date.split("-");
-    textOutput += `${s.pb} [${s.threshold}] (${day}/${month}) `;
+    let target: number | null = null;
+    if (info && info.sessionKey !== firstKey) target = targetByKey.get(info.sessionKey) ?? null;
+    if (target === null && s.threshold > 0) target = s.threshold;
+    const bracket = target === null ? "" : ` [${Math.round(target)}]`;
+    textOutput += `${s.pb}${bracket} (${day}/${month}) `;
   }
 
   return textOutput.trim();
-}
-
-export function recalculateAllTasks(tasks: Task[]): void {
-  for (const task of tasks) {
-    recalculateAllTaskThresholds(task);
-  }
 }
 
 export function resolveAutoAdvanceOnThreshold(

@@ -1,0 +1,19 @@
+Kill #,Timestamp,Bot,Weapon,TTK,Shots,Hits,Accuracy,Damage Done,Damage Possible,Efficiency,Cheated
+
+Weapon,Shots,Hits,Damage Done,Damage Possible,,Sens Scale,Horiz Sens,Vert Sens,FOV,Hide Gun,Crosshair,Crosshair Scale,Crosshair Color,ADS Sens,ADS Zoom Scale
+lg,3600,2950,2950.0,3600.0,,cm/360,38.0,38.0,103.0,true,default.png,1.0,FFFFFF,38.0,1.0
+
+Kills:,0
+Deaths:,0
+Fight Time:,60.000
+Avg TTK:,0.0
+Damage Done:,2950.0
+Damage Taken:,0.0
+Score:,2950.0
+Scenario:,Smoothbot Goated
+Game Version:,3.4.1.2024-06-10-0001
+Challenge Start:,21:09:59.900
+Sens Scale:,cm/360
+Horiz Sens:,38.0
+Vert Sens:,38.0
+FOV:,103.0

@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { FloppyDisk } from "@phosphor-icons/react";
-import { useI18n, type Key } from "@/lib/i18n";
+import { useI18n } from "@/lib/i18n";
 import type { RandomizerSettings, RandomizerState } from "@/hooks/useSensRandomizer";
 import type { Task } from "@/lib/types";
 import {
@@ -14,12 +14,19 @@ import {
   resetDraftTouched, validateDraft, isDraftDirty, draftToSettings,
   type RandomizerDraft,
 } from "@/lib/randomizer-draft";
+import { directionKey } from "@/lib/randomizer-directions";
+import { VISCOSE_CATEGORIES } from "@/lib/viscose";
+import type { RandomizerDirection } from "@/hooks/useSensRandomizer";
 import { Button } from "@/components/ui/Button";
 import { RecenterBanner } from "./recenter-banner";
-import { RangePresets } from "./range-presets";
+import { RangePresets, type RandomizerPreset } from "./range-presets";
 import { RangeModeFields } from "./range-mode-fields";
 import { RangeToggles } from "./range-toggles";
+import { DirectionTable } from "./direction-table";
+import { CategoryGates } from "./category-gates";
 import { cn } from "@/lib/utils";
+
+const VISCOSE_CATEGORY_NAMES = Object.keys(VISCOSE_CATEGORIES);
 
 export interface ControlsProps {
   settings: RandomizerSettings;
@@ -63,7 +70,7 @@ export function Controls({
 
   const getFieldError = (field: string) => {
     const err = validationErrors.find((e) => e.field === field);
-    return err ? t(err.messageKey as Key) : null;
+    return err ? t(err.messageKey) : null;
   };
 
   const parsedBase = Number(draft.baseSens) || settings.baseSensCm || 40;
@@ -86,13 +93,13 @@ export function Controls({
     minMult: parsedMinMult,
     maxMult: parsedMaxMult,
     spreadPercent: draft.spreadPercent,
-    autoScenarioSens: draft.autoScenarioSens,
+    autoScenarioSens: draft.centerSource !== "base",
     mouseDpi: parsedDpi,
-  }), [settings, parsedBase, draft.rangeMode, parsedMinCm, parsedMaxCm, parsedMinMult, parsedMaxMult, draft.spreadPercent, draft.autoScenarioSens, parsedDpi]);
+  }), [settings, parsedBase, draft.rangeMode, parsedMinCm, parsedMaxCm, parsedMinMult, parsedMaxMult, draft.spreadPercent, draft.centerSource, parsedDpi]);
 
   const previewRange = useRangePreview(
     settingsForPreview,
-    draft.autoScenarioSens && idealSens ? idealSens.value : null
+    draft.centerSource !== "base" && idealSens ? idealSens.value : null
   );
 
   const calculatedRange = useMemo(() => ({
@@ -120,7 +127,7 @@ export function Controls({
   }, [activeTask, parsedDpi]);
 
   const currentCenterCm = useMemo(() => {
-    if (draft.autoScenarioSens) {
+    if (draft.centerSource !== "base") {
       return idealSens?.value ?? settings.scenarioIdealCm ?? parsedBase;
     }
     if (draft.rangeMode === "multiplier") {
@@ -131,7 +138,7 @@ export function Controls({
     const minC = parsedMinCm > 0 ? parsedMinCm : 28;
     const maxC = parsedMaxCm > minC ? parsedMaxCm : 55;
     return Math.sqrt(minC * maxC);
-  }, [draft.autoScenarioSens, idealSens, settings.scenarioIdealCm, draft.rangeMode, parsedBase, parsedMinMult, parsedMaxMult, parsedMinCm, parsedMaxCm]);
+  }, [draft.centerSource, idealSens, settings.scenarioIdealCm, draft.rangeMode, parsedBase, parsedMinMult, parsedMaxMult, parsedMinCm, parsedMaxCm]);
 
   const recenterSuggestion = useMemo(() => {
     return suggestRecenter(localPrediction, currentCenterCm);
@@ -140,7 +147,7 @@ export function Controls({
   const handleSave = async () => {
     if (!canSave) return;
     const nextSettings = draftToSettings(draft, settings);
-    if (draft.autoScenarioSens && idealSens) {
+    if (draft.centerSource !== "base" && idealSens) {
       nextSettings.scenarioIdealCm = idealSens.value;
     }
     await onSaveSettings(nextSettings);
@@ -180,6 +187,39 @@ export function Controls({
       });
       await onSaveSettings({ ...settings, minCm: nextMin, maxCm: nextMax });
     }
+  };
+
+  const handleApplyPreset = (preset: RandomizerPreset) => {
+    setDraft((prev) => {
+      let d = updateDraftField(prev, "mode", preset.mode);
+      d = updateDraftField(d, "spreadPercent", preset.spreadPercent);
+      if (preset.alternatingBlock !== undefined) {
+        d = updateDraftField(d, "alternatingBlock", String(preset.alternatingBlock));
+      }
+      return d;
+    });
+  };
+
+  const handleChangeDirection = (category: string, subcategory: string, direction: RandomizerDirection) => {
+    setDraft((prev) =>
+      updateDraftField(prev, "directionOverrides", {
+        ...prev.directionOverrides,
+        [directionKey(category, subcategory)]: direction,
+      })
+    );
+  };
+
+  const handleRestoreDirections = () => {
+    setDraft((prev) => updateDraftField(prev, "directionOverrides", {}));
+  };
+
+  const handleToggleCategory = (category: string, enabled: boolean) => {
+    setDraft((prev) =>
+      updateDraftField(prev, "categoryEnabled", {
+        ...prev.categoryEnabled,
+        [category]: enabled,
+      })
+    );
   };
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -240,11 +280,21 @@ export function Controls({
         baseSens={draft.baseSens}
         onChangeBaseSens={(val) => setDraft((p) => updateDraftField(p, "baseSens", val))}
         getFieldError={getFieldError}
+        mode={draft.mode}
+        onChangeMode={(val) => setDraft((p) => updateDraftField(p, "mode", val))}
+        reactivationRuns={draft.reactivationRuns}
+        onChangeReactivationRuns={(val) => setDraft((p) => updateDraftField(p, "reactivationRuns", val))}
+        anchorEvery={draft.anchorEvery}
+        onChangeAnchorEvery={(val) => setDraft((p) => updateDraftField(p, "anchorEvery", val))}
+        alternatingBlock={draft.alternatingBlock}
+        onChangeAlternatingBlock={(val) => setDraft((p) => updateDraftField(p, "alternatingBlock", val))}
       />
 
       <div className="space-y-4">
-        {/* In-game preview and presets */}
+        {/* Named presets, in-game preview and spread/DPI */}
         <RangePresets
+          mode={draft.mode}
+          onApplyPreset={handleApplyPreset}
           spreadPercent={draft.spreadPercent}
           onSelectSpread={(p) => setDraft((prev) => updateDraftField(prev, "spreadPercent", p))}
           mouseDpi={draft.mouseDpi}
@@ -256,10 +306,10 @@ export function Controls({
           maxCm={calculatedRange.maxCm}
         />
 
-        {/* Auto Scenario Sens Switch & Avoid Repeats Switch */}
+        {/* Center source & Avoid Repeats switch */}
         <RangeToggles
-          autoScenarioSens={draft.autoScenarioSens}
-          onToggleAutoScenario={(checked) => setDraft((p) => updateDraftField(p, "autoScenarioSens", checked))}
+          centerSource={draft.centerSource}
+          onChangeCenterSource={(val) => setDraft((p) => updateDraftField(p, "centerSource", val))}
           avoidRepeats={draft.avoidRepeats}
           onToggleAvoidRepeats={(checked) => setDraft((p) => updateDraftField(p, "avoidRepeats", checked))}
           idealSensSummary={
@@ -270,6 +320,20 @@ export function Controls({
           minCm={calculatedRange.minCm}
           maxCm={calculatedRange.maxCm}
           gridPointsCount={calculatedRange.gridCm.length}
+        />
+
+        {draft.mode === "directed" && (
+          <DirectionTable
+            directionOverrides={draft.directionOverrides}
+            onChangeDirection={handleChangeDirection}
+            onRestoreDefaults={handleRestoreDirections}
+          />
+        )}
+
+        <CategoryGates
+          categories={VISCOSE_CATEGORY_NAMES}
+          categoryEnabled={draft.categoryEnabled}
+          onToggleCategory={handleToggleCategory}
         />
       </div>
 
